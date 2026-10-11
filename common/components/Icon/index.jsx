@@ -12,7 +12,7 @@ import {
     LuSun, LuMoon, LuCloudUpload, LuMap, LuClock, LuTruck, LuCreditCard, LuBarcode, LuAlignLeft,
     LuListPlus, LuNotebookPen, LuPanelRightClose, LuPanelRightOpen, LuCalendarPlus, LuSlidersHorizontal,
     LuBoxes, LuLightbulb, LuSnowflake, LuImage, LuBadgePercent, LuGalleryVerticalEnd, LuGalleryHorizontalEnd, LuHistory, LuPhone, LuMail, LuMessageSquare, LuArrowRightLeft, LuCalculator, LuArchiveRestore,
-    LuUpload, LuPhoneOutgoing, LuInfo, LuHeart, LuScissors
+    LuUpload, LuPhoneOutgoing, LuInfo, LuHeart, LuScissors, LuMaximize, LuMinimize
 } from 'react-icons/lu'
 import { BsFileEarmarkExcel } from 'react-icons/bs'
 import { TbHeartPlus } from 'react-icons/tb'
@@ -125,7 +125,9 @@ const iconsList = {
     info: LuInfo,
     heart: LuHeart,
     grid: LuLayoutGrid,
-    cut: LuScissors
+    cut: LuScissors,
+    maximize: LuMaximize,
+    minimize: LuMinimize
 }
 
 /**

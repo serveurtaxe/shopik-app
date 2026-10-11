@@ -6,6 +6,7 @@ import 'leaflet/dist/leaflet.css'
 import 'leaflet-draw/dist/leaflet.draw.css'
 import Text from 'common/components/Text'
 import { useText } from 'common/texts/TextProvider'
+import Icon from 'common/components/Icon'
 import Button from 'common/components/Button'
 import ConfirmButton from 'common/components/ConfirmButton'
 import Flex from 'common/components/Flex'
@@ -102,6 +103,15 @@ function FlyToPoint({ point }) {
     useEffect(() => {
         if (point) map.panTo([point.lat, point.lng], { animate: true, duration: 1 })
     }, [point, map])
+    return null
+}
+
+function MapRegistrar({ mapRef }) {
+    const map = useMap()
+    useEffect(() => {
+        mapRef.current = map
+        return () => { mapRef.current = null }
+    }, [map, mapRef])
     return null
 }
 
@@ -480,6 +490,26 @@ function MapController({
         if (layer) startEdit(layer)
     }, [geometryEditingId, startEdit, revertEdit, stopEdit])
 
+    // leaflet-draw ships English mouse hints — localize to Hebrew once loaded
+    useEffect(() => {
+        if (!drawReady) return
+        const handlers = L.drawLocal?.draw?.handlers
+        if (!handlers) return
+        if (handlers.polygon?.tooltip) {
+            handlers.polygon.tooltip.start = TR('supply_draw_shape_start')
+            handlers.polygon.tooltip.cont = TR('supply_draw_shape_cont')
+            handlers.polygon.tooltip.end = TR('supply_draw_shape_end')
+        }
+        if (handlers.polyline) {
+            handlers.polyline.error = TR('supply_draw_error_cross')
+            if (handlers.polyline.tooltip) {
+                handlers.polyline.tooltip.start = TR('supply_draw_line_start')
+                handlers.polyline.tooltip.cont = TR('supply_draw_line_cont')
+                handlers.polyline.tooltip.end = TR('supply_draw_line_end')
+            }
+        }
+    }, [drawReady, TR])
+
     // New-area draw completion + live vertex snapping
     useEffect(() => {
         if (!drawReady) return
@@ -652,8 +682,34 @@ export default function SupplyAreaMap({
     onSelect, onStartAreaPropsEdit, onSaveAreaProps, onCancelAreaPropsEdit, onDeleteArea, onStartGeometryEdit, onStartCut,
     onViewportChange, onCreateArea, cityBorders, onToggleCityBorders,
     toggleMode, drawing, onToggleArea, onCreated, onCutCommit, onEdited, onGeometryCancel, onBackgroundClick,
+    isFullscreen, onToggleFullscreen, sidebarOpen = true,
 }) {
     const { TR } = useText()
+
+    // Leaflet caches its container size — re-measure on any layout change
+    // (sidebar toggle, fullscreen, drawer) via ResizeObserver on the map wrapper
+    const mapRef = useRef(null)
+    const wrapRef = useRef(null)
+    useEffect(() => {
+        const el = wrapRef.current
+        if (!el || typeof ResizeObserver === 'undefined') {
+            const t = setTimeout(() => mapRef.current?.invalidateSize(), 120)
+            return () => clearTimeout(t)
+        }
+        let t = null
+        const ro = new ResizeObserver(() => {
+            clearTimeout(t)
+            t = setTimeout(() => mapRef.current?.invalidateSize(), 100)
+        })
+        ro.observe(el)
+        return () => { clearTimeout(t); ro.disconnect() }
+    }, [])
+
+    // Explicit re-measure on sidebar open/close (in addition to the observer)
+    useEffect(() => {
+        const t = setTimeout(() => mapRef.current?.invalidateSize(), 150)
+        return () => clearTimeout(t)
+    }, [sidebarOpen])
 
     const selectedArea = useMemo(() => areas.find(a => a.id === selectedId) || null, [areas, selectedId])
     const popupPosition = useMemo(() => {
@@ -727,7 +783,7 @@ export default function SupplyAreaMap({
     }, [storePins])
 
     return (
-        center && <div className={styles.mapInnerWrap}>
+        center && <div ref={wrapRef} className={styles.mapInnerWrap}>
             <MapContainer
                 center={center}
                 zoom={12}
@@ -863,8 +919,19 @@ export default function SupplyAreaMap({
                     </Marker>
                 )}
                 <FlyToPoint point={activeFlyPoint} />
+                <MapRegistrar mapRef={mapRef} />
             </MapContainer>
-            <div className={styles.tilePickerWrap}>
+            {onToggleFullscreen && (
+                <button
+                    type="button"
+                    className={styles.fullscreenBtn}
+                    title={TR(isFullscreen ? 'supply_map_exit_fullscreen' : 'supply_map_fullscreen')}
+                    onClick={onToggleFullscreen}
+                >
+                    <Icon name={isFullscreen ? 'minimize' : 'maximize'} />
+                </button>
+            )}
+            <div className={`${styles.tilePickerWrap} ${!sidebarOpen ? styles.tilePickerWrapShifted : ''}`}>
                 <div className={styles.tilePicker}>
                     {Object.entries(tilesets).map(([id, ts]) => (
                         <button
