@@ -305,6 +305,38 @@ export default function SupplyAreas() {
                 e.stopPropagation()
                 return
             }
+            // Single-key map shortcuts, also by physical position. Never while typing.
+            if (!e.ctrlKey && !e.metaKey && !e.altKey && !typing) {
+                // A — in/out of add (new area) mode
+                if (e.code === 'KeyA') {
+                    if (creating) handleCancelCreate()
+                    else handleNewArea()
+                    e.stopPropagation()
+                    return
+                }
+                // E — in/out of polygon edit mode (needs a selected area, clean state)
+                if (e.code === 'KeyE') {
+                    if (geometryEditingId) handleGeometryCancel()
+                    else if (selectedArea && !creating && !cuttingId && !groupDraft && !areaDraft) handleStartGeometryEdit()
+                    else return
+                    e.stopPropagation()
+                    return
+                }
+                // P — in/out of cut (split) mode (needs a selected area, clean state)
+                if (e.code === 'KeyP') {
+                    if (cuttingId) handleCutCancel()
+                    else if (selectedArea && !creating && !geometryEditingId && !groupDraft && !areaDraft) handleStartCut(selectedId)
+                    else return
+                    e.stopPropagation()
+                    return
+                }
+                // S — open/close the stores sidebar
+                if (e.code === 'KeyS') {
+                    setSidebarOpen(v => !v)
+                    e.stopPropagation()
+                    return
+                }
+            }
             if (e.key !== 'Escape') return
             if (typing) return
             if (unwindStep()) { e.stopPropagation(); return }
@@ -887,6 +919,7 @@ export default function SupplyAreas() {
                                                                             size="s"
                                                                             mode="outline"
                                                                             icon="trash"
+                                                                            tooltip="supply_delete_group"
                                                                             className={styles.deleteButton}
                                                                         />
                                                                         <Flex gap={8}>
@@ -1060,12 +1093,12 @@ export default function SupplyAreas() {
                                 </div>
                             </div>
                         ) : (
-                            <button
-                                type="button"
-                                className={styles.centerPlus}
-                                title={TR('new area')}
-                                onClick={handleNewArea}
-                            >
+                        <button
+                            type="button"
+                            className={styles.centerPlus}
+                            title={`${TR('new area')} (A)`}
+                            onClick={handleNewArea}
+                        >
                                 <Icon name="add" />
                             </button>
                         )
@@ -1102,7 +1135,7 @@ export default function SupplyAreas() {
                         <button
                             type="button"
                             className={styles.storeFab}
-                            title={TR('supply_stores_groups')}
+                            title={`${TR('supply_stores_groups')} (S)`}
                             onClick={() => setSidebarOpen(true)}
                         >
                             <Icon name="stores" />

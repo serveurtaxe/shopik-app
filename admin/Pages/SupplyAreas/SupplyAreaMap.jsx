@@ -857,12 +857,13 @@ export default function SupplyAreaMap({
                                         <strong className={styles.areaPopupTitle}>{selectedArea.name || <Text size="none">no_name</Text>}</strong>
                                         <span>vertices: {selectedArea.location.coordinates?.[0].length - 1}</span>
                                         <Flex gap={6} className={styles.areaPopupActions}>
-                                            <Button size="s" icon="edit" onClick={onStartAreaPropsEdit}></Button>
+                                            <Button size="s" icon="edit" tooltip="supply_edit_details" onClick={onStartAreaPropsEdit}></Button>
                                             <ConfirmButton
                                                 q={`${TR('supply_delete_area_confirm')}${selectedArea.name ? ` "${selectedArea.name}"` : ''}?`}
                                                 onOk={onDeleteArea}
                                                 size="s"
                                                 icon="trash"
+                                                tooltip="supply_delete_area"
                                                 mode="outline"
                                                 className={styles.deleteButton}
                                             />
@@ -880,8 +881,8 @@ export default function SupplyAreaMap({
                                     </div>
                                     <Flex gap={8} justifyContent="end" style={{ marginTop: 8 }}>
                                         <Button size="s" mode="outline" onClick={() => onSelect?.(null)}>cancel</Button>
-                                        <Button size="s" icon="cut" onClick={() => onStartCut?.(selectedArea.id)}>supply_cut_area</Button>
-                                        <Button size="s" icon="edit" onClick={onStartGeometryEdit}>supply_edit_shape</Button>
+                                        <Button size="s" icon="cut" tooltip={`${TR('supply_cut_area')} (P)`} onClick={() => onStartCut?.(selectedArea.id)}>supply_cut_area</Button>
+                                        <Button size="s" icon="edit" tooltip={`${TR('supply_edit_shape')} (E)`} onClick={onStartGeometryEdit}>supply_edit_shape</Button>
                                     </Flex>
                                 </>
                             ) : (
@@ -933,7 +934,7 @@ export default function SupplyAreaMap({
                 <button
                     type="button"
                     className={styles.fullscreenBtn}
-                    title={TR(isFullscreen ? 'supply_map_exit_fullscreen' : 'supply_map_fullscreen')}
+                    title={`${TR(isFullscreen ? 'supply_map_exit_fullscreen' : 'supply_map_fullscreen')} (F)`}
                     onClick={onToggleFullscreen}
                 >
                     <Icon name={isFullscreen ? 'minimize' : 'maximize'} />
