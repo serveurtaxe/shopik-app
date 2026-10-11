@@ -20,10 +20,6 @@
     min-width: 0;
     display: block;
     width: 100%;
-    /* Fixed box reserves space before images load and keeps the page from
-       jumping when slides have different aspect ratios. Compose uploads to
-       ~21:9 desktop / ~16:10 mobile; cover crops the overflow. */
-    aspect-ratio: 21 / 9;
 }
 
 /* .hero .slideImg {
@@ -94,7 +90,7 @@
 .mosaic {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 10px;
+    gap: 24px;
     width: 100%;
     min-height: 300px;
 }
@@ -106,9 +102,32 @@
 }
 
 .rail {
+    /* Full-bleed background: .rail lives inside the centered .main column,
+       so without this the subtle bg is cut off at the content margins.
+       Same 50% - 50vw trick as the header menuWrap. */
+    width: 100vw;
+    margin-inline: calc(50% - 50vw);
+    box-sizing: border-box;
+    background-color: var(--carousel-bg, var(--bg-secondary));
+    padding-block: 12px;
+}
+
+.railInner {
     width: 100%;
+    min-width: 0;
+    max-width: min(var(--max-width), calc(100vw - 60px - var(--safeLeft, 0px) - var(--safeRight, 0px)));
+    margin-inline: auto;
+    padding-inline-start: var(--safeLeft, 0px);
+    padding-inline-end: var(--safeRight, 0px);
+    /* Container queries for .railCard measure the content column, not the
+       full viewport — otherwise cards grow when the bg goes full-bleed. */
     container-type: inline-size;
-    background-color: var(--carousel-bg);
+}
+
+@media (max-width: 700px) {
+    .railInner {
+        max-width: min(var(--max-width), calc(100vw - 20px - var(--safeLeft, 0px) - var(--safeRight, 0px)));
+    }
 }
 
 .railHeader {
@@ -116,12 +135,30 @@
     padding: 10px 10px;
 }
 
+.railTitle {
+    color: var(--carousel-title, #003324);
+}
+
+/* Text size="h1" sets its own font-size — out-specify it. */
+.railHeader .railTitle {
+    font-size: var(--display-lg);
+    line-height: var(--line-height-display-lg);
+}
+
 .showAll {
-    color: var(--text-brand-tertiary);
+    color: var(--carousel-title, #003324);
     text-decoration: none;
     display: inline-flex;
     align-items: center;
     gap: 4px;
+}
+
+/* Text mode="link" sets its own color — out-specify it so the whole
+   "show all" control follows the theme color. */
+.showAll .showAllText {
+    color: var(--carousel-title, #003324);
+    font-size: var(--display-xs);
+    line-height: var(--line-height-display-xs);
 }
 
 /* Same card size as the products grid (products.module.css breakpoints):
