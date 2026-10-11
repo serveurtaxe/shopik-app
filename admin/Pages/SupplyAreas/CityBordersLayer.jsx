@@ -27,7 +27,7 @@ import styles from './supplyAreas.module.css'
 // Permanent name labels only when zoomed in enough to stay readable.
 const LABEL_MIN_ZOOM = 11
 // Path is publicDir-relative to admin/ (served from the admin host).
-const BORDERS_FILE = '/static/city-borders.v2025-10-16.geojson'
+const BORDERS_FILE = '/static/city-borders.v2026-10-11.geojson'
 // Manual nudge (meters, [east, north]) applied to the whole layer at load.
 // The file is properly projected so this stays [0, 0] — only touch it if a
 // systematic mismatch against the basemap is ever found (e.g. [70, 40]).
