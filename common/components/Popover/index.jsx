@@ -40,6 +40,14 @@ export default function Popover({ id, className, button, children, btnClassName,
         }
     }, [id])
 
+    function toggle(e) {
+        if (ref.current?.open) {
+            close()
+            return
+        }
+        open(e)
+    }
+
     function open(e) {
         if (disabled) return
         e?.stopPropagation()
@@ -139,6 +147,7 @@ export default function Popover({ id, className, button, children, btnClassName,
             if (e.target !== dialog || e.pseudoElement) return
             if (e.propertyName !== 'transform') return
             dialog.removeEventListener('transitionend', onCloseEnd)
+            if (!dialog.open) return
             dialog.close()
         }
         dialog.addEventListener('transitionend', onCloseEnd)
@@ -171,7 +180,7 @@ export default function Popover({ id, className, button, children, btnClassName,
             className={classNames(className, styles.popover, [styles.overlay, overlay], [styles.windowed, !modal])}>
             {typeof children == 'function' ? children({ close }) : children}
         </dialog>
-        <div onClick={open} ref={btnRef} className={classNames(btnClassName, styles.btn)}>
+        <div onClick={toggle} ref={btnRef} className={classNames(btnClassName, styles.btn)}>
             {button || <Button
                 mode='text'
                 disabled={disabled}

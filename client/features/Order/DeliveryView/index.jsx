@@ -87,8 +87,8 @@ export default function DeliveryView({ }) {
             <Icon name={icon} className={styles.icon} />
             <Flex alignItems='center' justifyContent='space-between' grow={1} className='btnTexts'>
                 <Flex col gap={3}>
-                    <Text bold size='s'>{buttonTitle}</Text>
-                    <Text size='xs'>{buttonSubTitle}</Text>
+                    <Text bold size='m'>{buttonTitle}</Text>
+                    <Text size='s'>{buttonSubTitle}</Text>
                 </Flex>
                 <Icon name='down' className={styles.chevron} />
             </Flex>

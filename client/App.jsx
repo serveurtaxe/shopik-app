@@ -15,7 +15,7 @@ import styles from './App.module.css'
 
 import 'common/styles/global.css'
 
-const AppDataContext = createContext()
+const AppDataContext = createContext({})
 export const useAppData = () => useContext(AppDataContext)
 
 export default function App({ data = {} }) {

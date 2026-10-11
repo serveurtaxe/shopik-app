@@ -2,7 +2,7 @@ import { createContext, useContext, useState } from 'react'
 import apiReq from '#common/functions/apiReq.js'
 import { useOrder } from '../Order/OrderProvider'
 
-const UserContext = createContext()
+const UserContext = createContext({})
 export const useUser = () => useContext(UserContext)
 
 export default function User({ children, sdUser = {} }) {

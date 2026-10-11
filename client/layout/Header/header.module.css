@@ -258,7 +258,7 @@
         }
 
         .userDelivery {
-            background-color: var(--bg-brand-secondary-hover, #DCEBEA);
+            background-color: var(--sub-header-bg, #FAF6F2);
             margin-left: calc(50% - 50vw);
             margin-right: calc(50% - 50vw);
             width: 100vw;
@@ -269,11 +269,22 @@
 
             /* Login lives at the top of the drawer on mobile — this bar
                shows the shipping method (DeliveryView) only.
-               The bar stays static (below the single overlay), so while
-               the drawer is open it dims with the body and taps land on
-               the overlay, dismissing the drawer. */
+               Drawer closed: the bar lifts above the single overlay so the
+               button that opened a dialog stays bright + switchable.
+               Drawer open: it stays below the overlay (dims, taps dismiss). */
             .userViewWrap {
                 display: none;
+            }
+
+            &.liftAbove {
+                position: relative;
+                z-index: 999;
+            }
+
+            /* The desktop "popover open" pill background looks wrong on the
+               light mobile bar — keep it transparent. */
+            :global(.Popover_visible)+:global(.Popover_btn) [class*="button"] {
+                background-color: transparent !important;
             }
 
             &>* {
@@ -298,12 +309,26 @@
                 flex: 1;
                 padding: 6px 8px !important;
                 gap: 6px !important;
-                border-radius: 12px !important;
+                background-color: transparent !important;
                 color: var(--text-primary) !important;
             }
 
             :global([class*="button"]:hover) {
-                background-color: var(--bg-brand-secondary) !important;
+                background-color: transparent !important;
+            }
+
+            /* Title on the right (by the icon), subtitle on the left
+               (by the chevron) — one vertically-centered row. */
+            :global(.btnTexts) {
+                gap: 8px !important;
+            }
+
+            :global(.btnTexts) > div:first-child {
+                display: contents;
+            }
+
+            :global(.btnTexts) > div > small:last-child {
+                margin-inline-start: auto;
             }
 
             :global([class*="icon"]) {

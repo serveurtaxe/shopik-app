@@ -5,7 +5,7 @@ import { getSalesCache, setSalesCache } from '#common/functions/salesCache.js'
 
 export const CART_SYNC_DEBOUNCE_MS = 300
 
-const OrderContext = createContext()
+const OrderContext = createContext({})
 export const useOrder = () => useContext(OrderContext)
 
 const readStoredCart = () => {

@@ -88,7 +88,7 @@ export default function Header() {
                     />
                 </div>
 
-                <div className={styles.userDelivery}>
+                <div className={classNames(styles.userDelivery, [styles.liftAbove, !drawerOpen])}>
                     <div className={styles.userViewWrap}>
                         <UserView />
                     </div>
