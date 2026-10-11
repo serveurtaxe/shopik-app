@@ -17,7 +17,7 @@ import {
 import { BsFileEarmarkExcel } from 'react-icons/bs'
 import { TbHeartPlus } from 'react-icons/tb'
 import { SiWaze } from 'react-icons/si'
-import { FaWhatsapp } from 'react-icons/fa6'
+import { FaWhatsapp, FaFacebookF, FaInstagram, FaLinkedinIn, FaTiktok, FaXTwitter } from 'react-icons/fa6'
 
 const iconsList = {
     add: LuPlus,
@@ -125,7 +125,12 @@ const iconsList = {
     info: LuInfo,
     heart: LuHeart,
     grid: LuLayoutGrid,
-    cut: LuScissors
+    cut: LuScissors,
+    facebook: FaFacebookF,
+    instagram: FaInstagram,
+    linkedin: FaLinkedinIn,
+    tiktok: FaTiktok,
+    twitter: FaXTwitter
 }
 
 /**

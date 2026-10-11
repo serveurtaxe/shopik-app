@@ -3,6 +3,7 @@ import UserView from 'features/User/UserView'
 import MiniCart from 'layout/Cart/miniCart'
 import Logo from 'common/components/Logo'
 import { getSettingFileUrl } from 'common/functions/settingFileUrl'
+import whatsappUrl from 'common/functions/whatsappUrl'
 import styles from './header.module.css'
 import MainMenu from 'layout/MainMenu'
 import Search from 'layout/Search'
@@ -28,9 +29,9 @@ export default function Header() {
     }, [drawerOpen])
 
     const handleWhatsAppClick = () => {
-        let wNumber = settings?.customerservice?.whatsappNumber
-        wNumber = wNumber?.replace(/[^0-9]/g, '').replace(/^05/, '9725')
-        window.open(`https://wa.me/${wNumber}`, '_blank', 'noopener,noreferrer')
+        const url = whatsappUrl(settings?.customerservice?.whatsappNumber)
+        if (!url) return
+        window.open(url, '_blank', 'noopener,noreferrer')
     }
 
     const infoMenuOptions = [

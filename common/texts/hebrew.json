@@ -876,6 +876,25 @@
         "aria_payment": "תשלום",
         "aria_mini_cart": "עגלת קניות",
         "aria_edit_address": "ערוך כתובת",
-        "aria_edit_delivery": "ערוך מועד אספקה"
+        "aria_edit_delivery": "ערוך מועד אספקה",
+        "footer_tagline": "Design amazing digital experiences that create more happy in the world.",
+        "footer_title_news": "חדשות ותוכן",
+        "footer_title_guide": "מדריך הקניות",
+        "footer_title_contact": "יצירת קשר",
+        "footer_link_products": "מוצרים",
+        "footer_link_faq": "שאלות נפוצות",
+        "footer_link_accessibility": "הצהרת נגישות",
+        "footer_link_press": "חדשות פרסום",
+        "footer_link_shipping_methods": "תקנון אתר ושיטות",
+        "footer_tag_new": "New",
+        "footer_powered_by": "© Powered by Shopik",
+        "footer_social": "רשתות חברתיות",
+        "aria_email": "אימייל",
+        "aria_phone": "טלפון",
+        "aria_facebook": "פייסבוק",
+        "aria_instagram": "אינסטגרם",
+        "aria_linkedin": "לינקדאין",
+        "aria_tiktok": "טיקטוק",
+        "aria_twitter": "טוויטר"
     }
 }
