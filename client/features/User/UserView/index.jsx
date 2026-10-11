@@ -19,8 +19,8 @@ export default function UserView({ }) {
             <Icon name='user' className={styles.icon} />
             <Flex alignItems='center' justifyContent='space-between' grow={1} className='btnTexts'>
                 <Flex col gap={3}>
-                    <Text bold size='s'>{user?.id ? `good ${getTimeOfDay()}` : 'login_register_btn'}</Text>
-                    <Text size='xs'>{user?.id ? `${user.name?.first || ''} ${user.name?.last || ''}` : 'login_register_subTitle'}</Text>
+                    <Text bold size='m'>{user?.id ? `good ${getTimeOfDay()}` : 'login_register_btn'}</Text>
+                    <Text size='s'>{user?.id ? `${user.name?.first || ''} ${user.name?.last || ''}` : 'login_register_subTitle'}</Text>
                 </Flex>
                 <Icon name='down' className={styles.chevron} />
             </Flex>

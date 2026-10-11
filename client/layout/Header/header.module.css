@@ -83,6 +83,7 @@
         align-items: center;
         gap: 10px;
         flex-shrink: 0;
+        height: 56px;
     }
 
     .userViewWrap,
@@ -168,6 +169,7 @@
             display: flex;
             align-items: center;
             column-gap: 12px;
+            height: 76px;
             background-color: var(--header-bg);
             position: relative;
             z-index: 999;
@@ -323,11 +325,11 @@
                 gap: 8px !important;
             }
 
-            :global(.btnTexts) > div:first-child {
+            :global(.btnTexts)>div:first-child {
                 display: contents;
             }
 
-            :global(.btnTexts) > div > small:last-child {
+            :global(.btnTexts)>div>small:last-child {
                 margin-inline-start: auto;
             }
 
@@ -345,7 +347,7 @@
         .menuWrap {
             display: none;
             position: absolute;
-            top: -52px;
+            top: -55px;
             right: 0;
             left: 0;
             background-color: var(--bg-primary, #fff);

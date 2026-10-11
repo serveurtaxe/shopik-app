@@ -1,5 +1,7 @@
 .button {
     padding: 5px 10px;
+    margin: 0px 3px;
+    min-width: 50px;
     cursor: pointer;
     color: var(--text-primary-on-brand);
     padding: 10px;
@@ -9,11 +11,13 @@
     min-width: 170px;
 
     .icon {
+        margin: 4px;
         font-size: 24px;
         transition: color .2s ease;
     }
 
     .chevron {
+        margin-right: 8px;
         font-size: 16px;
         transition: rotate .2s ease;
     }

@@ -111,7 +111,7 @@ export default function Popover({ id, className, button, children, btnClassName,
 
         top += topOffset
         left += leftOffset
-
+        console.log('position', { top, btop: btnRect.top, bheight: btnRect.height, gap })
         left = Math.min(window.innerWidth - popoverWidth - gap, left)
         top = Math.min(window.innerHeight - popoverHight - gap, top)
         left = Math.max(gap, left)

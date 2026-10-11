@@ -24,6 +24,19 @@ const deliveryMethods = {
     pickup: { text: 'pickup', icon: 'bag' }
 }
 
+// Matches the ≤768px mobile breakpoint in header.module.css
+function useIsMobile() {
+    const [isMobile, setIsMobile] = useState(() =>
+        typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches)
+    useEffect(() => {
+        const mq = window.matchMedia('(max-width: 768px)')
+        const onChange = (e) => setIsMobile(e.matches)
+        mq.addEventListener('change', onChange)
+        return () => mq.removeEventListener('change', onChange)
+    }, [])
+    return isMobile
+}
+
 export default function DeliveryView({ }) {
     const
         { order = {}, setOrder } = useOrder(),
@@ -33,6 +46,7 @@ export default function DeliveryView({ }) {
             deliveryMethods.pickup.text : deliveryMethods.delivery.text),
         [popoverOpened, setPopoverOpened] = useState(false),
         [isSwitching, setIsSwitching] = useState(false),
+        isMobile = useIsMobile(),
         { icon, text } = deliveryMethods[deliveryMethod],
         { TR } = useText(),
         window = order?.window,
@@ -79,11 +93,14 @@ export default function DeliveryView({ }) {
         events.on('delivery-popover', openPopover)
         return () => events.off('delivery-popover', openPopover)
     }, [])
-
+    console.log('isMobile', isMobile)
     return <Popover
         id='delivery'
-        topOffset={10}
-        overlay modal={false} button={<Flex alignItems='center' gap={10} className={styles.button} onClick={openPopover}>
+        // Popover base gap is 5: total 8 desktop / 2 mobile
+        topOffset={isMobile ? 4 : 10}
+        overlay
+        modal={false}
+        button={<Flex alignItems='center' gap={10} className={styles.button} onClick={openPopover}>
             <Icon name={icon} className={styles.icon} />
             <Flex alignItems='center' justifyContent='space-between' grow={1} className='btnTexts'>
                 <Flex col gap={3}>
@@ -92,7 +109,8 @@ export default function DeliveryView({ }) {
                 </Flex>
                 <Icon name='down' className={styles.chevron} />
             </Flex>
-        </Flex>}>
+        </Flex>}
+    >
         {() => <Flex col gap={25} className={styles.deliveryView}>
             {pickupStores.length ? <Tabs
                 active={deliveryMethod}

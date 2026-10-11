@@ -3,7 +3,8 @@
     align-items: center;
 
     img {
-        height: 35px;
+        height: 76px;
+        padding-bottom: 10px;
         max-width: 140px;
         object-fit: contain;
         object-position: left center;
@@ -30,7 +31,7 @@
             display: flex;
 
             img {
-                height: 30px;
+                height: 45px;
                 max-width: 90px;
                 object-fit: contain;
             }
@@ -48,7 +49,7 @@
         }
 
         .small img {
-            height: 28px;
+            /* height: 28px; */
             max-width: 90px;
         }
     }
@@ -58,10 +59,6 @@
             height: 26px;
             width: 30px;
             max-width: 30px;
-        }
-
-        .small img {
-            height: 26px;
         }
     }
 }
