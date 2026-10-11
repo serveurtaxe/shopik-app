@@ -60,7 +60,7 @@ export async function validateNoOverlap(DL, location, excludeId) {
     }
 
     if (excludeId)
-        query.id = { $ne: excludeId }
+        query.id = Array.isArray(excludeId) ? { $nin: excludeId } : { $ne: excludeId }
 
     const candidates = await DL.SupplyArea.Model.find(query).select('id name location').lean()
 

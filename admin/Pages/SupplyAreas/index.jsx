@@ -57,6 +57,42 @@ function mergeById(prev, incoming) {
     return [...map.values()]
 }
 
+// ——— Union adjacency pre-check (client-side, quantized; server re-validates) ———
+const quant = (n) => Math.round(n * 1e6)
+const ptKeyQ = ([lng, lat]) => `${quant(lng)}_${quant(lat)}`
+
+// Planar point-on-segment with epsilon (degree space)
+function ptOnSegQ([px, py], [ax, ay], [bx, by]) {
+    const cross = (bx - ax) * (py - ay) - (by - ay) * (px - ax)
+    if (Math.abs(cross) > 1e-9) return false
+    const dot = (px - ax) * (px - bx) + (py - ay) * (py - by)
+    return dot <= 1e-9
+}
+
+function ringsTouch(ringA, ringB) {
+    const setB = new Set(ringB.map(ptKeyQ))
+    if (ringA.some(p => setB.has(ptKeyQ(p)))) return true
+    for (let i = 0; i < ringB.length - 1; i++) {
+        const a = ringB[i]
+        const b = ringB[i + 1]
+        if (a[0] === b[0] && a[1] === b[1]) continue
+        if (ringA.some(p => ptOnSegQ(p, a, b))) return true
+    }
+    for (let i = 0; i < ringA.length - 1; i++) {
+        const a = ringA[i]
+        const b = ringA[i + 1]
+        if (a[0] === b[0] && a[1] === b[1]) continue
+        if (ringB.some(p => ptOnSegQ(p, a, b))) return true
+    }
+    return false
+}
+
+function areasAdjacent(a, b) {
+    const ringsA = a?.location?.coordinates || []
+    const ringsB = b?.location?.coordinates || []
+    return ringsA.some(ra => ringsB.some(rb => ringsTouch(ra, rb)))
+}
+
 export default function SupplyAreas() {
     const { TR } = useText()
     const [areas, setAreas] = useState([])
@@ -158,6 +194,8 @@ export default function SupplyAreas() {
     }, [areas.length, loading, startBackgroundFetch])
 
     const [selectedId, setSelectedId] = useState(null)
+    const [unionIds, setUnionIds] = useState([]) // ctrl+click multi-select (selection order, first survives)
+    const [merging, setMerging] = useState(false)
     const [areaDraft, setAreaDraft] = useState(null) // { id, name, storeIds }
     const [geometryEditingId, setGeometryEditingId] = useState(null)
     const [cuttingId, setCuttingId] = useState(null)
@@ -238,6 +276,7 @@ export default function SupplyAreas() {
         if (cuttingId) { handleCutCancel(); return true }
         if (creating) { handleCancelCreate(); return true }
         if (groupDraft) { handleCancelGroupDraft(); return true }
+        if (unionIds.length) { setUnionIds([]); setError(null); return true }
         return false
     }
 
@@ -300,7 +339,9 @@ export default function SupplyAreas() {
             ? TR('supply_draw_hint')
             : cuttingId
                 ? TR('supply_cut_hint')
-                : null
+                : unionIds.length
+                    ? TR('supply_union_hint')
+                    : null
     const servedStoreId = testResult?.area?.stores?.[0]?.storeId
     const servedByName = stores.find(s => s.id === servedStoreId)?.name || testResult?.area?.name || ''
 
@@ -403,9 +444,93 @@ export default function SupplyAreas() {
         if (groupDraft) return
         if (geometryEditingId) return
         if (cuttingId) return
+        if (merging) return
         setError(null)
+        if (unionIds.length) setUnionIds([])
         setSelectedId(id)
         setAreaDraft(null)
+    }
+
+    // ——— Union (ctrl+click multi-select → merge into first selected) ———
+    function handleUnionToggle(id) {
+        if (!id || groupDraft || creating || geometryEditingId || cuttingId || merging) return
+        if (unionIds.includes(id)) {
+            setError(null)
+            const rest = unionIds.filter(x => x !== id)
+            // A lone remainder is just a selection again (popup reopens)
+            if (rest.length === 1) {
+                setUnionIds([])
+                setSelectedId(rest[0])
+                setAreaDraft(null)
+                return
+            }
+            setUnionIds(rest)
+            return
+        }
+        setError(null)
+        if (unionIds.length === 0) {
+            // Fold an existing single selection in as the survivor (first)
+            const seed = selectedId && selectedId !== id
+                ? [areas.find(a => a.id === selectedId)].filter(Boolean)
+                : []
+            if (seed.length) {
+                const candidate = areas.find(a => a.id === id)
+                if (!candidate || !areasAdjacent(seed[0], candidate)) {
+                    setError('supply_union_not_adjacent')
+                    return
+                }
+                setSelectedId(null)
+                setAreaDraft(null)
+                setUnionIds([selectedId, id])
+                return
+            }
+            setSelectedId(null)
+            setAreaDraft(null)
+            setUnionIds([id])
+            return
+        }
+        const candidate = areas.find(a => a.id === id)
+        const touches = unionIds.some(pid => {
+            const other = areas.find(a => a.id === pid)
+            return candidate && other && areasAdjacent(candidate, other)
+        })
+        if (!touches) {
+            setError('supply_union_not_adjacent')
+            return
+        }
+        setUnionIds([...unionIds, id])
+    }
+
+    function handleUnionCommit() {
+        if (unionIds.length < 2 || merging) return
+        const picked = unionIds.map(id => areas.find(a => a.id === id))
+        if (picked.some(a => !a)) {
+            setError('supply_union_not_adjacent')
+            return
+        }
+        const storeKey = a => [...(a.stores || []).map(s => s.storeId)].sort().join(',')
+        const sameStores = picked.every(a => storeKey(a) === storeKey(picked[0]))
+        setMerging(true)
+        setError(null)
+        apiReq('supply_area/merge', { ids: unionIds })
+            .then(({ updated, deletedIds }) => {
+                if (updated?.id) patchArea(updated)
+                if (Array.isArray(deletedIds) && deletedIds.length)
+                    setAreas(prev => prev.filter(a => !deletedIds.includes(a.id)))
+                const survivorId = updated?.id || unionIds[0]
+                const survivor = updated || picked[0]
+                setUnionIds([])
+                setSelectedId(survivorId)
+                // Different store sets → open the store bubble for reconciliation;
+                // survivor keeps the first-selected area's stores until saved
+                if (!sameStores && survivor) {
+                    setAreaDraft({ id: survivorId, name: survivor.name || '', storeIds: (survivor.stores || []).map(s => s.storeId) })
+                } else {
+                    setAreaDraft(null)
+                }
+            })
+            .catch(err => setError(toMessage(err)))
+            .finally(() => setMerging(false))
     }
     function handleStartAreaPropsEdit() {
         if (!selectedArea) return
@@ -606,6 +731,7 @@ export default function SupplyAreas() {
 
     function handleMapBackgroundClick() {
         if (groupDraft || creating || geometryEditingId || cuttingId) return
+        if (unionIds.length) { setUnionIds([]); setError(null); return }
         setSelectedId(null)
         setAreaDraft(null)
     }
@@ -903,14 +1029,46 @@ export default function SupplyAreas() {
                         </div>
                     )}
                     {!modeMeta ? (
-                        <button
-                            type="button"
-                            className={styles.centerPlus}
-                            title={TR('new area')}
-                            onClick={handleNewArea}
-                        >
-                            <Icon name="add" />
-                        </button>
+                        unionIds.length ? (
+                            <div className={styles.toolbarWrap}>
+                                <div className={styles.toolbarPill}>
+                                    <span
+                                        className={`${styles.pillMain} ${styles.pillStatic} ${styles.pillMode_union}`}
+                                        title={TR('supply_union')}
+                                    >
+                                        <Icon name="combine" />
+                                        <span className={styles.pillLabel}>{unionIds.length} <Text size="none">supply_areas_selected</Text></span>
+                                    </span>
+                                    <Button
+                                        size="s"
+                                        icon="check"
+                                        loading={merging}
+                                        disabled={unionIds.length < 2}
+                                        onClick={handleUnionCommit}
+                                    >
+                                        supply_union
+                                    </Button>
+                                    <button
+                                        type="button"
+                                        className={styles.pillX}
+                                        title={TR('cancel')}
+                                        disabled={merging}
+                                        onClick={() => { setUnionIds([]); setError(null) }}
+                                    >
+                                        <Icon name="x" />
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <button
+                                type="button"
+                                className={styles.centerPlus}
+                                title={TR('new area')}
+                                onClick={handleNewArea}
+                            >
+                                <Icon name="add" />
+                            </button>
+                        )
                     ) : (
                         <div className={styles.toolbarWrap}>
                             <div className={styles.toolbarPill}>
@@ -968,6 +1126,8 @@ export default function SupplyAreas() {
                         focusPoint={focusPoint}
                         focusGroupPoint={focusGroupPoint}
                         selectedId={selectedId}
+                        unionIds={unionIds}
+                        onUnionToggle={handleUnionToggle}
                         areaDraft={areaDraft}
                         setAreaDraft={setAreaDraft}
                         geometryEditingId={geometryEditingId}

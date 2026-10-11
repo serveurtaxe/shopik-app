@@ -185,6 +185,7 @@ function getPaddedBounds(map) {
 function MapController({
     areas,
     selectedId,
+    unionIds = [],
     geometryEditingId,
     cuttingId,
     servedAreaIds,
@@ -193,6 +194,7 @@ function MapController({
     toggleMode,
     drawing,
     onSelect,
+    onUnionToggle,
     onToggleArea,
     onCreated,
     onCutCommit,
@@ -212,8 +214,8 @@ function MapController({
     const editLayerRef = useRef(null)
     const editOriginalRef = useRef(null)
     const editControlRef = useRef(null)
-    const cbRef = useRef({ onSelect, onToggleArea, onCreated, onCutCommit, onEdited, onGeometryCancel, onBackgroundClick, onViewportChange, selectedId, geometryEditingId, cuttingId, drawing, toggleMode })
-    cbRef.current = { onSelect, onToggleArea, onCreated, onCutCommit, onEdited, onGeometryCancel, onBackgroundClick, onViewportChange, selectedId, geometryEditingId, cuttingId, drawing, toggleMode }
+    const cbRef = useRef({ onSelect, onUnionToggle, onToggleArea, onCreated, onCutCommit, onEdited, onGeometryCancel, onBackgroundClick, onViewportChange, selectedId, geometryEditingId, cuttingId, drawing, toggleMode })
+    cbRef.current = { onSelect, onUnionToggle, onToggleArea, onCreated, onCutCommit, onEdited, onGeometryCancel, onBackgroundClick, onViewportChange, selectedId, geometryEditingId, cuttingId, drawing, toggleMode }
 
     const removeEditControl = useCallback(() => {
         if (editControlRef.current) {
@@ -322,6 +324,10 @@ function MapController({
                 if (cbRef.current.drawing) return
                 if (cbRef.current.geometryEditingId) return
                 if (cbRef.current.cuttingId) return
+                if (e.originalEvent?.ctrlKey || e.originalEvent?.metaKey) {
+                    cbRef.current.onUnionToggle?.(area.id)
+                    return
+                }
                 const isSelected = cbRef.current.selectedId === area.id
                 cbRef.current.onSelect?.(isSelected ? null : area.id)
             })
@@ -332,17 +338,17 @@ function MapController({
         return () => group.clearLayers()
     }, [map, areas])
 
-    // Highlight: selected (blue) > current group members (purple) > served by store (orange) > default.
+    // Highlight: selected / union members (blue) > current group members (purple) > served by store (orange) > default.
     useEffect(() => {
         layersRef.current.forEach((layer, id) => {
             layer.setStyle(polygonStyle({
-                selected: id === selectedId,
+                selected: id === selectedId || unionIds.includes(id),
                 draftMember: draftAreaIds.includes(id),
                 groupMember: !toggleMode && groupAreaIds.includes(id),
                 served: servedAreaIds.includes(id)
             }))
         })
-    }, [selectedId, servedAreaIds, groupAreaIds, draftAreaIds, toggleMode])
+    }, [selectedId, unionIds, servedAreaIds, groupAreaIds, draftAreaIds, toggleMode])
 
     // Refresh snapping targets (existing area vertices + edges) — bucketed grid for vertices + flat edge list
     useEffect(() => {
@@ -678,8 +684,8 @@ function AreaEditForm({ areaDraft, setAreaDraft, stores, savingArea, onCancel, o
 export default function SupplyAreaMap({
     areas = [], stores = [], activeStoreIds = [], servedAreaIds = [], groupAreaIds = [], draftAreaIds = [],
     focusPoint, focusGroupPoint, testPoint, testLabel,
-    selectedId, geometryEditingId, cuttingId, areaDraft, setAreaDraft, savingArea,
-    onSelect, onStartAreaPropsEdit, onSaveAreaProps, onCancelAreaPropsEdit, onDeleteArea, onStartGeometryEdit, onStartCut,
+    selectedId, unionIds = [], geometryEditingId, cuttingId, areaDraft, setAreaDraft, savingArea,
+    onSelect, onUnionToggle, onStartAreaPropsEdit, onSaveAreaProps, onCancelAreaPropsEdit, onDeleteArea, onStartGeometryEdit, onStartCut,
     onViewportChange, onCreateArea, cityBorders, onToggleCityBorders,
     toggleMode, drawing, onToggleArea, onCreated, onCutCommit, onEdited, onGeometryCancel, onBackgroundClick,
     isFullscreen, onToggleFullscreen, sidebarOpen = true,
@@ -820,11 +826,13 @@ export default function SupplyAreaMap({
                     groupAreaIds={groupAreaIds}
                     draftAreaIds={draftAreaIds}
                     selectedId={selectedId}
+                    unionIds={unionIds}
                     geometryEditingId={geometryEditingId}
                     cuttingId={cuttingId}
                     toggleMode={toggleMode}
                     drawing={drawing}
                     onSelect={onSelect}
+                    onUnionToggle={onUnionToggle}
                     onToggleArea={onToggleArea}
                     onCreated={onCreated}
                     onCutCommit={onCutCommit}
@@ -833,7 +841,7 @@ export default function SupplyAreaMap({
                     onBackgroundClick={onBackgroundClick}
                     onViewportChange={onViewportChange}
                 />
-                {selectedArea && popupPosition && (
+                {selectedArea && popupPosition && !unionIds.length && (
                     <Popup
                         position={popupPosition}
                         maxWidth={420}

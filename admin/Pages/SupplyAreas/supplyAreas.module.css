@@ -1210,6 +1210,10 @@
     color: #7c3aed;
 }
 
+.pillMode_union {
+    color: #2563eb;
+}
+
 .pillLabel {
     font-size: .8rem;
     font-weight: var(--font-weight-semibold);
