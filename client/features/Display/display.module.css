@@ -108,6 +108,7 @@
 .rail {
     width: 100%;
     container-type: inline-size;
+    background-color: var(--carousel-bg);
 }
 
 .railHeader {

@@ -118,7 +118,7 @@
 }
 
 .miniCartButton {
-    background-color: var(--bg-brand-section, #0E3432);
+    background-color: var(--header-cart-bg);
     color: var(--text-white, #FFFFFF);
     border-radius: var(--radius-full, 9999px);
     border: none;
