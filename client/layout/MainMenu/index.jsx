@@ -9,10 +9,12 @@ import { NavLink, useLocation } from 'react-router'
 import { useAppData } from 'App'
 import { useCart } from 'layout/Cart/CartProvider'
 
-export default function MainMenu({ }) {
+export default function MainMenu({ openMenu: controlledOpen, onOpenMenu }) {
     const { menu } = useAppData() || {}
     const { cartOpen } = useCart()
-    const [openMenu, setOpenMenu] = useState(null)
+    const [internalOpen, setInternalOpen] = useState(null)
+    const openMenu = controlledOpen !== undefined ? controlledOpen : internalOpen
+    const setOpenMenu = onOpenMenu || setInternalOpen
     const menuRef = useRef(null)
     const location = useLocation()
 
@@ -79,6 +81,7 @@ function MenuItem({
             <li className={styles.mainListItem}>
                 <Flex
                     className={styles.mainItem}
+                    style={menuThemeVars(to)}
                     tag={hasChildren ? 'button' : NavLink}
                     to={hasChildren ? undefined : to}
                     type={hasChildren ? 'button' : undefined}
@@ -278,4 +281,23 @@ function Level3Menu({ items, visible, parentName, basePath, onClose, onBack }) {
             })}
         </Flex>
     )
+}
+
+// Theme vars for main pills come from Settings (category theme,
+// subCategory colors) — entry-server injects them as :root vars.
+// Falls back to .mainItem defaults when a setting is missing.
+const MENU_THEME_KEYS = {
+    '/products': 'departments',
+    '/sales': 'sales',
+    '/': 'home',
+}
+
+function menuThemeVars(path) {
+    const key = MENU_THEME_KEYS[path]
+    if (!key) return undefined
+    return {
+        '--main-bg': `var(--menu-${key}-bg, var(--bg-primary, #ffffff))`,
+        '--main-border': `var(--menu-${key}-border, var(--border-secondary, #dde4e2))`,
+        '--main-text': `var(--menu-${key}-text, var(--text-primary, #242a28))`,
+    }
 }

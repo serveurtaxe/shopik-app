@@ -1,6 +1,6 @@
-import { USER_TOKEN_EXPIRY_MS, USER_TOKEN_COOKIE, GUEST_CART_TOKEN_COOKIE } from '#common/constants.js'
+import { USER_TOKEN_EXPIRY_MS, USER_TOKEN_EXPIRY_SHORT_MS, USER_TOKEN_COOKIE, GUEST_CART_TOKEN_COOKIE } from '#common/constants.js'
 
-export default async function login({ domainId, phone, otpToken, otp }, { DL, utils, platform, setCookie, cookies, clearCookie }) {
+export default async function login({ domainId, phone, otpToken, otp, remember }, { DL, utils, platform, setCookie, cookies, clearCookie }) {
     const storedOtp = await DL.Otp.readOne({ token: otpToken })
     if (!storedOtp || storedOtp.otp !== otp || String(storedOtp.phone) !== String(phone)) {
         if (storedOtp?._id) {
@@ -25,7 +25,9 @@ export default async function login({ domainId, phone, otpToken, otp }, { DL, ut
             throw { message: 'login failed', status: 403 }
     }
 
-    const token = utils.auth.createToken(user.id, USER_TOKEN_EXPIRY_MS)
+    const shouldRemember = remember === true || (remember === undefined && storedOtp.remember === true)
+    const tokenExpiryMs = shouldRemember ? USER_TOKEN_EXPIRY_MS : USER_TOKEN_EXPIRY_SHORT_MS
+    const token = utils.auth.createToken(user.id, tokenExpiryMs)
     const update = {
         lastLogin: new Date,
         [`tokens.${platform}`]: token
@@ -34,7 +36,7 @@ export default async function login({ domainId, phone, otpToken, otp }, { DL, ut
 
     await DL.redis?.del(`user_auth:${user.id}`)
     await DL.Otp.deleteOne({ _id: storedOtp._id })
-    setCookie(USER_TOKEN_COOKIE, token, USER_TOKEN_EXPIRY_MS)
+    setCookie(USER_TOKEN_COOKIE, token, tokenExpiryMs)
 
     let order = await utils.data.getUserOrder({ DL, _user: updatedUser })
 

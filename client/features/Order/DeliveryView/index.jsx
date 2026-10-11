@@ -80,16 +80,19 @@ export default function DeliveryView({ }) {
         return () => events.off('delivery-popover', openPopover)
     }, [])
 
-    return <Popover id='delivery' overlay button={<Flex alignItems='center' gap={10} className={styles.button} onClick={openPopover}>
-        <Icon name={icon} className={styles.icon} />
-        <Flex alignItems='center' justifyContent='space-between' grow={1}>
-            <Flex col gap={3}>
-                <Text bold size='s'>{buttonTitle}</Text>
-                <Text size='xs'>{buttonSubTitle}</Text>
+    return <Popover
+        id='delivery'
+        topOffset={10}
+        overlay modal={false} button={<Flex alignItems='center' gap={10} className={styles.button} onClick={openPopover}>
+            <Icon name={icon} className={styles.icon} />
+            <Flex alignItems='center' justifyContent='space-between' grow={1} className='btnTexts'>
+                <Flex col gap={3}>
+                    <Text bold size='s'>{buttonTitle}</Text>
+                    <Text size='xs'>{buttonSubTitle}</Text>
+                </Flex>
+                <Icon name='down' className={styles.chevron} />
             </Flex>
-            <Icon name='down' className={styles.chevron} />
-        </Flex>
-    </Flex>}>
+        </Flex>}>
         {() => <Flex col gap={25} className={styles.deliveryView}>
             {pickupStores.length ? <Tabs
                 active={deliveryMethod}

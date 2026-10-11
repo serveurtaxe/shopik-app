@@ -1,5 +1,6 @@
 export const ADMIN_TOKEN_EXPIRY_MS = 1000 * 60 * 60 * 24 * 30
 export const USER_TOKEN_EXPIRY_MS = 1000 * 60 * 60 * 24 * 30
+export const USER_TOKEN_EXPIRY_SHORT_MS = 1000 * 60 * 60 * 24
 export const BOT_TOKEN_EXPIRY_MS = 1000 * 60 * 60 * 24
 export const ADMIN_TOKEN_COOKIE = 'at'
 export const USER_TOKEN_COOKIE = 'ut'

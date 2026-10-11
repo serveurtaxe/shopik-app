@@ -10,8 +10,35 @@
         display: block;
     }
 
+    .full {
+        display: flex;
+        align-items: center;
+    }
+
+    .small {
+        display: none;
+        align-items: center;
+    }
+
+    /* Small logo from settings on tablet and smaller */
+    @media screen and (max-width: 1023px) {
+        .full {
+            display: none;
+        }
+
+        .small {
+            display: flex;
+
+            img {
+                height: 30px;
+                max-width: 90px;
+                object-fit: contain;
+            }
+        }
+    }
+
     @media screen and (max-width: 768px) {
-        img {
+        .full img {
             height: 28px;
             width: 32px;
             max-width: 32px;
@@ -19,13 +46,22 @@
             object-position: left center;
             /* DRY: single Logo component, CSS switches to mini icon (S+dashes) without duplicating component */
         }
+
+        .small img {
+            height: 28px;
+            max-width: 90px;
+        }
     }
 
     @media screen and (max-width: 480px) {
-        img {
+        .full img {
             height: 26px;
             width: 30px;
             max-width: 30px;
+        }
+
+        .small img {
+            height: 26px;
         }
     }
 }

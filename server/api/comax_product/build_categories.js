@@ -146,6 +146,10 @@ export default async function buildCategories(payload, { DL }) {
 
     if (categories.length > 0) {
         await DL.Category.bulkWrite({ docs: categories })
+        // Category docs feed the storefront menu (60min Redis cache) — the
+        // bulkWrite $set only touches synced fields so manual `icon` values
+        // survive, but the cached menu must be rebuilt on next request.
+        await DL.redis?.del('menu')
     }
 
     console.log(`[Comax Categories] Built ${categories.length} categories from comax products`)

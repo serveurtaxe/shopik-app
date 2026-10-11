@@ -29,12 +29,12 @@
 
     .mainItem {
         cursor: pointer;
-        border: 1.5px solid var(--border-secondary, #dde4e2);
+        border: 1.5px solid var(--main-border, var(--border-secondary, #dde4e2));
         border-radius: 100px;
         transition: background-color .2s ease-in-out, border-color .2s ease-in-out, box-shadow .2s ease-in-out;
-        background-color: var(--bg-primary, #ffffff);
+        background-color: var(--main-bg, var(--bg-primary, #ffffff));
         text-decoration: none;
-        color: var(--text-primary, #242a28);
+        color: var(--main-text, var(--text-primary, #242a28));
         padding: 6px 16px;
         white-space: nowrap;
         font-size: 14px;
@@ -57,7 +57,7 @@
 
         position: absolute;
 
-        top: calc(100% + 8px);
+        top: calc(100% + 10px);
         right: 0;
 
         width: 240px;
@@ -287,7 +287,7 @@
     }
 
     .level4Item:hover {
-        color: var(--text-brand-primary);
+        color: var(--text-primary);
         text-decoration: underline;
     }
 
