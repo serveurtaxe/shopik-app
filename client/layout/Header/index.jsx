@@ -7,6 +7,7 @@ import openWhatsApp from 'common/functions/openWhatsApp'
 import styles from './header.module.css'
 import MainMenu from 'layout/MainMenu'
 import MobileMenu from 'layout/MobileMenu'
+import Cart from 'layout/Cart'
 import { INFO_LINKS } from 'layout/infoLinks'
 import { closeAllPopovers, subscribePopoverCount } from 'common/components/Popover/registry'
 import events from 'common/features/events'
@@ -82,7 +83,10 @@ export default function Header() {
                     />
                 </div>
 
-                <div className={classNames(styles.userDelivery, [styles.liftAbove, !drawerOpen])}>
+                {/* Lifted only while one of its popovers is open (not merely
+                    when the drawer is closed), so the bar never covers the
+                    open cart drawer on mobile. */}
+                <div className={classNames(styles.userDelivery, [styles.liftAbove, popCount > 0])}>
                     <div className={styles.userViewWrap}>
                         <UserView />
                     </div>
@@ -140,10 +144,17 @@ export default function Header() {
                 <MobileMenu onClose={() => setDrawerOpen(false)} />
             </div>
 
+            {/* Cart drawer lives here (not in Main) so it slots into the
+                header's stacking order: below overlay/popovers/top row,
+                above the static menu row. Fixed positioning keeps it
+                viewport-anchored; state lives in CartProvider. */}
+            <Cart />
+
             {/* The single overlay: menu, drawer and popovers all share it.
-               Plain header child (same stacking context, no portal):
-               row-1 + open menu/drawer/dialogs lift above it (z 999+),
-               everything else falls below and a press here only closes. */}
+                Plain header child (same stacking context, no portal):
+                row-1 + open menu/drawer/dialogs lift above it (10002),
+                cart drawer (9999) and everything else falls below it,
+                and a press here only closes. */}
             {(openMenu || drawerOpen || popCount > 0) && (
                 <div
                     aria-hidden

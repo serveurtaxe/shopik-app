@@ -2,9 +2,10 @@
     box-sizing: border-box;
     position: sticky;
     top: 0;
-    /* Above the cart drawer (9999): the whole header subtree — row controls,
-       nested overlay, windowed popovers — keeps its internal order and paints
-       over the cart together. */
+    /* Own stacking context above page content: shields all header paint at
+       once. Inside it: top row + open menus/dialogs (10002) > overlay (10001)
+       > cart drawer (9999) > static menu row. The cart lives here (not in
+       Main) so it slots        into this order instead of competing from outside. */
     z-index: 10000;
     width: 100%;
     background-color: var(--header-bg);
@@ -31,16 +32,15 @@
         display: contents;
     }
 
-    /* The overlay below is a plain child of the header (same stacking
-       context): row-1 controls + open menu/drawer/dialogs lift above it,
-       menu row / delivery bar / body fall below it. No portals. */
+    /* Row-1 controls ride above the overlay (10001) so buttons stay
+       clickable and popovers switch with a single press. */
     .menuBtn,
     .logoWrap,
     .searchWrap,
     .headerActions,
     .cartWrap {
         position: relative;
-        z-index: 999;
+        z-index: 10002;
     }
 
     .menuBtn {
@@ -162,7 +162,8 @@
     /* Desktop grid */
     @media screen and (min-width: 769px) {
 
-        /* Row 1 is a real bar: header background, lifted above the overlay */
+        /* Row 1 is a real bar: header background, lifted above the overlay
+           (and, globally, above the cart drawer) */
         .topBar {
             display: flex;
             align-items: center;
@@ -170,7 +171,7 @@
             height: 76px;
             background-color: var(--header-bg);
             position: relative;
-            z-index: 999;
+            z-index: 10002;
             transition: background-color .3s ease;
             padding: calc(10px + env(safe-area-inset-top, 0px)) max(16px, calc((100% - var(--max-width)) / 2 + 16px)) 0 max(16px, calc((100% - var(--max-width)) / 2 + 16px));
             padding-inline-start: max(env(safe-area-inset-left, 0px), max(16px, calc((100% - var(--max-width)) / 2 + 16px)));
@@ -195,7 +196,7 @@
         /* The open menu is lifted above the single overlay */
         .menuWrap.menuAbove {
             position: relative;
-            z-index: 999;
+            z-index: 10002;
         }
     }
 
@@ -274,7 +275,7 @@
 
             &.liftAbove {
                 position: relative;
-                z-index: 999;
+                z-index: 10002;
             }
 
             /* The desktop "popover open" pill background looks wrong on the
@@ -347,7 +348,7 @@
             background-color: var(--bg-primary, #fff);
             margin: 0;
             padding: 0;
-            z-index: 999;
+            z-index: 10002;
             border-top: 1px solid #e3ebea;
             box-shadow: 0 6px 20px rgba(0, 0, 0, .08);
             max-height: calc(100dvh - 100% - env(safe-area-inset-top, 0px));
@@ -407,16 +408,15 @@
     }
 }
 
-/* Shared dim behind open menu/drawer/popovers. Nested in the header: it sits
-   below the lifted row controls/dropdowns/dialogs (999+) and above page
-   content — and since the header root paints above the cart drawer, the
-   overlay dims the cart too. A press here only closes. */
+/* Shared dim behind open menu/drawer/popovers. Nested in the header: below
+   the lifted rows (10002), above the cart drawer (9999) and page content.
+   A press here only closes. */
 .menuOverlay {
     position: fixed;
     inset: 0;
     background-color: var(--menu-overlay, #00332499);
     border: 0;
     padding: 0;
-    z-index: 998;
+    z-index: 10001;
     cursor: default;
 }
