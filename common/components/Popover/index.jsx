@@ -31,6 +31,7 @@ export default function Popover({ id, className, button, children, btnClassName,
             if (winResizeRef.current) {
                 window.removeEventListener('resize', winResizeRef.current)
                 window.visualViewport?.removeEventListener('resize', winResizeRef.current)
+                window.removeEventListener('scroll', winResizeRef.current, true)
                 winResizeRef.current = null
             }
         }
@@ -83,7 +84,7 @@ export default function Popover({ id, className, button, children, btnClassName,
             void ref.current?.offsetWidth
             ref.current?.classList.add(styles.visible)
             watchResize()
-            watchWindowResize()
+            watchViewport()
             positionRef.current?.()
         })
     }
@@ -98,19 +99,23 @@ export default function Popover({ id, className, button, children, btnClassName,
         winRafRef.current = requestAnimationFrame(() => positionRef.current?.())
     }
 
-    // Viewport size changes move the anchor button — re-glue windowed
-    // popovers while open. Modal dialogs stay browser-centered.
-    function watchWindowResize() {
-        if (modal || winResizeRef.current) return
+    // Viewport resizes and any scroll (window or nested containers, via
+    // capture) move the anchor button — re-glue the dialog to it while
+    // open. Applies to windowed and modal popovers alike: both are
+    // JS-anchored to their button (base CSS disables native centering).
+    function watchViewport() {
+        if (winResizeRef.current) return
         winResizeRef.current = () => schedulePosition()
         window.addEventListener('resize', winResizeRef.current)
         window.visualViewport?.addEventListener('resize', winResizeRef.current)
+        window.addEventListener('scroll', winResizeRef.current, true)
     }
 
-    function unwatchWindowResize() {
+    function unwatchViewport() {
         if (!winResizeRef.current) return
         window.removeEventListener('resize', winResizeRef.current)
         window.visualViewport?.removeEventListener('resize', winResizeRef.current)
+        window.removeEventListener('scroll', winResizeRef.current, true)
         winResizeRef.current = null
     }
 
@@ -139,7 +144,7 @@ export default function Popover({ id, className, button, children, btnClassName,
 
         const
             overflowTop = top + popoverHight > window.innerHeight - gap,
-            overflowleft = props.left || left - popoverWidth < 0
+            overflowleft = props.left || left < 0
 
         if (overflowTop)
             top = btnRect.top - popoverHight - gap
@@ -176,7 +181,7 @@ export default function Popover({ id, className, button, children, btnClassName,
         cancelAnimationFrame(rafRef.current)
         cancelAnimationFrame(winRafRef.current)
         document.removeEventListener('keydown', escRef.current)
-        unwatchWindowResize()
+        unwatchViewport()
         roRef.current?.disconnect()
         roRef.current = null
         popoverClosed(key)
