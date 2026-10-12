@@ -6,11 +6,6 @@
         width: 100%;
     }
 
-    .tabBtn {
-        flex: 1;
-        border-radius: 100px;
-    }
-
     .hero {
         text-align: center;
     }

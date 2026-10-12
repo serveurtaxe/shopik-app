@@ -5,6 +5,7 @@ import apiReq from 'common/functions/apiReq'
 import events from '#common/features/events'
 import Input from 'common/components/Input'
 import Title from 'common/components/Title'
+import Tabs from 'common/components/Tabs'
 import styles from './authPanel.module.css'
 import Icon from '#common/components/Icon'
 import Flex from 'common/components/Flex'
@@ -13,6 +14,11 @@ import Text from 'common/components/Text'
 import { useUser } from 'features/User'
 import { useState } from 'react'
 import Account from 'pages/Account'
+
+const AUTH_TABS = [
+    { value: 'login', text: 'login' },
+    { value: 'register', text: 'register' }
+]
 
 /**
  * Shared login/register panel — rendered inside the desktop Popover
@@ -29,24 +35,7 @@ export default function AuthPanel({ onClose }) {
         </Flex>
 
     return <Flex gap={16} col className={styles.authPanel}>
-        <Flex gap={8} className={styles.tabs}>
-            <Button
-                type='button'
-                mode={tab === 'login' ? 'outline' : 'text'}
-                className={styles.tabBtn}
-                onClick={() => setTab('login')}
-            >
-                login
-            </Button>
-            <Button
-                type='button'
-                mode={tab === 'register' ? 'outline' : 'text'}
-                className={styles.tabBtn}
-                onClick={() => setTab('register')}
-            >
-                register
-            </Button>
-        </Flex>
+        <Tabs options={AUTH_TABS} active={tab} onChange={setTab} className={styles.tabs} />
 
         {tab === 'login'
             ? <LoginForm onClose={onClose} onToRegister={() => setTab('register')} />
