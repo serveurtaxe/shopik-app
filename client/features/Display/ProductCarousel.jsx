@@ -18,29 +18,27 @@ export default function ProductCarousel({ block }) {
     useEffect(() => { if (Object.keys(sales).length) setSalesCache(sales) }, [sales])
     if (!products.length) return null
 
-    return <Flex col className={styles.rail}>
-        <Flex col gap={8} className={styles.railInner}>
-            <Flex className={styles.railHeader} alignItems="center">
-                <Text size="h1" bold className={styles.railTitle}>{title || block.name}</Text>
-                {showAll !== false && (
-                    <Link to={`/carousel/${block.id}`} className={styles.showAll}>
-                        <Text mode="link" bold size='xl' className={styles.showAllText}>{showAllText || TR('display_show_all_default')}</Text>
-                        <Icon name="left" size={24} />
-                    </Link>
-                )}
-            </Flex>
-            <HorizontalScroll
-                autoplaySec={autoplaySec}
-                itemClassName={styles.railCard}
-                items={products.map(p => (
-                    <ProductCard
-                        key={p.id}
-                        product={p}
-                        sales={(p.saleIds || []).reduce(
-                            (acc, sId) => sales[sId] ? { ...acc, [sId]: sales[sId] } : acc, {})}
-                    />
-                ))}
-            />
+    return <Flex col gap={8} className={styles.rail}>
+        <Flex className={styles.railHeader} alignItems="center">
+            <Text size="h1" bold className={styles.railTitle}>{title || block.name}</Text>
+            {showAll !== false && (
+                <Link to={`/carousel/${block.id}`} className={styles.showAll}>
+                    <Text mode="link" bold size='xl' className={styles.showAllText}>{showAllText || TR('display_show_all_default')}</Text>
+                    <Icon name="left" size={24} />
+                </Link>
+            )}
         </Flex>
+        <HorizontalScroll
+            autoplaySec={autoplaySec}
+            itemClassName={styles.railCard}
+            items={products.map(p => (
+                <ProductCard
+                    key={p.id}
+                    product={p}
+                    sales={(p.saleIds || []).reduce(
+                        (acc, sId) => sales[sId] ? { ...acc, [sId]: sales[sId] } : acc, {})}
+                />
+            ))}
+        />
     </Flex>
 }

@@ -2,7 +2,10 @@
     box-sizing: border-box;
     position: sticky;
     top: 0;
-    z-index: 999;
+    /* Above the cart drawer (9999): the whole header subtree — row controls,
+       nested overlay, windowed popovers — keeps its internal order and paints
+       over the cart together. */
+    z-index: 10000;
     width: 100%;
     background-color: var(--header-bg);
     transition: background-color .3s ease, padding .3s ease;
@@ -404,13 +407,10 @@
     }
 }
 
-/* Full-screen tint behind the open categories menu. Top-level (NOT nested
-   inside .header) because it is rendered via portal to document.body:
-   a nested rule would compile to a descendant selector that never matches.
-   z-index sits below the header (999, which contains the dropdown) and
-   above page content, so the header stays fully interactable while a
-   click/tap anywhere else lands here: the menu closes and the underlying
-   product/link never receives the gesture. */
+/* Shared dim behind open menu/drawer/popovers. Nested in the header: it sits
+   below the lifted row controls/dropdowns/dialogs (999+) and above page
+   content — and since the header root paints above the cart drawer, the
+   overlay dims the cart too. A press here only closes. */
 .menuOverlay {
     position: fixed;
     inset: 0;
