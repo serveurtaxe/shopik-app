@@ -48,6 +48,17 @@ export default function Header() {
         return () => events.off('popover-opened', onPopover)
     }, [])
 
+    // Cart toggle dismisses both menus (mobile drawer + desktop product
+    // menu); popovers are closed by MiniCart itself via the registry.
+    useEffect(() => {
+        const onCartToggle = () => {
+            setOpenMenu(null)
+            setDrawerOpen(false)
+        }
+        events.on('cart-toggled', onCartToggle)
+        return () => events.off('cart-toggled', onCartToggle)
+    }, [])
+
     useEffect(() => subscribePopoverCount(setPopCount), [])
 
     const handleWhatsAppClick = () => {

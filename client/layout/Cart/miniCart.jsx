@@ -6,6 +6,8 @@ import Icon from 'common/components/Icon'
 import { useText } from 'common/texts/TextProvider'
 import classNames from 'common/functions/classNames'
 import { useCart } from './CartProvider'
+import { closeAllPopovers } from 'common/components/Popover/registry'
+import events from 'common/features/events'
 import { useOrder } from 'features/Order/OrderProvider'
 import { useAppData } from 'App'
 import { getRemainingToFreeShipping, extractShippingConfig } from '#common/functions/shipping.js'
@@ -36,6 +38,11 @@ export default function MiniCart({
     const itemCount = order?.cart?.length
 
     const handleToggle = (e) => {
+        // Cart and popovers never share the screen: opening/closing the cart
+        // dismisses login, delivery, info and any other open popover.
+        closeAllPopovers()
+        // Menus are Header-owned: let Header close drawer + product menu.
+        events.emit('cart-toggled')
         if (onToggle) {
             onToggle(e)
         } else if (controlledIsOpen === undefined) {
