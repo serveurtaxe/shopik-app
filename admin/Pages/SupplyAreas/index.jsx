@@ -4,7 +4,6 @@ import apiReq from 'common/functions/apiReq'
 import Button from 'common/components/Button'
 import Checkbox from 'common/components/Checkbox'
 import ConfirmButton from 'common/components/ConfirmButton'
-import Input from 'common/components/Input'
 import Flex from 'common/components/Flex'
 import Card from 'common/components/Card'
 import Text from 'common/components/Text'
@@ -14,6 +13,13 @@ import SupplyAreaMap from './SupplyAreaMap'
 import styles from './supplyAreas.module.css'
 
 const toMessage = (err) => (typeof err === 'string' ? err : err?.message || 'something went wrong')
+
+const MODE_META = {
+    new: { icon: 'add', label: 'new area' },
+    split: { icon: 'cut', label: 'supply_cut_area' },
+    edit: { icon: 'edit', label: 'supply_edit_shape' },
+    group: { icon: 'grid', label: 'supply_new_area_group' },
+}
 
 const ISRAEL_BOUNDS = { west: 34.2, south: 29.5, east: 35.9, north: 33.4 }
 const CITY_BORDERS_KEY = 'supplyMapCityBorders'
@@ -49,6 +55,42 @@ function mergeById(prev, incoming) {
     if (!changed && incoming.length === 0) return prev
     if (map.size === prev.length && !changed) return prev
     return [...map.values()]
+}
+
+// ——— Union adjacency pre-check (client-side, quantized; server re-validates) ———
+const quant = (n) => Math.round(n * 1e6)
+const ptKeyQ = ([lng, lat]) => `${quant(lng)}_${quant(lat)}`
+
+// Planar point-on-segment with epsilon (degree space)
+function ptOnSegQ([px, py], [ax, ay], [bx, by]) {
+    const cross = (bx - ax) * (py - ay) - (by - ay) * (px - ax)
+    if (Math.abs(cross) > 1e-9) return false
+    const dot = (px - ax) * (px - bx) + (py - ay) * (py - by)
+    return dot <= 1e-9
+}
+
+function ringsTouch(ringA, ringB) {
+    const setB = new Set(ringB.map(ptKeyQ))
+    if (ringA.some(p => setB.has(ptKeyQ(p)))) return true
+    for (let i = 0; i < ringB.length - 1; i++) {
+        const a = ringB[i]
+        const b = ringB[i + 1]
+        if (a[0] === b[0] && a[1] === b[1]) continue
+        if (ringA.some(p => ptOnSegQ(p, a, b))) return true
+    }
+    for (let i = 0; i < ringA.length - 1; i++) {
+        const a = ringA[i]
+        const b = ringA[i + 1]
+        if (a[0] === b[0] && a[1] === b[1]) continue
+        if (ringB.some(p => ptOnSegQ(p, a, b))) return true
+    }
+    return false
+}
+
+function areasAdjacent(a, b) {
+    const ringsA = a?.location?.coordinates || []
+    const ringsB = b?.location?.coordinates || []
+    return ringsA.some(ra => ringsB.some(rb => ringsTouch(ra, rb)))
 }
 
 export default function SupplyAreas() {
@@ -152,6 +194,8 @@ export default function SupplyAreas() {
     }, [areas.length, loading, startBackgroundFetch])
 
     const [selectedId, setSelectedId] = useState(null)
+    const [unionIds, setUnionIds] = useState([]) // ctrl+click multi-select (selection order, first survives)
+    const [merging, setMerging] = useState(false)
     const [areaDraft, setAreaDraft] = useState(null) // { id, name, storeIds }
     const [geometryEditingId, setGeometryEditingId] = useState(null)
     const [cuttingId, setCuttingId] = useState(null)
@@ -171,13 +215,167 @@ export default function SupplyAreas() {
     const [editingGroupName, setEditingGroupName] = useState(false)
     const [savingGroup, setSavingGroup] = useState(false)
     const [error, setError] = useState(null)
-    const [testCity, setTestCity] = useState('')
-    const [testStreet, setTestStreet] = useState('')
-    const [testBuilding, setTestBuilding] = useState('')
+    const [testQuery, setTestQuery] = useState('')
+    const [searchOpen, setSearchOpen] = useState(false)
     const [testPoint, setTestPoint] = useState(null)
     const [testLabel, setTestLabel] = useState('')
     const [testResult, setTestResult] = useState(null)
     const [testing, setTesting] = useState(false)
+
+    // ——— Fullscreen mode ———
+    const containerRef = useRef(null)
+    const [isFullscreen, setIsFullscreen] = useState(false)
+    const [sidebarOpen, setSidebarOpen] = useState(true) // collapsible in every mode; fullscreen starts closed
+    const selfExitFsRef = useRef(false)
+
+    const mapMode = useMemo(() => {
+        if (creating) return 'new'
+        if (cuttingId) return 'split'
+        if (geometryEditingId) return 'edit'
+        if (groupDraft) return 'group'
+        return null
+    }, [creating, cuttingId, geometryEditingId, groupDraft])
+    const modeMeta = mapMode ? MODE_META[mapMode] : null
+
+    const enterFullscreen = useCallback(() => {
+        setIsFullscreen(true)
+        setSidebarOpen(false)
+        setSearchOpen(false)
+    }, [])
+
+    // CSS state paints first; the native request runs after commit so it can't
+    // race React's render (a same-tick requestFullscreen blanked the map).
+    useEffect(() => {
+        if (!isFullscreen) return
+        document.body.classList.add('supply-map-fullscreen')
+        const el = containerRef.current
+        if (el && !document.fullscreenElement && el.requestFullscreen) {
+            try {
+                const p = el.requestFullscreen()
+                if (p?.catch) p.catch(() => { /* CSS-only fallback */ })
+            } catch (_) { /* CSS-only fallback */ }
+        }
+    }, [isFullscreen])
+
+    const exitFullscreen = useCallback(() => {
+        setIsFullscreen(false)
+        setSidebarOpen(true)
+        document.body.classList.remove('supply-map-fullscreen')
+        if (document.fullscreenElement) {
+            selfExitFsRef.current = true
+            try {
+                const p = document.exitFullscreen()
+                if (p?.catch) p.catch(() => { /* noop */ })
+            } catch (_) { /* noop */ }
+        }
+    }, [])
+
+    // Single source of truth for leaving the active map mode (pill X, ESC, native fullscreen ESC)
+    function exitMapMode() {
+        if (geometryEditingId) { handleGeometryCancel(); return true }
+        if (cuttingId) { handleCutCancel(); return true }
+        if (creating) { handleCancelCreate(); return true }
+        if (groupDraft) { handleCancelGroupDraft(); return true }
+        if (unionIds.length) { setUnionIds([]); setError(null); return true }
+        return false
+    }
+
+    // ESC unwinds map modes first, fullscreen last. A native browser-ESC (which
+    // can't be preventDefaulted) is treated as one unwind step while keeping CSS fullscreen.
+    // Capture phase: leaflet-draw also handles ESC and stops propagation, which used to
+    // leave our mode state (and the pill) stuck — we run first and swallow the event.
+    useEffect(() => {
+        function unwindStep() {
+            if (exitMapMode()) return true
+            if (areaDraft) { handleCancelAreaPropsEdit(); return true }
+            if (selectedId) { setSelectedId(null); setAreaDraft(null); return true }
+            if (sidebarOpen) { setSidebarOpen(false); return true }
+            if (searchOpen) { setSearchOpen(false); return true }
+            return false
+        }
+        function onKey(e) {
+            const t = e.target
+            const typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)
+            // F toggles fullscreen (YouTube-style) — physical key position so it
+            // works in any keyboard language (Hebrew layout produces ש here).
+            // Never while typing.
+            if (e.code === 'KeyF' && !e.ctrlKey && !e.metaKey && !e.altKey && !typing) {
+                if (isFullscreen) exitFullscreen()
+                else enterFullscreen()
+                e.stopPropagation()
+                return
+            }
+            // Single-key map shortcuts, also by physical position. Never while typing.
+            if (!e.ctrlKey && !e.metaKey && !e.altKey && !typing) {
+                // A — in/out of add (new area) mode
+                if (e.code === 'KeyA') {
+                    if (creating) handleCancelCreate()
+                    else handleNewArea()
+                    e.stopPropagation()
+                    return
+                }
+                // E — in/out of polygon edit mode (needs a selected area, clean state)
+                if (e.code === 'KeyE') {
+                    if (geometryEditingId) handleGeometryCancel()
+                    else if (selectedArea && !creating && !cuttingId && !groupDraft && !areaDraft) handleStartGeometryEdit()
+                    else return
+                    e.stopPropagation()
+                    return
+                }
+                // P — in/out of cut (split) mode (needs a selected area, clean state)
+                if (e.code === 'KeyP') {
+                    if (cuttingId) handleCutCancel()
+                    else if (selectedArea && !creating && !geometryEditingId && !groupDraft && !areaDraft) handleStartCut(selectedId)
+                    else return
+                    e.stopPropagation()
+                    return
+                }
+                // S — open/close the stores sidebar
+                if (e.code === 'KeyS') {
+                    setSidebarOpen(v => !v)
+                    e.stopPropagation()
+                    return
+                }
+            }
+            if (e.key !== 'Escape') return
+            if (typing) return
+            if (unwindStep()) { e.stopPropagation(); return }
+            if (document.body.classList.contains('supply-map-fullscreen')) exitFullscreen()
+        }
+        function onFsChange() {
+            if (document.fullscreenElement) return
+            if (selfExitFsRef.current) { selfExitFsRef.current = false; return }
+            if (unwindStep()) return
+            exitFullscreen()
+        }
+        window.addEventListener('keydown', onKey, true)
+        document.addEventListener('fullscreenchange', onFsChange)
+        return () => {
+            window.removeEventListener('keydown', onKey, true)
+            document.removeEventListener('fullscreenchange', onFsChange)
+        }
+    })
+    // Never leave fullscreen behind (unmount while fullscreen)
+    useEffect(() => () => {
+        document.body.classList.remove('supply-map-fullscreen')
+        if (document.fullscreenElement) {
+            try {
+                const p = document.exitFullscreen()
+                if (p?.catch) p.catch(() => { /* noop */ })
+            } catch (_) { /* noop */ }
+        }
+    }, [])
+    const modeHintText = groupDraft
+        ? `${TR('supply_group_hint')} "${groupDraft.name}"`
+        : creating
+            ? TR('supply_draw_hint')
+            : cuttingId
+                ? TR('supply_cut_hint')
+                : unionIds.length
+                    ? TR('supply_union_hint')
+                    : null
+    const servedStoreId = testResult?.area?.stores?.[0]?.storeId
+    const servedByName = stores.find(s => s.id === servedStoreId)?.name || testResult?.area?.name || ''
 
     const selectedArea = areas.find(a => a.id === selectedId) || null
 
@@ -278,9 +476,93 @@ export default function SupplyAreas() {
         if (groupDraft) return
         if (geometryEditingId) return
         if (cuttingId) return
+        if (merging) return
         setError(null)
+        if (unionIds.length) setUnionIds([])
         setSelectedId(id)
         setAreaDraft(null)
+    }
+
+    // ——— Union (ctrl+click multi-select → merge into first selected) ———
+    function handleUnionToggle(id) {
+        if (!id || groupDraft || creating || geometryEditingId || cuttingId || merging) return
+        if (unionIds.includes(id)) {
+            setError(null)
+            const rest = unionIds.filter(x => x !== id)
+            // A lone remainder is just a selection again (popup reopens)
+            if (rest.length === 1) {
+                setUnionIds([])
+                setSelectedId(rest[0])
+                setAreaDraft(null)
+                return
+            }
+            setUnionIds(rest)
+            return
+        }
+        setError(null)
+        if (unionIds.length === 0) {
+            // Fold an existing single selection in as the survivor (first)
+            const seed = selectedId && selectedId !== id
+                ? [areas.find(a => a.id === selectedId)].filter(Boolean)
+                : []
+            if (seed.length) {
+                const candidate = areas.find(a => a.id === id)
+                if (!candidate || !areasAdjacent(seed[0], candidate)) {
+                    setError('supply_union_not_adjacent')
+                    return
+                }
+                setSelectedId(null)
+                setAreaDraft(null)
+                setUnionIds([selectedId, id])
+                return
+            }
+            setSelectedId(null)
+            setAreaDraft(null)
+            setUnionIds([id])
+            return
+        }
+        const candidate = areas.find(a => a.id === id)
+        const touches = unionIds.some(pid => {
+            const other = areas.find(a => a.id === pid)
+            return candidate && other && areasAdjacent(candidate, other)
+        })
+        if (!touches) {
+            setError('supply_union_not_adjacent')
+            return
+        }
+        setUnionIds([...unionIds, id])
+    }
+
+    function handleUnionCommit() {
+        if (unionIds.length < 2 || merging) return
+        const picked = unionIds.map(id => areas.find(a => a.id === id))
+        if (picked.some(a => !a)) {
+            setError('supply_union_not_adjacent')
+            return
+        }
+        const storeKey = a => [...(a.stores || []).map(s => s.storeId)].sort().join(',')
+        const sameStores = picked.every(a => storeKey(a) === storeKey(picked[0]))
+        setMerging(true)
+        setError(null)
+        apiReq('supply_area/merge', { ids: unionIds })
+            .then(({ updated, deletedIds }) => {
+                if (updated?.id) patchArea(updated)
+                if (Array.isArray(deletedIds) && deletedIds.length)
+                    setAreas(prev => prev.filter(a => !deletedIds.includes(a.id)))
+                const survivorId = updated?.id || unionIds[0]
+                const survivor = updated || picked[0]
+                setUnionIds([])
+                setSelectedId(survivorId)
+                // Different store sets → open the store bubble for reconciliation;
+                // survivor keeps the first-selected area's stores until saved
+                if (!sameStores && survivor) {
+                    setAreaDraft({ id: survivorId, name: survivor.name || '', storeIds: (survivor.stores || []).map(s => s.storeId) })
+                } else {
+                    setAreaDraft(null)
+                }
+            })
+            .catch(err => setError(toMessage(err)))
+            .finally(() => setMerging(false))
     }
     function handleStartAreaPropsEdit() {
         if (!selectedArea) return
@@ -481,6 +763,7 @@ export default function SupplyAreas() {
 
     function handleMapBackgroundClick() {
         if (groupDraft || creating || geometryEditingId || cuttingId) return
+        if (unionIds.length) { setUnionIds([]); setError(null); return }
         setSelectedId(null)
         setAreaDraft(null)
     }
@@ -501,19 +784,15 @@ export default function SupplyAreas() {
     }
 
     async function handleTest() {
-        if (!testCity || !testStreet || !testBuilding) {
-            setTestResult({ error: 'supply_test_missing_fields' })
+        if (!testQuery?.trim()) {
+            setTestResult({ error: 'supply_test_missing_query' })
             return
         }
         setTesting(true)
         setError(null)
         setTestResult(null)
         try {
-            const geocoded = await apiReq('geocode/lookup', {
-                city: testCity,
-                street: testStreet,
-                building: testBuilding
-            })
+            const geocoded = await apiReq('geocode/lookup', { q: testQuery.trim() })
             const coords = geocoded?.location?.coordinates
             if (!Array.isArray(coords) || coords.length < 2) {
                 setTestResult({ error: TR('supply_no_service') })
@@ -531,80 +810,22 @@ export default function SupplyAreas() {
         }
     }
     return (
-        <Flex tag={Card} col className={styles.container}>
-            <div className={styles.header}>
-                <Flex gap={8} alignItems="end" className={styles.headerControls}>
-                    <Input
-                        className={styles.headerInput}
-                        label="city"
-                        name="city"
-                        value={testCity}
-                        onChange={(e) => setTestCity(e.target.value)}
-                    />
-                    <Input
-                        className={styles.headerInput}
-                        label="street"
-                        name="street"
-                        value={testStreet}
-                        onChange={(e) => setTestStreet(e.target.value)}
-                    />
-                    <Input
-                        className={styles.headerInput}
-                        label="building"
-                        name="building"
-                        value={testBuilding}
-                        onChange={(e) => setTestBuilding(e.target.value)}
-                    />
-                    <Button
-                        className={styles.headerBtn}
-                        size="s"
-                        icon="search"
-                        onClick={handleTest}
-                        loading={testing}
-                    >
-                        test
-                    </Button>
-                    {testResult && (
-                        <div className={testResult.error ? styles.testResultError : styles.testResult}>
-                            <Text size="none">
-                                {testResult.error
-                                    ? testResult.error
-                                    : testResult.hasService
-                                        ? null
-                                        : TR('supply_no_service')}
-                            </Text>
-                        </div>
-                    )}
-                    {groupDraft && (
-                        <div className={`${styles.hint} ${styles.groupHint}`}>
-                            <Text size="none">{`${TR('supply_group_hint')} "${groupDraft.name}"`}</Text>
-                        </div>
-                    )}
-                    {creating && (
-                        <div className={styles.hint}><Text size="none">supply_draw_hint</Text></div>
-                    )}
-                    {cuttingId && (
-                        <div className={styles.hint}><Text size="none">supply_cut_hint</Text></div>
-                    )}
-                    {error && <div className={styles.errorBanner}><Text size="none">{error}</Text></div>}
-                </Flex>
-                <Flex gap={8} alignItems="end" justifyContent="flex-end" className={styles.headerActions}>
-                    {creating && (
-                        <Button className={styles.headerBtn} size="s" mode="outline" onClick={handleCancelCreate}>supply_cancel_draw</Button>
-                    )}
-                    {cuttingId && (
-                        <Button className={styles.headerBtn} size="s" mode="outline" onClick={handleCutCancel} loading={cuttingSaving}>supply_cancel_cut</Button>
-                    )}
-                    <Button className={styles.headerBtn} size="s" icon="add" onClick={handleNewArea} disabled={!!groupDraft || !!geometryEditingId || !!cuttingId}>new area</Button>
-                </Flex>
-            </div>
-
-
+        <Flex tag={Card} ref={containerRef} col className={`${styles.container} ${isFullscreen ? styles.containerFs : ''}`}>
             <Flex className={styles.body}>
-                <div className={styles.sidebar}>
+                <div className={`${styles.sidebar} ${isFullscreen ? styles.sidebarDrawer : ''} ${!sidebarOpen ? (isFullscreen ? styles.sidebarDrawerClosed : styles.sidebarClosed) : ''}`}>
 
                     <div className={styles.storeListPane}>
-                        <h4 className={styles.storeListTitle}><Text>supply_stores_groups</Text></h4>
+                        <h4 className={styles.storeListTitle}>
+                            <Text>supply_stores_groups</Text>
+                            <button
+                                type="button"
+                                className={styles.drawerClose}
+                                onClick={() => setSidebarOpen(false)}
+                                title={TR('cancel')}
+                            >
+                                <Icon name="x" />
+                            </button>
+                        </h4>
                         {!stores.length && <div className={styles.empty}><Text>supply_no_stores</Text></div>}
                         {stores.map(store => {
                             const storeGroups = groups.filter(g => g.storeId === store.id)
@@ -698,6 +919,7 @@ export default function SupplyAreas() {
                                                                             size="s"
                                                                             mode="outline"
                                                                             icon="trash"
+                                                                            tooltip="supply_delete_group"
                                                                             className={styles.deleteButton}
                                                                         />
                                                                         <Flex gap={8}>
@@ -786,6 +1008,145 @@ export default function SupplyAreas() {
                     {loading && !areas.length ? (
                         <div style={{ position: 'absolute', inset: 0, zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.7)', color: '#64748b' }}>Loading areas…</div>
                     ) : null}
+                    <div className={styles.cornerStack}>
+                        {!searchOpen ? (
+                            <button
+                                type="button"
+                                className={styles.cornerBtn}
+                                title={TR('supply_search_address')}
+                                onClick={() => setSearchOpen(true)}
+                            >
+                                <Icon name="search" />
+                            </button>
+                        ) : (
+                            <>
+                                <button
+                                    type="button"
+                                    className={styles.cornerBtn}
+                                    title={TR('cancel')}
+                                    onClick={() => setSearchOpen(false)}
+                                >
+                                    <Icon name="x" />
+                                </button>
+                                <button
+                                    type="button"
+                                    className={styles.searchGo}
+                                    title={TR('supply_search_address')}
+                                    disabled={testing}
+                                    onClick={handleTest}
+                                >
+                                    <Icon name={testing ? 'load' : 'search'} />
+                                </button>
+                                <input
+                                    className={styles.searchField}
+                                    value={testQuery}
+                                    onChange={e => setTestQuery(e.target.value)}
+                                    onKeyDown={e => { if (e.key === 'Enter') handleTest() }}
+                                    placeholder={TR('supply_search_address_placeholder')}
+                                    autoFocus
+                                />
+                            </>
+                        )}
+                    </div>
+                    {searchOpen && testResult && (
+                        <div className={styles.searchResult}>
+                            <div className={testResult.error ? styles.testResultError : styles.testResult}>
+                                <Text size="none">
+                                    {testResult.error
+                                        ? testResult.error
+                                        : testResult.hasService
+                                            ? TR('supply_served_by_store', { name: servedByName })
+                                            : TR('supply_no_service')}
+                                </Text>
+                            </div>
+                        </div>
+                    )}
+                    {!modeMeta ? (
+                        unionIds.length ? (
+                            <div className={styles.toolbarWrap}>
+                                <div className={styles.toolbarPill}>
+                                    <span
+                                        className={`${styles.pillMain} ${styles.pillStatic} ${styles.pillMode_union}`}
+                                        title={TR('supply_union')}
+                                    >
+                                        <Icon name="combine" />
+                                        <span className={styles.pillLabel}>{unionIds.length} <Text size="none">supply_areas_selected</Text></span>
+                                    </span>
+                                    <Button
+                                        size="s"
+                                        icon="check"
+                                        loading={merging}
+                                        disabled={unionIds.length < 2}
+                                        onClick={handleUnionCommit}
+                                    >
+                                        supply_union
+                                    </Button>
+                                    <button
+                                        type="button"
+                                        className={styles.pillX}
+                                        title={TR('cancel')}
+                                        disabled={merging}
+                                        onClick={() => { setUnionIds([]); setError(null) }}
+                                    >
+                                        <Icon name="x" />
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                        <button
+                            type="button"
+                            className={styles.centerPlus}
+                            title={`${TR('new area')} (A)`}
+                            onClick={handleNewArea}
+                        >
+                                <Icon name="add" />
+                            </button>
+                        )
+                    ) : (
+                        <div className={styles.toolbarWrap}>
+                            <div className={styles.toolbarPill}>
+                                <span
+                                    className={`${styles.pillMain} ${styles.pillStatic} ${styles[`pillMode_${mapMode}`] || ''}`}
+                                    title={TR(modeMeta.label)}
+                                >
+                                    <Icon name={modeMeta.icon} />
+                                    <span className={styles.pillLabel}><Text size="none">{modeMeta.label}</Text></span>
+                                </span>
+                                <button
+                                    type="button"
+                                    className={styles.pillX}
+                                    title={TR('cancel')}
+                                    disabled={mapMode === 'split' && cuttingSaving}
+                                    onClick={exitMapMode}
+                                >
+                                    <Icon name="x" />
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                    {(modeHintText || error) && (
+                        <div className={styles.hintBar}>
+                            {error
+                                ? <div className={styles.errorBanner}><Text size="none">{error}</Text></div>
+                                : <div className={`${styles.hint} ${groupDraft ? styles.groupHint : ''}`}><Text size="none">{modeHintText}</Text></div>}
+                        </div>
+                    )}
+                    {!sidebarOpen && (
+                        <button
+                            type="button"
+                            className={styles.storeFab}
+                            title={`${TR('supply_stores_groups')} (S)`}
+                            onClick={() => setSidebarOpen(true)}
+                        >
+                            <Icon name="stores" />
+                        </button>
+                    )}
+                    {isFullscreen && sidebarOpen && (
+                        <div
+                            className={styles.drawerBackdrop}
+                            onClick={() => setSidebarOpen(false)}
+                        />
+                    )}
                     <SupplyAreaMap
                         areas={areas}
                         stores={stores}
@@ -798,6 +1159,8 @@ export default function SupplyAreas() {
                         focusPoint={focusPoint}
                         focusGroupPoint={focusGroupPoint}
                         selectedId={selectedId}
+                        unionIds={unionIds}
+                        onUnionToggle={handleUnionToggle}
                         areaDraft={areaDraft}
                         setAreaDraft={setAreaDraft}
                         geometryEditingId={geometryEditingId}
@@ -822,6 +1185,9 @@ export default function SupplyAreas() {
                         onCreateArea={handleCityCreateArea}
                         cityBorders={showCityBorders}
                         onToggleCityBorders={toggleCityBorders}
+                        isFullscreen={isFullscreen}
+                        onToggleFullscreen={isFullscreen ? exitFullscreen : enterFullscreen}
+                        sidebarOpen={sidebarOpen}
                     />
                     {bgLoading && areas.length > 0 ? (
                         <div style={{ position: 'absolute', bottom: 8, right: 60, background: 'rgba(255,255,255,0.9)', padding: '4px 8px', borderRadius: 6, fontSize: 11, color: '#64748b' }}>Loading all areas… {areas.length}</div>

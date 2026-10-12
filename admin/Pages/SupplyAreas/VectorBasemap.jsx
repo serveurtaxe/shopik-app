@@ -170,5 +170,23 @@ export default function VectorBasemap({ styleUrl, labelScale = 1, labelsVisible 
         applyLabelsVisibility(live.mbMap, labelsVisible)
     }, [labelsVisible])
 
+    // MapLibre's GL canvas doesn't follow Leaflet container growth on its own
+    // (sidebar toggle, fullscreen) — the gl-leaflet bridge resizes its wrapper
+    // div but never calls resize(). Leaflet fires 'resize' on invalidateSize —
+    // forward it so the canvas backing store matches the new container size.
+    // Deferred: the bridge grows its wrapper in a requestAnimationFrame after
+    // this handler, so resizing synchronously would lock in the old size.
+    useEffect(() => {
+        let t = null
+        const onResize = () => {
+            clearTimeout(t)
+            t = setTimeout(() => {
+                try { liveRef.current?.mbMap.resize() } catch { /* not loaded yet */ }
+            }, 80)
+        }
+        map.on('resize', onResize)
+        return () => { clearTimeout(t); map.off('resize', onResize) }
+    }, [map])
+
     return null
 }
