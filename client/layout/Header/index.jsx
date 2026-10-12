@@ -165,11 +165,14 @@ export default function Header() {
                 Plain header child (same stacking context, no portal):
                 row-1 + open menu/drawer/dialogs lift above it (10002),
                 cart drawer (9999) and everything else falls below it,
-                and a press here only closes. */}
+                and a press here only closes.
+                Two heights: below the cart when ONLY the departments menu
+                is open (bar, dropdown and cart all stay bright, page dims);
+                above the cart otherwise (cart dims with everything else). */}
             {(openMenu || drawerOpen || popCount > 0) && (
                 <div
                     aria-hidden
-                    className={styles.menuOverlay}
+                    className={classNames(styles.menuOverlay, [styles.belowCart, openMenu && !drawerOpen && popCount <= 0])}
                     onPointerDown={(e) => {
                         // Shield must stay mounted until the press ends: closing
                         // here would unmount it and let the following click land

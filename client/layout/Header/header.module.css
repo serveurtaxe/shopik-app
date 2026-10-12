@@ -3,9 +3,10 @@
     position: sticky;
     top: 0;
     /* Own stacking context above page content: shields all header paint at
-       once. Inside it: top row + open menus/dialogs (10002) > overlay (10001)
-       > cart drawer (9999) > static menu row. The cart lives here (not in
-       Main) so it slots        into this order instead of competing from outside. */
+       once. Inside it: top row + open menus/dialogs (10002) > overlay-high
+       (10001) > cart drawer (9999) > open menu bar + dropdown (9500) >
+       overlay-low (9000) > static menu row. The cart lives here (not in
+       Main) so it slots into this order instead of competing from outside. */
     z-index: 10000;
     width: 100%;
     background-color: var(--header-bg);
@@ -193,10 +194,13 @@
             box-sizing: border-box;
         }
 
-        /* The open menu is lifted above the single overlay */
+        /* The open menu sits between the tiers: bright above the low
+           overlay (9000) when only the menu is open, but below the cart
+           (9999) — the cart always covers bar and dropdown. The high
+           overlay (10001) dims it along with everything but the top row. */
         .menuWrap.menuAbove {
             position: relative;
-            z-index: 10002;
+            z-index: 9500;
         }
     }
 
@@ -409,8 +413,10 @@
 }
 
 /* Shared dim behind open menu/drawer/popovers. Nested in the header: below
-   the lifted rows (10002), above the cart drawer (9999) and page content.
-   A press here only closes. */
+   the lifted rows (10002). Two heights: full (10001, above the cart) when a
+   popover or the drawer is open; menu-only (9000, below the cart) when just
+   the departments menu is open, so bar, dropdown and cart all stay bright
+   while only the page dims. A press here only closes. */
 .menuOverlay {
     position: fixed;
     inset: 0;
@@ -419,4 +425,8 @@
     padding: 0;
     z-index: 10001;
     cursor: default;
+}
+
+.menuOverlay.belowCart {
+    z-index: 9000;
 }
