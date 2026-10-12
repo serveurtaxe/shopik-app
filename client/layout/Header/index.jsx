@@ -7,6 +7,7 @@ import openWhatsApp from 'common/functions/openWhatsApp'
 import styles from './header.module.css'
 import MainMenu from 'layout/MainMenu'
 import MobileMenu from 'layout/MobileMenu'
+import { INFO_LINKS } from 'layout/infoLinks'
 import { closeAllPopovers, subscribePopoverCount } from 'common/components/Popover/registry'
 import events from 'common/features/events'
 import Search from 'layout/Search'
@@ -52,16 +53,11 @@ export default function Header() {
         openWhatsApp(settings?.customerservice?.whatsappNumber)
     }
 
-    const infoMenuOptions = [
-        {
-            text: 'info_terms',
-            onClick: () => navigate('/terms')
-        },
-        {
-            text: 'info_privacy',
-            onClick: () => navigate('/privacy')
-        }
-    ]
+    const infoMenuOptions = INFO_LINKS.map(({ text, icon, path }) => ({
+        text,
+        icon,
+        onClick: () => navigate(path)
+    }))
 
     return (
         <header className={styles.header}>
@@ -112,6 +108,10 @@ export default function Header() {
                     <ContextMenu
                         btnClassName={styles.contextMenuPopoverBtn}
                         modal={false}
+                        // Same header-bottom line as the login/delivery popovers:
+                        // 40px button centered in the ~56px row ends ~4-8px above
+                        // the taller login button, so 14 ~= their 10.
+                        topOffset={16}
                         button={
                             <Button
                                 mode='text'

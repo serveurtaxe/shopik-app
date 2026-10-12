@@ -158,6 +158,7 @@
 
     /* Desktop grid */
     @media screen and (min-width: 769px) {
+
         /* Row 1 is a real bar: header background, lifted above the overlay */
         .topBar {
             display: flex;

@@ -4,6 +4,7 @@ import BackButton from 'common/components/BackButton'
 import AuthPanel from 'features/User/AuthPanel'
 import { useUser } from 'features/User'
 import { getUserTitle, getUserSubtitle } from 'common/functions/userLabel'
+import { INFO_LINKS } from 'layout/infoLinks'
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useAppData } from 'App'
@@ -44,8 +45,7 @@ export default function MobileMenu({ onClose }) {
 
     const railBottom = [
         { key: 'contact', icon: 'whatsapp', onClick: handleWhatsApp },
-        { key: 'terms', icon: 'note', onClick: () => go('/terms') },
-        { key: 'privacy', icon: 'shield', onClick: () => go('/privacy') },
+        ...INFO_LINKS.map(({ key, icon, path }) => ({ key, icon, onClick: () => go(path) })),
     ]
 
     const loginRow = { key: 'login', icon: 'user', text: getUserTitle(user), sub: getUserSubtitle(user), onClick: () => toggle('login') }
@@ -58,8 +58,7 @@ export default function MobileMenu({ onClose }) {
 
     const bottomRows = [
         { key: 'contact', icon: 'whatsapp', text: 'contact_us', onClick: handleWhatsApp },
-        { key: 'terms', icon: 'note', text: 'info_terms', onClick: () => go('/terms') },
-        { key: 'privacy', icon: 'shield', text: 'info_privacy', onClick: () => go('/privacy') },
+        ...INFO_LINKS.map(({ key, text, icon, path }) => ({ key, text, icon, onClick: () => go(path) })),
     ]
 
     return <div className={styles.mobileMenu}>
@@ -108,15 +107,15 @@ export default function MobileMenu({ onClose }) {
                     <li aria-hidden key='div-top' className={styles.divider} />
                     {midRows.map(row => <li key={row.key}>
                         <button type='button' className={row.accent ? styles.mainRowAccent : styles.mainRow} onClick={row.onClick}>
-                            <Text bold={row.bold} size='l'>{row.text}</Text>
                             <Icon name={row.icon} className={styles.rowIcon} />
+                            <Text bold={row.bold} size='l'>{row.text}</Text>
                         </button>
                     </li>)}
                     <li aria-hidden key='div-bottom' className={styles.divider} />
                     {bottomRows.map(row => <li key={row.key}>
                         <button type='button' className={styles.mainRow} onClick={row.onClick}>
-                            <Text bold={row.bold} size='l'>{row.text}</Text>
                             <Icon name={row.icon} className={styles.rowIcon} />
+                            <Text bold={row.bold} size='l'>{row.text}</Text>
                         </button>
                     </li>)}
                 </Flex>
