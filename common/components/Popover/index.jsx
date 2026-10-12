@@ -69,11 +69,11 @@ export default function Popover({ id, className, button, children, btnClassName,
         // rAF, so top/left derive from final — not stale — dimensions.
         cancelAnimationFrame(rafRef.current)
         rafRef.current = requestAnimationFrame(() => {
-            position()
             // Force reflow so the .5 -> 1 scale transition below animates
             void ref.current?.offsetWidth
             ref.current?.classList.add(styles.visible)
             watchResize()
+            position()
         })
     }
 
@@ -111,7 +111,6 @@ export default function Popover({ id, className, button, children, btnClassName,
 
         top += topOffset
         left += leftOffset
-        console.log('position', { top, btop: btnRect.top, bheight: btnRect.height, gap })
         left = Math.min(window.innerWidth - popoverWidth - gap, left)
         top = Math.min(window.innerHeight - popoverHight - gap, top)
         left = Math.max(gap, left)
@@ -131,7 +130,6 @@ export default function Popover({ id, className, button, children, btnClassName,
         roRef.current = new ResizeObserver(() => {
             if (!ref.current?.open) return
             cancelAnimationFrame(rafRef.current)
-            rafRef.current = requestAnimationFrame(position)
         })
         roRef.current.observe(dialog)
     }

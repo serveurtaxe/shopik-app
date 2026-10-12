@@ -88,7 +88,7 @@
     box-shadow: rgba(0, 0, 0, 0.1) 5px 0 5px;
 }
 
-@media (max-width: 1023px) {
+@media (max-width: 1200px) {
     .cart {
         width: 100%;
         max-width: 380px;
@@ -243,7 +243,7 @@
 /* Responsive Viewports */
 
 /* Desktop view: min-width 1024px */
-@media (min-width: 1024px) {
+@media (min-width: 1201px) {
     .miniCartButton {
         min-width: 250px;
         height: 58px;
@@ -256,8 +256,8 @@
     }
 }
 
-/* Tablet view: 640px to 1023px */
-@media (min-width: 640px) and (max-width: 1023px) {
+/* Tablet view: 640px to 1200px */
+@media (min-width: 640px) and (max-width: 1200px) {
     .miniCartButton {
         min-width: 130px;
         height: 56px;
