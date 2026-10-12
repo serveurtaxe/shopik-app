@@ -135,7 +135,9 @@
     padding: 10px 10px;
 }
 
-.railTitle {
+.railTitle,
+.showAll,
+.showAll .showAllText {
     color: var(--carousel-title, #003324);
 }
 
@@ -146,7 +148,6 @@
 }
 
 .showAll {
-    color: var(--carousel-title, #003324);
     text-decoration: none;
     display: inline-flex;
     align-items: center;
@@ -156,7 +157,6 @@
 /* Text mode="link" sets its own color — out-specify it so the whole
    "show all" control follows the theme color. */
 .showAll .showAllText {
-    color: var(--carousel-title, #003324);
     font-size: var(--display-xs);
     line-height: var(--line-height-display-xs);
 }

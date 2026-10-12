@@ -1,4 +1,5 @@
 import toSlug from '#common/functions/toSlug.js'
+import { invalidateMenu } from '#server/utils/data/getMenu.js'
 
 export default async function buildCategories(payload, { DL }) {
     // Distinct category tuples via aggregation — never load the full catalog.
@@ -149,7 +150,7 @@ export default async function buildCategories(payload, { DL }) {
         // Category docs feed the storefront menu (60min Redis cache) — the
         // bulkWrite $set only touches synced fields so manual `icon` values
         // survive, but the cached menu must be rebuilt on next request.
-        await DL.redis?.del('menu')
+        await invalidateMenu({ DL })
     }
 
     console.log(`[Comax Categories] Built ${categories.length} categories from comax products`)

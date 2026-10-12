@@ -1,4 +1,5 @@
 import uid from '#common/functions/uid.js'
+import toRemember from '#common/functions/toRemember.js'
 
 export default async function register(payload, { DL, utils, external }) {
     const name = utils.extractFields.getName(payload)
@@ -6,7 +7,7 @@ export default async function register(payload, { DL, utils, external }) {
 
     const allowed = ['phone', 'name', 'email', 'getOffers', 'domainId']
     const domainId = payload.domainId
-    const remember = payload.remember === true
+    const remember = toRemember(payload.remember)
     const filtered = {}
     for (const key of allowed) {
         if (payload[key] !== undefined) filtered[key] = payload[key]

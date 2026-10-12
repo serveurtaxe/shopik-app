@@ -11,7 +11,7 @@ export default function Popover({ id, className, button, children, btnClassName,
     const rafRef = useRef(0)
     const winRafRef = useRef(0)
     const roRef = useRef(null)
-    const winResizeRef = useRef(null)
+    const viewportRef = useRef(null)
     const closeRef = useRef()
     const positionRef = useRef()
     const escRef = useRef()
@@ -25,15 +25,7 @@ export default function Popover({ id, className, button, children, btnClassName,
     useEffect(() => {
         return () => {
             cancelAnimationFrame(rafRef.current)
-            cancelAnimationFrame(winRafRef.current)
-            roRef.current?.disconnect()
-            roRef.current = null
-            if (winResizeRef.current) {
-                window.removeEventListener('resize', winResizeRef.current)
-                window.visualViewport?.removeEventListener('resize', winResizeRef.current)
-                window.removeEventListener('scroll', winResizeRef.current, true)
-                winResizeRef.current = null
-            }
+            teardownReposition()
         }
     }, [])
 
@@ -104,19 +96,27 @@ export default function Popover({ id, className, button, children, btnClassName,
     // open. Applies to windowed and modal popovers alike: both are
     // JS-anchored to their button (base CSS disables native centering).
     function watchViewport() {
-        if (winResizeRef.current) return
-        winResizeRef.current = () => schedulePosition()
-        window.addEventListener('resize', winResizeRef.current)
-        window.visualViewport?.addEventListener('resize', winResizeRef.current)
-        window.addEventListener('scroll', winResizeRef.current, true)
+        if (viewportRef.current) return
+        viewportRef.current = () => schedulePosition()
+        window.addEventListener('resize', viewportRef.current)
+        window.visualViewport?.addEventListener('resize', viewportRef.current)
+        window.addEventListener('scroll', viewportRef.current, true)
     }
 
     function unwatchViewport() {
-        if (!winResizeRef.current) return
-        window.removeEventListener('resize', winResizeRef.current)
-        window.visualViewport?.removeEventListener('resize', winResizeRef.current)
-        window.removeEventListener('scroll', winResizeRef.current, true)
-        winResizeRef.current = null
+        if (!viewportRef.current) return
+        window.removeEventListener('resize', viewportRef.current)
+        window.visualViewport?.removeEventListener('resize', viewportRef.current)
+        window.removeEventListener('scroll', viewportRef.current, true)
+        viewportRef.current = null
+    }
+
+    // Shared by close() and unmount: stop all reposition signals.
+    function teardownReposition() {
+        cancelAnimationFrame(winRafRef.current)
+        roRef.current?.disconnect()
+        roRef.current = null
+        unwatchViewport()
     }
 
     // True (unscaled) dialog size regardless of the current .5 -> 1
@@ -135,7 +135,7 @@ export default function Popover({ id, className, button, children, btnClassName,
         if (!dialog?.open) return
         const
             btnRect = btnRef.current.getBoundingClientRect(),
-            { width: popoverWidth, height: popoverHight } = trueSize(),
+            { width: popoverWidth, height: popoverHeight } = trueSize(),
             gap = 5
 
         let
@@ -143,23 +143,23 @@ export default function Popover({ id, className, button, children, btnClassName,
             left = btnRect.left - popoverWidth + btnRect.width
 
         const
-            overflowTop = top + popoverHight > window.innerHeight - gap,
-            overflowleft = props.left || left < 0
+            overflowTop = top + popoverHeight > window.innerHeight - gap,
+            overflowLeft = props.left || left < 0
 
         if (overflowTop)
-            top = btnRect.top - popoverHight - gap
-        if (overflowleft)
+            top = btnRect.top - popoverHeight - gap
+        if (overflowLeft)
             left = btnRect.left
 
         top += topOffset
         left += leftOffset
         left = Math.min(window.innerWidth - popoverWidth - gap, left)
-        top = Math.min(window.innerHeight - popoverHight - gap, top)
+        top = Math.min(window.innerHeight - popoverHeight - gap, top)
         left = Math.max(gap, left)
         top = Math.max(gap, top)
 
         dialog.style.transformOrigin =
-            `${overflowTop ? 'bottom' : 'top'} ${overflowleft ? 'left' : 'right'}`
+            `${overflowTop ? 'bottom' : 'top'} ${overflowLeft ? 'left' : 'right'}`
         dialog.style.top = `${top}px`
         dialog.style.left = `${left}px`
     }
@@ -179,11 +179,8 @@ export default function Popover({ id, className, button, children, btnClassName,
     function close() {
         const dialog = ref.current
         cancelAnimationFrame(rafRef.current)
-        cancelAnimationFrame(winRafRef.current)
+        teardownReposition()
         document.removeEventListener('keydown', escRef.current)
-        unwatchViewport()
-        roRef.current?.disconnect()
-        roRef.current = null
         popoverClosed(key)
         if (!dialog.open) return
         dialog.classList.remove(styles.visible)

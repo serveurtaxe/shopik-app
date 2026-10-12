@@ -18,6 +18,8 @@ export const CACHE_STRATEGIES = {
     HASHSET: 'hashset'
 }
 
+export const MENU_CACHE_KEY = 'menu'
+
 export const WINDOWS_PAGE = {
     FOCUS_START_HOUR: 6,
     FOCUS_END_HOUR: 22,

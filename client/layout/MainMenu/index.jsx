@@ -1,5 +1,7 @@
 import classNames from 'common/functions/classNames'
 import toSlug from 'common/functions/toSlug.js'
+import resolvePath from 'common/functions/resolvePath'
+import BackButton from 'common/components/BackButton'
 import { useEffect, useRef, useState } from 'react'
 import styles from './mainMenu.module.css'
 import Flex from 'common/components/Flex'
@@ -15,6 +17,7 @@ export default function MainMenu({ openMenu: controlledOpen, onOpenMenu }) {
     const [internalOpen, setInternalOpen] = useState(null)
     const openMenu = controlledOpen !== undefined ? controlledOpen : internalOpen
     const setOpenMenu = onOpenMenu || setInternalOpen
+    const isControlled = controlledOpen !== undefined || onOpenMenu
     const menuRef = useRef(null)
     const location = useLocation()
 
@@ -23,6 +26,7 @@ export default function MainMenu({ openMenu: controlledOpen, onOpenMenu }) {
     }, [location.pathname])
 
     useEffect(() => {
+        if (isControlled) return
         const handlePointerDown = event => {
             if (!menuRef.current?.contains(event.target)) {
                 setOpenMenu(null)
@@ -34,7 +38,7 @@ export default function MainMenu({ openMenu: controlledOpen, onOpenMenu }) {
         return () => {
             document.removeEventListener('pointerdown', handlePointerDown)
         }
-    }, [])
+    }, [isControlled])
 
     const close = () => setOpenMenu(null)
 
@@ -141,7 +145,7 @@ function Level2Menu({ items, open, basePath, onClose }) {
                 const hasChildren = Boolean(
                     item.children && item.children.length > 0
                 )
-                const itemPath = item.path || `${basePath}/${toSlug(item.name)}`
+                const itemPath = resolvePath(item, basePath)
                 const itemKey = `${itemPath}-${index}`
 
                 const isItemActive = currentActiveItem === itemPath
@@ -227,14 +231,11 @@ function Level3Menu({ items, visible, parentName, basePath, onClose, onBack }) {
             style={{ display: visible ? 'flex' : 'none' }}
         >
             <li className={styles.mobileClose}>
-                <button type='button' onClick={onBack}>
-                    <Icon name='right' />
-                    <Text bold size='l'>{parentName || 'back'}</Text>
-                </button>
+                <BackButton onBack={onBack}>{parentName}</BackButton>
             </li>
 
             {items.map((item, index) => {
-                const itemPath = item.path || `${basePath}/${toSlug(item.name)}`
+                const itemPath = resolvePath(item, basePath)
 
                 return (
                     <li
@@ -258,7 +259,7 @@ function Level3Menu({ items, visible, parentName, basePath, onClose, onBack }) {
                                 className={styles.level4Menu}
                             >
                                 {item.children.map((child, childIdx) => {
-                                    const childPath = child.path || `${itemPath}/${toSlug(child.name)}`
+                                    const childPath = resolvePath(child, itemPath)
 
                                     return (
                                         <li key={`${childPath}-${childIdx}`}>

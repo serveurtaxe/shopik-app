@@ -44,12 +44,9 @@
             width: 32px;
             max-width: 32px;
             object-fit: cover;
-            object-position: left center;
-            /* DRY: single Logo component, CSS switches to mini icon (S+dashes) without duplicating component */
         }
 
         .small img {
-            /* height: 28px; */
             max-width: 90px;
         }
     }

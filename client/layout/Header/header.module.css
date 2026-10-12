@@ -158,12 +158,6 @@
 
     /* Desktop grid */
     @media screen and (min-width: 769px) {
-        grid-template-columns: 1fr;
-        grid-template-areas:
-            "top"
-            "menuWrap";
-        row-gap: 8px;
-
         /* Row 1 is a real bar: header background, lifted above the overlay */
         .topBar {
             display: flex;
@@ -181,10 +175,6 @@
 
         .searchWrap {
             flex: 1;
-        }
-
-        .menuBtn {
-            display: none !important;
         }
 
         .menuWrap {
@@ -380,12 +370,6 @@
                 width: 100%;
                 justify-content: flex-start;
             }
-        }
-
-        .backdrop {
-            display: block;
-            position: fixed;
-            inset: 0;
         }
     }
 

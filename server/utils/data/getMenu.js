@@ -1,4 +1,5 @@
 import toSlug from '#common/functions/toSlug.js'
+import { MENU_CACHE_KEY } from '#common/constants.js'
 
 const baseMenu = [
     {
@@ -38,16 +39,18 @@ export default async function getMenu({ DL }) {
         for (const child of direct) {
             const slug = child.slug || toSlug(child.name)
             if (!slug) continue
-            if (!bySlug.has(slug)) bySlug.set(slug, { name: child.name, icon: child.icon, ids: [] })
+            let entry = bySlug.get(slug)
+            if (!entry) {
+                entry = { name: child.name, icon: child.icon, ids: [] }
+                bySlug.set(slug, entry)
+            }
             // Merged duplicates: first non-empty icon wins
-            const entry = bySlug.get(slug)
             if (!entry.icon && child.icon) entry.icon = child.icon
             entry.ids.push(child.id)
         }
         return [...bySlug.entries()].map(([slug, { name, icon, ids }]) => {
             const nodePath = `${prefix}/${slug}`
-            const node = { name }
-            if (icon) node.icon = icon
+            const node = { name, ...(icon ? { icon } : {}) }
             const children = buildBranch(ids, nodePath)
             if (children.length > 0) node.children = children
             return node
@@ -66,4 +69,8 @@ export default async function getMenu({ DL }) {
     ]
     await DL.redis?.set('menu', JSON.stringify(menu), 'EX', 60 * 60)
     return menu
+}
+
+export async function invalidateMenu({ DL }) {
+    await DL.redis?.del(MENU_CACHE_KEY)
 }

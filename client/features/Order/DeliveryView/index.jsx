@@ -13,28 +13,15 @@ import events from 'common/features/events'
 import { useUser } from 'features/User'
 import { useEffect, useState } from 'react'
 import { useAppData } from 'App'
-import Icon from '#common/components/Icon/index.jsx'
-import Text from '#common/components/Text/index.jsx'
 import { useOrder } from '../OrderProvider'
 import { useText } from '#common/texts/TextProvider.jsx'
+import HeaderPopoverButton from 'common/components/HeaderPopoverButton'
+import useMediaQuery from 'common/functions/useMediaQuery'
 
 
 const deliveryMethods = {
     delivery: { text: 'delivery', icon: 'truck' },
     pickup: { text: 'pickup', icon: 'bag' }
-}
-
-// Matches the ≤768px mobile breakpoint in header.module.css
-function useIsMobile() {
-    const [isMobile, setIsMobile] = useState(() =>
-        typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches)
-    useEffect(() => {
-        const mq = window.matchMedia('(max-width: 768px)')
-        const onChange = (e) => setIsMobile(e.matches)
-        mq.addEventListener('change', onChange)
-        return () => mq.removeEventListener('change', onChange)
-    }, [])
-    return isMobile
 }
 
 export default function DeliveryView({ }) {
@@ -46,7 +33,8 @@ export default function DeliveryView({ }) {
             deliveryMethods.pickup.text : deliveryMethods.delivery.text),
         [popoverOpened, setPopoverOpened] = useState(false),
         [isSwitching, setIsSwitching] = useState(false),
-        isMobile = useIsMobile(),
+        // Matches the ≤768px mobile breakpoint in header.module.css
+        isMobile = useMediaQuery('(max-width: 768px)'),
         { icon, text } = deliveryMethods[deliveryMethod],
         { TR } = useText(),
         window = order?.window,
@@ -100,16 +88,12 @@ export default function DeliveryView({ }) {
         topOffset={isMobile ? 4 : 10}
         overlay
         modal={false}
-        button={<Flex alignItems='center' gap={10} className={styles.button} onClick={openPopover}>
-            <Icon name={icon} className={styles.icon} />
-            <Flex alignItems='center' justifyContent='space-between' grow={1} className='btnTexts'>
-                <Flex col gap={3}>
-                    <Text bold size='m'>{buttonTitle}</Text>
-                    <Text size='s'>{buttonSubTitle}</Text>
-                </Flex>
-                <Icon name='down' className={styles.chevron} />
-            </Flex>
-        </Flex>}
+        button={<HeaderPopoverButton
+            icon={icon}
+            title={buttonTitle}
+            subtitle={buttonSubTitle}
+            onClick={openPopover}
+        />}
     >
         {() => <Flex col gap={25} className={styles.deliveryView}>
             {pickupStores.length ? <Tabs

@@ -1,4 +1,5 @@
 import { USER_TOKEN_EXPIRY_MS, USER_TOKEN_EXPIRY_SHORT_MS, USER_TOKEN_COOKIE, GUEST_CART_TOKEN_COOKIE } from '#common/constants.js'
+import toRemember from '#common/functions/toRemember.js'
 
 export default async function login({ domainId, phone, otpToken, otp, remember }, { DL, utils, platform, setCookie, cookies, clearCookie }) {
     const storedOtp = await DL.Otp.readOne({ token: otpToken })
@@ -25,7 +26,7 @@ export default async function login({ domainId, phone, otpToken, otp, remember }
             throw { message: 'login failed', status: 403 }
     }
 
-    const shouldRemember = remember === true || (remember === undefined && storedOtp.remember === true)
+    const shouldRemember = toRemember(remember) || (remember === undefined && toRemember(storedOtp.remember))
     const tokenExpiryMs = shouldRemember ? USER_TOKEN_EXPIRY_MS : USER_TOKEN_EXPIRY_SHORT_MS
     const token = utils.auth.createToken(user.id, tokenExpiryMs)
     const update = {

@@ -1,11 +1,12 @@
 /**
  * Assign display icons to top-level categories (idempotent, safe to re-run).
- * Usage: node server/scripts/runSeedCategoryIcons.js
+ * Usage: node server/scripts/runSeed.js seedCategoryIcons
  *
  * Only sets `icon` where empty — manual overrides are never overwritten.
  * Uses DL wrappers so the Redis HASHSET cache stays in sync, and drops the
  * cached storefront `menu` (60min TTL) so icons show immediately.
  */
+import { invalidateMenu } from '#server/utils/data/getMenu.js'
 const TOP_LEVEL_ICONS = [
     { slug: 'לחם-חלב-ביצים-ומזון-מצונן', icon: 'milk' },
     { slug: 'חומרי-ניקוי-וכביסה', icon: 'spray' },
@@ -20,12 +21,7 @@ const TOP_LEVEL_ICONS = [
     { slug: 'חד-פעמי', icon: 'cup' },
 ]
 
-export default async function seedCategoryIcons({ DL } = {}) {
-    if (!DL) {
-        console.log('[categoryIcons] DL required — call seedCategoryIcons({ DL }) from boot/cron')
-        return
-    }
-
+export default async function seedCategoryIcons({ DL }) {
     let set = 0
     for (const { slug, icon } of TOP_LEVEL_ICONS) {
         const updated = await DL.Category.Model.findOneAndUpdate(
@@ -39,6 +35,6 @@ export default async function seedCategoryIcons({ DL } = {}) {
         set++
         console.log(`[categoryIcons] ${slug} -> ${icon}`)
     }
-    if (set > 0) await DL.redis?.del('menu')
+    if (set > 0) await invalidateMenu({ DL })
     console.log(`[categoryIcons] Done — ${set} icons set`)
 }

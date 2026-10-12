@@ -5,14 +5,11 @@ import logo from './logo.svg'
 
 export default function Logo({ className, noLink, src, darkSrc, smallSrc, smallDarkSrc }) {
     const light = src || logo
-    const _logo = darkSrc
-        ? <picture><source srcSet={darkSrc} media="(prefers-color-scheme: dark)" /><img src={light} alt="logo" /></picture>
-        : <img src={light} alt="logo" />
-    const _small = smallSrc
-        ? (smallDarkSrc
-            ? <picture><source srcSet={smallDarkSrc} media="(prefers-color-scheme: dark)" /><img src={smallSrc} alt="logo" /></picture>
-            : <img src={smallSrc} alt="logo" />)
-        : null
+    const pic = (imgSrc, dark) => dark
+        ? <picture><source srcSet={dark} media="(prefers-color-scheme: dark)" /><img src={imgSrc} alt="logo" /></picture>
+        : <img src={imgSrc} alt="logo" />
+    const _logo = pic(light, darkSrc)
+    const _small = smallSrc ? pic(smallSrc, smallDarkSrc) : null
 
     const content = _small
         ? <>

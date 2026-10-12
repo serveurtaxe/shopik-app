@@ -3,7 +3,7 @@ import UserView from 'features/User/UserView'
 import MiniCart from 'layout/Cart/miniCart'
 import Logo from 'common/components/Logo'
 import { getSettingFileUrl } from 'common/functions/settingFileUrl'
-import whatsappUrl from 'common/functions/whatsappUrl'
+import openWhatsApp from 'common/functions/openWhatsApp'
 import styles from './header.module.css'
 import MainMenu from 'layout/MainMenu'
 import MobileMenu from 'layout/MobileMenu'
@@ -49,9 +49,7 @@ export default function Header() {
     useEffect(() => subscribePopoverCount(setPopCount), [])
 
     const handleWhatsAppClick = () => {
-        const url = whatsappUrl(settings?.customerservice?.whatsappNumber)
-        if (!url) return
-        window.open(url, '_blank', 'noopener,noreferrer')
+        openWhatsApp(settings?.customerservice?.whatsappNumber)
     }
 
     const infoMenuOptions = [

@@ -1,6 +1,6 @@
 /**
  * Seed menu color settings (one-off + idempotent, safe to re-run).
- * Usage: node server/scripts/runSeedMenuColors.js
+ * Usage: node server/scripts/runSeed.js seedMenuColors
  *
  * Creates public COLOR settings under category 'theme' / subCategory 'colors'.
  * entry-server.jsx auto-injects settings.theme entries as :root CSS vars, so
@@ -26,12 +26,7 @@ const MENU_COLOR_DEFAULTS = [
     { key: 'menu-divider', value: '#B4D0C7' },
 ]
 
-export default async function seedMenuColors({ DL } = {}) {
-    if (!DL) {
-        console.log('[menuColors] DL required — call seedMenuColors({ DL }) from boot/cron')
-        return
-    }
-
+export default async function seedMenuColors({ DL }) {
     const domains = await DL.Domain.read({}, { _id: 0, id: 1, name: 1 }, { limit: 0 })
     if (!domains?.length) {
         console.log('[menuColors] no domains found, nothing to seed')

@@ -336,7 +336,6 @@
         "send_otp": "שלחו לי קוד",
         "login_phone_label": "מספר טלפון",
         "login_phone_placeholder": "להזין מספר טלפון",
-        "login_otp_notice": "קוד האימות ישלח בהודעת SMS למספר שהזנת",
         "login_remember_30": "זכור אותי למשך 30 יום",
         "web_login_success": "הכניסה למערכת הושלמה בהצלחה",
         "web_login_error": "שגיאה בפרטי הכניסה",

@@ -62,19 +62,18 @@ function RememberRow() {
     </Checkbox>
 }
 
-function LoginForm({ onClose, onToRegister }) {
+function useOtpFlow(requestOtp) {
     const
         [step, setStep] = useState(1),
-        [otpToken, setOtpToken] = useState(''),
         [phone, setPhone] = useState(''),
+        [otpToken, setOtpToken] = useState(''),
         [remember, setRemember] = useState(true),
         [error, setError] = useState('')
 
-    async function handleRequestOtp(vals) {
+    async function request(vals) {
         setError('')
         try {
-            const targetPhone = vals?.phone || phone
-            const res = await apiReq('user/login_otp', { phone: targetPhone, remember: vals?.remember === true })
+            const res = await requestOtp(vals, { phone })
             setOtpToken(res.token)
             if (vals?.phone) setPhone(vals.phone)
             setRemember(vals?.remember === true)
@@ -84,98 +83,85 @@ function LoginForm({ onClose, onToRegister }) {
         }
     }
 
-    if (step === 2) {
+    return { step, setStep, phone, otpToken, remember, error, request }
+}
+
+function PhoneInput({ defaultValue }) {
+    return <Input
+        name='phone'
+        type='tel'
+        title='login_phone_label'
+        placeholder='login_phone_placeholder'
+        defaultValue={defaultValue}
+        required
+        autoFocus
+        className={styles.phoneInput}
+    />
+}
+
+function SwitchFooter({ question, action, onAction }) {
+    return <Flex center gap={5}>
+        <Text>{question}</Text>
+        <Button type='button' mode='text-brand' onClick={onAction}>{action}</Button>
+    </Flex>
+}
+
+function LoginForm({ onClose, onToRegister }) {
+    const flow = useOtpFlow((vals, { phone }) =>
+        apiReq('user/login_otp', { phone: vals?.phone || phone, remember: vals?.remember === true }))
+
+    if (flow.step === 2) {
         return <DigitsInputStep
-            phone={phone}
-            otpToken={otpToken}
-            remember={remember}
+            phone={flow.phone}
+            otpToken={flow.otpToken}
+            remember={flow.remember}
             onClose={onClose}
-            onResend={() => handleRequestOtp()}
-            onBack={() => setStep(1)}
+            onResend={() => flow.request()}
+            onBack={() => flow.setStep(1)}
             submitText='login'
         />
     }
 
     return <>
         <AuthHero />
-        <Form action={handleRequestOtp} error={error} submitText='send_otp' className={styles.form}>
+        <Form action={flow.request} error={flow.error} submitText='send_otp' className={styles.form}>
             <Flex col gap={4}>
-                <Input
-                    name='phone'
-                    type='tel'
-                    title='login_phone_label'
-                    placeholder='login_phone_placeholder'
-                    defaultValue={phone}
-                    required
-                    autoFocus
-                    className={styles.phoneInput}
-                />
+                <PhoneInput defaultValue={flow.phone} />
             </Flex>
             <RememberRow />
         </Form>
-        <Flex center gap={5}>
-            <Text>no_account_question</Text>
-            <Button type='button' mode='text-brand' onClick={onToRegister}>to_register</Button>
-        </Flex>
+        <SwitchFooter question='no_account_question' action='to_register' onAction={onToRegister} />
     </>
 }
 
 function RegisterForm({ onClose, onToLogin }) {
-    const
-        [step, setStep] = useState(1),
-        [phone, setPhone] = useState(''),
-        [otpToken, setOtpToken] = useState(''),
-        [remember, setRemember] = useState(true),
-        [error, setError] = useState('')
+    const flow = useOtpFlow(data =>
+        apiReq('user/register', { ...data, remember: data?.remember === true }))
 
-    async function handleRequestOtp(data) {
-        setError('')
-        try {
-            const res = await apiReq('user/register', { ...data, remember: data?.remember === true })
-            setOtpToken(res.token)
-            setPhone(data.phone)
-            setRemember(data?.remember === true)
-            setStep(2)
-        } catch (err) {
-            setError(err.message || err)
-        }
-    }
-
-    if (step === 2) {
+    if (flow.step === 2) {
         return <DigitsInputStep
             title='web_register_title'
-            phone={phone}
-            otpToken={otpToken}
-            remember={remember}
+            phone={flow.phone}
+            otpToken={flow.otpToken}
+            remember={flow.remember}
             onClose={onClose}
-            onResend={() => handleRequestOtp()}
-            onBack={() => setStep(1)}
+            onResend={() => flow.request()}
+            onBack={() => flow.setStep(1)}
             submitText='register'
         />
     }
 
     return <>
         <AuthHero icon='circleUser' title='web_register_title' subtitle='web_register_phone_subTitle' />
-        <Form action={handleRequestOtp} error={error} submitText='send_otp' className={styles.form}>
+        <Form action={flow.request} error={flow.error} submitText='send_otp' className={styles.form}>
             <Flex col gap={10}>
-                <Input
-                    name='phone'
-                    type='tel'
-                    title='login_phone_label'
-                    placeholder='login_phone_placeholder'
-                    required
-                    autoFocus
-                    className={styles.phoneInput}
-                />
+                <PhoneInput />
                 <Input name='name.first' />
                 <Input name='name.last' />
             </Flex>
             <RememberRow />
         </Form>
-        <Flex center gap={5}>
-            <Text>have_account_question</Text>
-            <Button type='button' mode='text-brand' onClick={onToLogin}>to_login</Button>
-        </Flex>
+        <SwitchFooter question='have_account_question' action='to_login' onAction={onToLogin} />
     </>
 }
 
@@ -216,7 +202,7 @@ function DigitsInputStep({ title = 'web_login_title', subtitle = 'web_login_subT
                 <DigitsInput name='otp' onCodeComplete={otp => handleLogin({ otp })} />
             </Flex>
         </Form>
-        {resent ? '' : <Flex center gap={5}>
+        {!resent && <Flex center gap={5}>
             <Text>did_not_receive_code</Text>
             <Button type='button' mode='text-brand' onClick={resendCode}>send_again</Button>
         </Flex>}

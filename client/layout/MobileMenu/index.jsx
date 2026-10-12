@@ -1,6 +1,9 @@
-import toSlug from 'common/functions/toSlug.js'
-import whatsappUrl from 'common/functions/whatsappUrl'
+import resolvePath from 'common/functions/resolvePath'
+import openWhatsApp from 'common/functions/openWhatsApp'
+import BackButton from 'common/components/BackButton'
 import AuthPanel from 'features/User/AuthPanel'
+import { useUser } from 'features/User'
+import { getUserTitle, getUserSubtitle } from 'common/functions/userLabel'
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useAppData } from 'App'
@@ -17,6 +20,7 @@ import Text from 'common/components/Text'
  */
 export default function MobileMenu({ onClose }) {
     const { menu, settings } = useAppData() || {}
+    const user = useUser()
     const [selected, setSelected] = useState(null)
     const navigate = useNavigate()
 
@@ -27,42 +31,63 @@ export default function MobileMenu({ onClose }) {
         onClose?.()
     }
 
-    function openWhatsApp() {
-        const url = whatsappUrl(settings?.customerservice?.whatsappNumber)
-        if (!url) return
-        window.open(url, '_blank', 'noopener,noreferrer')
-        onClose?.()
-    }
+    const toggle = k => setSelected(s => s === k ? null : k)
+
+    const handleWhatsApp = () => openWhatsApp(settings?.customerservice?.whatsappNumber, onClose)
+
+    const railTop = [
+        { key: 'login', icon: 'user', active: selected === 'login', onClick: () => toggle('login') },
+        { key: 'departments', icon: 'grid', active: selected === 'departments', onClick: () => toggle('departments') },
+        { key: 'sales', icon: 'salePercent', onClick: () => go('/sales') },
+        { key: 'home', icon: 'home', onClick: () => go('/') },
+    ]
+
+    const railBottom = [
+        { key: 'contact', icon: 'whatsapp', onClick: handleWhatsApp },
+        { key: 'terms', icon: 'note', onClick: () => go('/terms') },
+        { key: 'privacy', icon: 'shield', onClick: () => go('/privacy') },
+    ]
+
+    const loginRow = { key: 'login', icon: 'user', text: getUserTitle(user), sub: getUserSubtitle(user), onClick: () => toggle('login') }
+
+    const midRows = [
+        { key: 'sales', icon: 'salePercent', text: 'Sales', bold: true, accent: true, onClick: () => go('/sales') },
+        { key: 'departments', icon: 'grid', text: 'all_departments', bold: true, onClick: () => toggle('departments') },
+        { key: 'home', icon: 'home', text: 'Home', bold: true, onClick: () => go('/') },
+    ]
+
+    const bottomRows = [
+        { key: 'contact', icon: 'whatsapp', text: 'contact_us', onClick: handleWhatsApp },
+        { key: 'terms', icon: 'note', text: 'info_terms', onClick: () => go('/terms') },
+        { key: 'privacy', icon: 'shield', text: 'info_privacy', onClick: () => go('/privacy') },
+    ]
 
     return <div className={styles.mobileMenu}>
         {selected ? (
             <div key={`rail-${selected}`} className={classNames(styles.view, styles.viewForward)}>
                 <nav className={styles.rail} aria-label='menu'>
-                    <RailBtn
-                        entryKey='login'
-                        icon='user'
-                        active={selected === 'login'}
-                        onClick={() => (selected === 'login' ? setSelected(null) : setSelected('login'))}
-                    />
-                    <RailBtn
-                        entryKey='departments'
-                        icon='grid'
-                        active={selected === 'departments'}
-                        onClick={() => (selected === 'departments' ? setSelected(null) : setSelected('departments'))}
-                    />
-                    <RailBtn entryKey='sales' icon='salePercent' onClick={() => go('/sales')} />
-                    <RailBtn entryKey='home' icon='home' onClick={() => go('/')} />
-                    <span className={styles.railDivider} />
-                    <RailBtn entryKey='contact' icon='whatsapp' onClick={openWhatsApp} />
-                    <RailBtn entryKey='terms' icon='note' onClick={() => go('/terms')} />
-                    <RailBtn entryKey='privacy' icon='shield' onClick={() => go('/privacy')} />
+                    {railTop.map(row => <RailBtn
+                        key={row.key}
+                        entryKey={row.key}
+                        icon={row.icon}
+                        active={row.active}
+                        onClick={row.onClick}
+                    />)}
+                    <span className={styles.divider} />
+                    {railBottom.map(row => <RailBtn
+                        key={row.key}
+                        entryKey={row.key}
+                        icon={row.icon}
+                        active={row.active}
+                        onClick={row.onClick}
+                    />)}
                 </nav>
 
                 <div className={styles.panel}>
                     {selected === 'login' && <AuthPanel onClose={onClose} />}
                     {selected === 'departments' && (
                         products?.children?.length
-                            ? <DeptBrowser items={products.children} basePath={products.path} onClose={onClose} />
+                            ? <DeptBrowser items={products.children} basePath={products.path} go={go} />
                             : null
                     )}
                 </div>
@@ -70,54 +95,30 @@ export default function MobileMenu({ onClose }) {
         ) : (
             <div key='main-list' className={classNames(styles.view, styles.viewBack)}>
                 <Flex tag='ul' col direction='column' gap={4} className={styles.mainList}>
-                    <li>
-                        <button type='button' className={styles.mainRow} onClick={() => setSelected('login')}>
-                            <Icon name='user' className={styles.rowIcon} />
+                    <li key={loginRow.key}>
+                        <button type='button' className={styles.mainRow} onClick={loginRow.onClick}>
+                            <Icon name={loginRow.icon} className={styles.rowIcon} />
                             <span className={styles.rowTexts}>
-                                <Text bold size='l'>login_register_btn</Text>
-                                <Text size='xs' mode='sub'>login_register_subTitle</Text>
+                                <Text bold size='m'>{loginRow.text}</Text>
+                                <Text size='s' mode='sub'>{loginRow.sub}</Text>
                             </span>
                             <Icon name='left' />
                         </button>
                     </li>
-                    <li aria-hidden className={styles.listDivider} />
-                    <li>
-                        <button type='button' className={styles.mainRowAccent} onClick={() => go('/sales')}>
-                            <Text bold size='l'>Sales</Text>
-                            <Icon name='salePercent' className={styles.rowIcon} />
+                    <li aria-hidden key='div-top' className={styles.divider} />
+                    {midRows.map(row => <li key={row.key}>
+                        <button type='button' className={row.accent ? styles.mainRowAccent : styles.mainRow} onClick={row.onClick}>
+                            <Text bold={row.bold} size='l'>{row.text}</Text>
+                            <Icon name={row.icon} className={styles.rowIcon} />
                         </button>
-                    </li>
-                    <li>
-                        <button type='button' className={styles.mainRow} onClick={() => setSelected('departments')}>
-                            <Text bold size='l'>all_departments</Text>
-                            <Icon name='grid' className={styles.rowIcon} />
+                    </li>)}
+                    <li aria-hidden key='div-bottom' className={styles.divider} />
+                    {bottomRows.map(row => <li key={row.key}>
+                        <button type='button' className={styles.mainRow} onClick={row.onClick}>
+                            <Text bold={row.bold} size='l'>{row.text}</Text>
+                            <Icon name={row.icon} className={styles.rowIcon} />
                         </button>
-                    </li>
-                    <li>
-                        <button type='button' className={styles.mainRow} onClick={() => go('/')}>
-                            <Text bold size='l'>Home</Text>
-                            <Icon name='home' className={styles.rowIcon} />
-                        </button>
-                    </li>
-                    <li aria-hidden className={styles.listDivider} />
-                    <li>
-                        <button type='button' className={styles.mainRow} onClick={openWhatsApp}>
-                            <Text size='l'>contact_us</Text>
-                            <Icon name='whatsapp' className={styles.rowIcon} />
-                        </button>
-                    </li>
-                    <li>
-                        <button type='button' className={styles.mainRow} onClick={() => go('/terms')}>
-                            <Text size='l'>info_terms</Text>
-                            <Icon name='note' className={styles.rowIcon} />
-                        </button>
-                    </li>
-                    <li>
-                        <button type='button' className={styles.mainRow} onClick={() => go('/privacy')}>
-                            <Text size='l'>info_privacy</Text>
-                            <Icon name='shield' className={styles.rowIcon} />
-                        </button>
-                    </li>
+                    </li>)}
                 </Flex>
             </div>
         )}
@@ -135,18 +136,12 @@ function RailBtn({ entryKey, icon, active, onClick }) {
     </button>
 }
 
-function DeptBrowser({ items, basePath, onClose }) {
+function DeptBrowser({ items, basePath, go }) {
     const [activePath, setActivePath] = useState(null)
-    const navigate = useNavigate()
 
     const active = activePath
-        ? items.find(item => (item.path || `${basePath}/${toSlug(item.name)}`) === activePath)
+        ? items.find(item => resolvePath(item, basePath) === activePath)
         : null
-
-    function go(path) {
-        navigate(path)
-        onClose?.()
-    }
 
     // Sub-category view (groups + leaf links) with back to departments
     if (active) {
@@ -159,19 +154,16 @@ function DeptBrowser({ items, basePath, onClose }) {
             className={classNames(styles.groups, styles.viewForward)}
         >
             <li className={styles.backRow}>
-                <button type='button' onClick={() => setActivePath(null)}>
-                    <Icon name='right' />
-                    <Text bold size='l'>{active.name}</Text>
-                </button>
+                <BackButton onBack={() => setActivePath(null)}>{active.name}</BackButton>
             </li>
             {(active.children || []).map((group, i) => {
-                const groupPath = group.path || `${activePath}/${toSlug(group.name)}`
+                const groupPath = resolvePath(group, activePath)
                 return <li key={`${groupPath}-${i}`} className={styles.group}>
                     <Text bold size='l' className={styles.groupTitle}>{group.name}</Text>
                     {group.children?.length > 0 && (
                         <Flex tag='ul' col direction='column' gap={4}>
                             {group.children.map((child, j) => {
-                                const childPath = child.path || `${groupPath}/${toSlug(child.name)}`
+                                const childPath = resolvePath(child, groupPath)
                                 return <li key={`${childPath}-${j}`}>
                                     <button
                                         type='button'
@@ -200,7 +192,7 @@ function DeptBrowser({ items, basePath, onClose }) {
     >
         {items.map((item, index) => {
             const hasChildren = Boolean(item.children?.length)
-            const itemPath = item.path || `${basePath}/${toSlug(item.name)}`
+            const itemPath = resolvePath(item, basePath)
             return <li key={`${itemPath}-${index}`}>
                 <button
                     type='button'
