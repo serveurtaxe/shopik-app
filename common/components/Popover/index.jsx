@@ -9,8 +9,11 @@ export default function Popover({ id, className, button, children, btnClassName,
     const ref = useRef()
     const btnRef = useRef()
     const rafRef = useRef(0)
+    const winRafRef = useRef(0)
     const roRef = useRef(null)
+    const winResizeRef = useRef(null)
     const closeRef = useRef()
+    const positionRef = useRef()
     const escRef = useRef()
     const key = id || useId()
     if (!escRef.current) {
@@ -22,7 +25,14 @@ export default function Popover({ id, className, button, children, btnClassName,
     useEffect(() => {
         return () => {
             cancelAnimationFrame(rafRef.current)
+            cancelAnimationFrame(winRafRef.current)
             roRef.current?.disconnect()
+            roRef.current = null
+            if (winResizeRef.current) {
+                window.removeEventListener('resize', winResizeRef.current)
+                window.visualViewport?.removeEventListener('resize', winResizeRef.current)
+                winResizeRef.current = null
+            }
         }
     }, [])
 
@@ -73,8 +83,35 @@ export default function Popover({ id, className, button, children, btnClassName,
             void ref.current?.offsetWidth
             ref.current?.classList.add(styles.visible)
             watchResize()
-            position()
+            watchWindowResize()
+            positionRef.current?.()
         })
+    }
+
+    // rAF-throttled reposition so resize drags cost one layout read per frame.
+    // Separate slot from the open-transition rAF so a resize in the same
+    // frame can't cancel the .visible class add. Goes through positionRef
+    // so resize/content observers (stored once per open) always use the
+    // latest render's topOffset/leftOffset/left props instead of open-time values.
+    function schedulePosition() {
+        cancelAnimationFrame(winRafRef.current)
+        winRafRef.current = requestAnimationFrame(() => positionRef.current?.())
+    }
+
+    // Viewport size changes move the anchor button — re-glue windowed
+    // popovers while open. Modal dialogs stay browser-centered.
+    function watchWindowResize() {
+        if (modal || winResizeRef.current) return
+        winResizeRef.current = () => schedulePosition()
+        window.addEventListener('resize', winResizeRef.current)
+        window.visualViewport?.addEventListener('resize', winResizeRef.current)
+    }
+
+    function unwatchWindowResize() {
+        if (!winResizeRef.current) return
+        window.removeEventListener('resize', winResizeRef.current)
+        window.visualViewport?.removeEventListener('resize', winResizeRef.current)
+        winResizeRef.current = null
     }
 
     // True (unscaled) dialog size regardless of the current .5 -> 1
@@ -129,7 +166,7 @@ export default function Popover({ id, className, button, children, btnClassName,
         if (!dialog || roRef.current) return
         roRef.current = new ResizeObserver(() => {
             if (!ref.current?.open) return
-            cancelAnimationFrame(rafRef.current)
+            schedulePosition()
         })
         roRef.current.observe(dialog)
     }
@@ -137,7 +174,11 @@ export default function Popover({ id, className, button, children, btnClassName,
     function close() {
         const dialog = ref.current
         cancelAnimationFrame(rafRef.current)
+        cancelAnimationFrame(winRafRef.current)
         document.removeEventListener('keydown', escRef.current)
+        unwatchWindowResize()
+        roRef.current?.disconnect()
+        roRef.current = null
         popoverClosed(key)
         if (!dialog.open) return
         dialog.classList.remove(styles.visible)
@@ -168,8 +209,10 @@ export default function Popover({ id, className, button, children, btnClassName,
         }
     }
 
-    // Latest close for the registry + Escape listener (stable identity).
+    // Latest close for the registry + Escape listener (stable identity),
+    // latest position for the resize/content observers (fresh offsets).
     closeRef.current = close
+    positionRef.current = position
 
     return <>
         <dialog
