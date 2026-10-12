@@ -93,7 +93,7 @@ export default function DeliveryView({ }) {
         events.on('delivery-popover', openPopover)
         return () => events.off('delivery-popover', openPopover)
     }, [])
-    console.log('isMobile', isMobile)
+
     return <Popover
         id='delivery'
         // Popover base gap is 5: total 8 desktop / 2 mobile
