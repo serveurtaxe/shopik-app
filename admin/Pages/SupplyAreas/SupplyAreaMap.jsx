@@ -6,6 +6,7 @@ import 'leaflet/dist/leaflet.css'
 import 'leaflet-draw/dist/leaflet.draw.css'
 import Text from 'common/components/Text'
 import { useText } from 'common/texts/TextProvider'
+import Icon from 'common/components/Icon'
 import Button from 'common/components/Button'
 import ConfirmButton from 'common/components/ConfirmButton'
 import Flex from 'common/components/Flex'
@@ -105,6 +106,15 @@ function FlyToPoint({ point }) {
     return null
 }
 
+function MapRegistrar({ mapRef }) {
+    const map = useMap()
+    useEffect(() => {
+        mapRef.current = map
+        return () => { mapRef.current = null }
+    }, [map, mapRef])
+    return null
+}
+
 const buttonStyle = `
 display:block;
 min-width: 200px;
@@ -175,6 +185,7 @@ function getPaddedBounds(map) {
 function MapController({
     areas,
     selectedId,
+    unionIds = [],
     geometryEditingId,
     cuttingId,
     servedAreaIds,
@@ -183,6 +194,7 @@ function MapController({
     toggleMode,
     drawing,
     onSelect,
+    onUnionToggle,
     onToggleArea,
     onCreated,
     onCutCommit,
@@ -202,8 +214,8 @@ function MapController({
     const editLayerRef = useRef(null)
     const editOriginalRef = useRef(null)
     const editControlRef = useRef(null)
-    const cbRef = useRef({ onSelect, onToggleArea, onCreated, onCutCommit, onEdited, onGeometryCancel, onBackgroundClick, onViewportChange, selectedId, geometryEditingId, cuttingId, drawing, toggleMode })
-    cbRef.current = { onSelect, onToggleArea, onCreated, onCutCommit, onEdited, onGeometryCancel, onBackgroundClick, onViewportChange, selectedId, geometryEditingId, cuttingId, drawing, toggleMode }
+    const cbRef = useRef({ onSelect, onUnionToggle, onToggleArea, onCreated, onCutCommit, onEdited, onGeometryCancel, onBackgroundClick, onViewportChange, selectedId, geometryEditingId, cuttingId, drawing, toggleMode })
+    cbRef.current = { onSelect, onUnionToggle, onToggleArea, onCreated, onCutCommit, onEdited, onGeometryCancel, onBackgroundClick, onViewportChange, selectedId, geometryEditingId, cuttingId, drawing, toggleMode }
 
     const removeEditControl = useCallback(() => {
         if (editControlRef.current) {
@@ -312,6 +324,10 @@ function MapController({
                 if (cbRef.current.drawing) return
                 if (cbRef.current.geometryEditingId) return
                 if (cbRef.current.cuttingId) return
+                if (e.originalEvent?.ctrlKey || e.originalEvent?.metaKey) {
+                    cbRef.current.onUnionToggle?.(area.id)
+                    return
+                }
                 const isSelected = cbRef.current.selectedId === area.id
                 cbRef.current.onSelect?.(isSelected ? null : area.id)
             })
@@ -322,17 +338,17 @@ function MapController({
         return () => group.clearLayers()
     }, [map, areas])
 
-    // Highlight: selected (blue) > current group members (purple) > served by store (orange) > default.
+    // Highlight: selected / union members (blue) > current group members (purple) > served by store (orange) > default.
     useEffect(() => {
         layersRef.current.forEach((layer, id) => {
             layer.setStyle(polygonStyle({
-                selected: id === selectedId,
+                selected: id === selectedId || unionIds.includes(id),
                 draftMember: draftAreaIds.includes(id),
                 groupMember: !toggleMode && groupAreaIds.includes(id),
                 served: servedAreaIds.includes(id)
             }))
         })
-    }, [selectedId, servedAreaIds, groupAreaIds, draftAreaIds, toggleMode])
+    }, [selectedId, unionIds, servedAreaIds, groupAreaIds, draftAreaIds, toggleMode])
 
     // Refresh snapping targets (existing area vertices + edges) — bucketed grid for vertices + flat edge list
     useEffect(() => {
@@ -479,6 +495,26 @@ function MapController({
         const layer = layersRef.current.get(geometryEditingId)
         if (layer) startEdit(layer)
     }, [geometryEditingId, startEdit, revertEdit, stopEdit])
+
+    // leaflet-draw ships English mouse hints — localize to Hebrew once loaded
+    useEffect(() => {
+        if (!drawReady) return
+        const handlers = L.drawLocal?.draw?.handlers
+        if (!handlers) return
+        if (handlers.polygon?.tooltip) {
+            handlers.polygon.tooltip.start = TR('supply_draw_shape_start')
+            handlers.polygon.tooltip.cont = TR('supply_draw_shape_cont')
+            handlers.polygon.tooltip.end = TR('supply_draw_shape_end')
+        }
+        if (handlers.polyline) {
+            handlers.polyline.error = TR('supply_draw_error_cross')
+            if (handlers.polyline.tooltip) {
+                handlers.polyline.tooltip.start = TR('supply_draw_line_start')
+                handlers.polyline.tooltip.cont = TR('supply_draw_line_cont')
+                handlers.polyline.tooltip.end = TR('supply_draw_line_end')
+            }
+        }
+    }, [drawReady, TR])
 
     // New-area draw completion + live vertex snapping
     useEffect(() => {
@@ -648,12 +684,38 @@ function AreaEditForm({ areaDraft, setAreaDraft, stores, savingArea, onCancel, o
 export default function SupplyAreaMap({
     areas = [], stores = [], activeStoreIds = [], servedAreaIds = [], groupAreaIds = [], draftAreaIds = [],
     focusPoint, focusGroupPoint, testPoint, testLabel,
-    selectedId, geometryEditingId, cuttingId, areaDraft, setAreaDraft, savingArea,
-    onSelect, onStartAreaPropsEdit, onSaveAreaProps, onCancelAreaPropsEdit, onDeleteArea, onStartGeometryEdit, onStartCut,
+    selectedId, unionIds = [], geometryEditingId, cuttingId, areaDraft, setAreaDraft, savingArea,
+    onSelect, onUnionToggle, onStartAreaPropsEdit, onSaveAreaProps, onCancelAreaPropsEdit, onDeleteArea, onStartGeometryEdit, onStartCut,
     onViewportChange, onCreateArea, cityBorders, onToggleCityBorders,
     toggleMode, drawing, onToggleArea, onCreated, onCutCommit, onEdited, onGeometryCancel, onBackgroundClick,
+    isFullscreen, onToggleFullscreen, sidebarOpen = true,
 }) {
     const { TR } = useText()
+
+    // Leaflet caches its container size — re-measure on any layout change
+    // (sidebar toggle, fullscreen, drawer) via ResizeObserver on the map wrapper
+    const mapRef = useRef(null)
+    const wrapRef = useRef(null)
+    useEffect(() => {
+        const el = wrapRef.current
+        if (!el || typeof ResizeObserver === 'undefined') {
+            const t = setTimeout(() => mapRef.current?.invalidateSize(), 120)
+            return () => clearTimeout(t)
+        }
+        let t = null
+        const ro = new ResizeObserver(() => {
+            clearTimeout(t)
+            t = setTimeout(() => mapRef.current?.invalidateSize(), 100)
+        })
+        ro.observe(el)
+        return () => { clearTimeout(t); ro.disconnect() }
+    }, [])
+
+    // Explicit re-measure on sidebar open/close (in addition to the observer)
+    useEffect(() => {
+        const t = setTimeout(() => mapRef.current?.invalidateSize(), 150)
+        return () => clearTimeout(t)
+    }, [sidebarOpen])
 
     const selectedArea = useMemo(() => areas.find(a => a.id === selectedId) || null, [areas, selectedId])
     const popupPosition = useMemo(() => {
@@ -727,7 +789,7 @@ export default function SupplyAreaMap({
     }, [storePins])
 
     return (
-        center && <div className={styles.mapInnerWrap}>
+        center && <div ref={wrapRef} className={styles.mapInnerWrap}>
             <MapContainer
                 center={center}
                 zoom={12}
@@ -764,11 +826,13 @@ export default function SupplyAreaMap({
                     groupAreaIds={groupAreaIds}
                     draftAreaIds={draftAreaIds}
                     selectedId={selectedId}
+                    unionIds={unionIds}
                     geometryEditingId={geometryEditingId}
                     cuttingId={cuttingId}
                     toggleMode={toggleMode}
                     drawing={drawing}
                     onSelect={onSelect}
+                    onUnionToggle={onUnionToggle}
                     onToggleArea={onToggleArea}
                     onCreated={onCreated}
                     onCutCommit={onCutCommit}
@@ -777,7 +841,7 @@ export default function SupplyAreaMap({
                     onBackgroundClick={onBackgroundClick}
                     onViewportChange={onViewportChange}
                 />
-                {selectedArea && popupPosition && (
+                {selectedArea && popupPosition && !unionIds.length && (
                     <Popup
                         position={popupPosition}
                         maxWidth={420}
@@ -793,12 +857,13 @@ export default function SupplyAreaMap({
                                         <strong className={styles.areaPopupTitle}>{selectedArea.name || <Text size="none">no_name</Text>}</strong>
                                         <span>vertices: {selectedArea.location.coordinates?.[0].length - 1}</span>
                                         <Flex gap={6} className={styles.areaPopupActions}>
-                                            <Button size="s" icon="edit" onClick={onStartAreaPropsEdit}></Button>
+                                            <Button size="s" icon="edit" tooltip="supply_edit_details" onClick={onStartAreaPropsEdit}></Button>
                                             <ConfirmButton
                                                 q={`${TR('supply_delete_area_confirm')}${selectedArea.name ? ` "${selectedArea.name}"` : ''}?`}
                                                 onOk={onDeleteArea}
                                                 size="s"
                                                 icon="trash"
+                                                tooltip="supply_delete_area"
                                                 mode="outline"
                                                 className={styles.deleteButton}
                                             />
@@ -816,8 +881,8 @@ export default function SupplyAreaMap({
                                     </div>
                                     <Flex gap={8} justifyContent="end" style={{ marginTop: 8 }}>
                                         <Button size="s" mode="outline" onClick={() => onSelect?.(null)}>cancel</Button>
-                                        <Button size="s" icon="cut" onClick={() => onStartCut?.(selectedArea.id)}>supply_cut_area</Button>
-                                        <Button size="s" icon="edit" onClick={onStartGeometryEdit}>supply_edit_shape</Button>
+                                        <Button size="s" icon="cut" tooltip={`${TR('supply_cut_area')} (P)`} onClick={() => onStartCut?.(selectedArea.id)}>supply_cut_area</Button>
+                                        <Button size="s" icon="edit" tooltip={`${TR('supply_edit_shape')} (E)`} onClick={onStartGeometryEdit}>supply_edit_shape</Button>
                                     </Flex>
                                 </>
                             ) : (
@@ -863,8 +928,19 @@ export default function SupplyAreaMap({
                     </Marker>
                 )}
                 <FlyToPoint point={activeFlyPoint} />
+                <MapRegistrar mapRef={mapRef} />
             </MapContainer>
-            <div className={styles.tilePickerWrap}>
+            {onToggleFullscreen && (
+                <button
+                    type="button"
+                    className={styles.fullscreenBtn}
+                    title={`${TR(isFullscreen ? 'supply_map_exit_fullscreen' : 'supply_map_fullscreen')} (F)`}
+                    onClick={onToggleFullscreen}
+                >
+                    <Icon name={isFullscreen ? 'minimize' : 'maximize'} />
+                </button>
+            )}
+            <div className={`${styles.tilePickerWrap} ${!sidebarOpen ? styles.tilePickerWrapShifted : ''}`}>
                 <div className={styles.tilePicker}>
                     {Object.entries(tilesets).map(([id, ts]) => (
                         <button

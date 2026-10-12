@@ -2,9 +2,12 @@ import rewind from '@turf/rewind'
 import intersect from '@turf/intersect'
 import area from '@turf/area'
 
-// Below this area (sq-degrees) an intersection is considered a boundary touch
-// (shared edge / shared vertex), which is allowed for seamless tiling.
-const MIN_OVERLAP_AREA = 1e-9
+// Below this area (square METERS — @turf/area returns m²) an intersection is
+// considered a boundary touch (shared edge / shared vertex) or float noise
+// from split/union round-trips (e.g. a diagonal cut re-unioned leaves ~0.003 m²
+// slivers on jagged city-border edges), which is allowed for seamless tiling.
+// ≈ original intent of 1e-9 sq-degrees (~12 m²).
+export const MIN_OVERLAP_AREA = 10
 
 // Normalize polygon: close every ring + enforce Right-Hand Rule (CCW exterior,
 // CW holes) for MongoDB. Uses turf rewind default direction (no reverse flag).
@@ -60,7 +63,7 @@ export async function validateNoOverlap(DL, location, excludeId) {
     }
 
     if (excludeId)
-        query.id = { $ne: excludeId }
+        query.id = Array.isArray(excludeId) ? { $nin: excludeId } : { $ne: excludeId }
 
     const candidates = await DL.SupplyArea.Model.find(query).select('id name location').lean()
 
@@ -71,7 +74,7 @@ export async function validateNoOverlap(DL, location, excludeId) {
     }
 }
 
-function polygonsOverlap(geomA, geomB) {
+export function polygonsOverlap(geomA, geomB) {
     const intersection = intersect({
         type: 'FeatureCollection',
         features: [

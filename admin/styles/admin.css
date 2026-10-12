@@ -301,3 +301,24 @@ body .Popover_ {
         padding-bottom: calc(16px + var(--safeBottom, 0px));
     }
 }
+
+/* ============================================================
+   Supply Areas fullscreen map: hide admin chrome (menu + header),
+   the map page takes over the viewport.
+   ============================================================ */
+
+body.supply-map-fullscreen {
+    overflow: hidden;
+}
+
+/* Hide the menu (aside) + header only — never the .Sidebar_ wrapper itself,
+   it contains Main (the map page); display:none on it would hide the map too. */
+body.supply-map-fullscreen .Sidebar_>aside,
+body.supply-map-fullscreen .Overlay_.Overlay_open,
+body.supply-map-fullscreen .Header_ {
+    display: none !important;
+}
+
+body.supply-map-fullscreen .Main_ {
+    padding: 0 !important;
+}
