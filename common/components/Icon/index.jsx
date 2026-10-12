@@ -14,8 +14,8 @@ import {
     LuBoxes, LuLightbulb, LuSnowflake, LuImage, LuBadgePercent, LuGalleryVerticalEnd, LuGalleryHorizontalEnd,
     LuHistory, LuPhone, LuMail, LuMessageSquare, LuArrowRightLeft, LuCalculator, LuArchiveRestore,
     LuUpload, LuPhoneOutgoing, LuInfo, LuHeart, LuScissors, LuHouse, LuShieldCheck, LuDoorOpen,
-    LuMilk, LuSprayCan, LuCroissant, LuCigarette, LuBeef, LuShoppingBasket, LuApple, LuBaby, LuSparkles, LuCupSoda,
-    LuCircleUserRound, LuScrollText, LuPhoneOutgoing, LuInfo, LuHeart, LuScissors, LuMaximize, LuMinimize, LuCombine
+    LuMilk, LuSprayCan, LuCroissant, LuCigarette, LuBeef, LuShoppingBasket, LuApple, LuBaby, LuSparkles,
+    LuCupSoda, LuCircleUserRound, LuScrollText, LuMaximize, LuMinimize, LuCombine
 } from 'react-icons/lu'
 import { BsFileEarmarkExcel } from 'react-icons/bs'
 import { TbHeartPlus } from 'react-icons/tb'
