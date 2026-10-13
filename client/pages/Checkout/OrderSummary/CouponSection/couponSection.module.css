@@ -387,3 +387,13 @@
     font-size: 12px;
     font-weight: 600;
 }
+
+/* Disabled personalized-coupons header — no coupons available.
+   Manual input row stays enabled; only this Collapse header is grayed. */
+.couponsDisabled {
+    opacity: 0.55;
+}
+
+.couponsDisabledTop.couponsDisabledTop {
+    cursor: default;
+}

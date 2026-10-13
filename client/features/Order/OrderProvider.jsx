@@ -70,7 +70,15 @@ export default function OrderProvider({ children }) {
     useEffect(() => {
         if (hasServerOrder) return
         const cart = readStoredCart()
-        if (cart) setOrder({ cart })
+        if (!cart?.length) return
+        setOrder({ cart })
+        // Device-restored guest cart: recreate the server guest cart so sums,
+        // sales and shipping come from the server. Display fallbacks cover
+        // the gap until the responses arrive; failures keep the fallback.
+        for (const item of cart) {
+            const amount = Number(item?.amount) || 0
+            if (item?.id && amount > 0) queueCartSync(item, amount)
+        }
     }, [hasServerOrder])
 
     useEffect(() => {

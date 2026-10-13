@@ -11,6 +11,7 @@ import events from 'common/features/events'
 import { useOrder } from 'features/Order/OrderProvider'
 import { useAppData } from 'App'
 import { getRemainingToFreeShipping, extractShippingConfig } from '#common/functions/shipping.js'
+import { fallbackCartTotals } from 'common/functions/cartTotals.js'
 import styles from './cart.module.css'
 
 export default function MiniCart({
@@ -30,8 +31,10 @@ export default function MiniCart({
     const { order } = useOrder()
     const { settings } = useAppData() || {}
     const shippingConfig = useMemo(() => extractShippingConfig(settings), [settings])
-    // sum pre-coupon per spec; if coupon present, show discounted total
-    const sum = order?.sum ?? 0
+    // sum pre-coupon per spec; if coupon present, show discounted total.
+    // Falls back to last-synced line totals for device-restored guest carts.
+    const cart = order?.cart || []
+    const sum = order?.sum ?? (cart.length ? fallbackCartTotals(cart).sum : 0)
     const hasCoupon = !!(order?.coupons && order.coupons.length)
     const sumWithShipping = order?.sumWithShipping ?? (order?.shipping != null ? (sum + Number(order.shipping || 0)) : sum)
     const total = hasCoupon && order?.finalSumWithShipping != null ? order.finalSumWithShipping : sumWithShipping

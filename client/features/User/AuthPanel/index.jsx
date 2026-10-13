@@ -12,6 +12,7 @@ import Flex from 'common/components/Flex'
 import Form from 'common/components/Form'
 import Text from 'common/components/Text'
 import { useUser } from 'features/User'
+import { takeCartLoginPending } from 'layout/Cart/cartLoginPending'
 import { useState } from 'react'
 import Account from 'pages/Account'
 
@@ -176,7 +177,10 @@ function DigitsInputStep({ title = 'web_login_title', subtitle = 'web_login_subT
             const user = await apiReq('user/login', { phone, otpToken, otp: vals.otp, remember })
             onLogin(user)
             onClose?.()
-            events.emit('delivery-popover')
+            // Mobile guest pay flow reopens the cart instead of the
+            // desktop-style delivery prompt; the user taps pay again.
+            if (takeCartLoginPending()) events.emit('reopen-cart')
+            else events.emit('delivery-popover')
         } catch (err) {
             setError(err.message || err)
             throw err

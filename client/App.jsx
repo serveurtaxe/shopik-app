@@ -2,7 +2,7 @@ import OrderProvider from 'features/Order/OrderProvider'
 import { ModalProvider } from 'common/components/Modal'
 import TextProvider from 'common/texts/TextProvider'
 import { createContext, useContext } from 'react'
-import { Routes, Route } from 'react-router'
+import { Routes, Route, useLocation } from 'react-router'
 import Lists from 'common/features/Lists'
 import Header from 'layout/Header'
 import User from 'features/User'
@@ -18,6 +18,8 @@ const AppDataContext = createContext({})
 export const useAppData = () => useContext(AppDataContext)
 
 export default function App({ data = {} }) {
+    const { pathname } = useLocation()
+    const hideFooter = pathname === '/checkout' || pathname.startsWith('/checkout/')
     return <AppDataContext value={data}>
         <TextProvider>
             <Lists sdLists={data.lists}>
@@ -34,7 +36,7 @@ export default function App({ data = {} }) {
                                             }) => <Route key={path} path={path} element={<Elm />} />)}
                                         </Routes>
                                     </Main>
-                                    <Footer />
+                                    {!hideFooter && <Footer />}
                                 </div>
                             </CartProvider>
                         </ModalProvider>

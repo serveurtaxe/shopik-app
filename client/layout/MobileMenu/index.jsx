@@ -5,7 +5,8 @@ import AuthPanel from 'features/User/AuthPanel'
 import { useUser } from 'features/User'
 import { getUserTitle, getUserSubtitle } from 'common/functions/userLabel'
 import { INFO_LINKS } from 'layout/infoLinks'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import events from 'common/features/events'
 import { useNavigate } from 'react-router'
 import { useAppData } from 'App'
 import styles from './mobileMenu.module.css'
@@ -24,6 +25,17 @@ export default function MobileMenu({ onClose }) {
     const user = useUser()
     const [selected, setSelected] = useState(null)
     const navigate = useNavigate()
+
+    // Guest pay opens the drawer on the login section (same event Header
+    // uses to open the drawer). Ignored once logged in.
+    useEffect(() => {
+        const openLogin = () => {
+            if (user?.id) return
+            setSelected('login')
+        }
+        events.on('mobile-login', openLogin)
+        return () => events.off('mobile-login', openLogin)
+    }, [user?.id])
 
     const products = menu?.find(item => item.path === '/products')
 

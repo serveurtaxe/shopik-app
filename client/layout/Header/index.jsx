@@ -59,6 +59,19 @@ export default function Header() {
         return () => events.off('cart-toggled', onCartToggle)
     }, [])
 
+    // Mobile guest pay: open the menu drawer (login lives there, not in a
+    // popover). MobileMenu listens to the same event for the login section.
+    useEffect(() => {
+        const onMobileLogin = () => {
+            closeAllPopovers()
+            document.querySelectorAll('dialog[open]').forEach(d => d.close())
+            setOpenMenu(null)
+            setDrawerOpen(true)
+        }
+        events.on('mobile-login', onMobileLogin)
+        return () => events.off('mobile-login', onMobileLogin)
+    }, [])
+
     useEffect(() => subscribePopoverCount(setPopCount), [])
 
     const handleWhatsAppClick = () => {
