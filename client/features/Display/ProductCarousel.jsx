@@ -31,6 +31,7 @@ export default function ProductCarousel({ block }) {
         <HorizontalScroll
             autoplaySec={autoplaySec}
             itemClassName={styles.railCard}
+            largeArrows
             items={products.map(p => (
                 <ProductCard
                     key={p.id}
