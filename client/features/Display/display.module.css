@@ -147,6 +147,18 @@
     line-height: var(--line-height-display-xs);
 }
 
+@media (max-width: 700px) {
+    .railHeader .railTitle {
+        font-size: 32px;
+        line-height: 1.2;
+    }
+
+    .showAll .showAllText {
+        font-size: 16px;
+        line-height: 1.5;
+    }
+}
+
 /* Same card size as the products grid (products.module.css breakpoints):
    2/3/4/5/6 columns at 700/1000/1300/1600px with a 12px gap. The rail itself
    lays out with a 10px gap, so the trailing card peeks slightly — a natural

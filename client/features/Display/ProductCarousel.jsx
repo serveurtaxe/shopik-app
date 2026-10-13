@@ -19,7 +19,7 @@ export default function ProductCarousel({ block }) {
     if (!products.length) return null
 
     return <Flex col gap={8} className={styles.rail}>
-        <Flex className={styles.railHeader} alignItems="center">
+        <Flex className={styles.railHeader} alignItems="end">
             <Text size="h1" bold className={styles.railTitle}>{title || block.name}</Text>
             {showAll !== false && (
                 <Link to={`/carousel/${block.id}`} className={styles.showAll}>

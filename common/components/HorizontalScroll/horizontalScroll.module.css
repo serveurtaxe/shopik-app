@@ -63,16 +63,16 @@
    Border/shadow inherit from .arrow. Doubled class for specificity
    over Button's .button / .button svg rules. */
 .arrow.arrowLarge {
-    width: 98px;
-    height: 98px;
+    width: 56px;
+    height: 56px;
     background-color: var(--carousel-bg, #FDFBF9);
     color: var(--carousel-title, #003324);
 }
 
 .arrow.arrowLarge svg {
-    width: 98px;
-    height: 98px;
-    font-size: 98px;
+    width: 56px;
+    height: 56px;
+    font-size: 56px;
 }
 
 .arrow.arrowLarge:hover {
