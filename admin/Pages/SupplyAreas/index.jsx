@@ -202,6 +202,9 @@ export default function SupplyAreas() {
     const [cuttingSaving, setCuttingSaving] = useState(false)
     const [savingArea, setSavingArea] = useState(false)
     const [focusStoreId, setFocusStoreId] = useState(null)
+    // Most recent map-focus intent — decides whether a store click or an
+    // address search wins the FlyTo when both points exist.
+    const [lastFocus, setLastFocus] = useState(null) // 'store' | 'test' | 'group'
     const [creating, setCreating] = useState(false)
     // City borders overlay visibility — shared by the header switch and the map basemap picker
     const [showCityBorders, setShowCityBorders] = useState(() => localStorage.getItem(CITY_BORDERS_KEY) !== '0')
@@ -217,6 +220,7 @@ export default function SupplyAreas() {
     const [error, setError] = useState(null)
     const [testQuery, setTestQuery] = useState('')
     const [searchOpen, setSearchOpen] = useState(false)
+    const searchInputRef = useRef(null)
     const [testPoint, setTestPoint] = useState(null)
     const [testLabel, setTestLabel] = useState('')
     const [testResult, setTestResult] = useState(null)
@@ -296,6 +300,19 @@ export default function SupplyAreas() {
         function onKey(e) {
             const t = e.target
             const typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)
+            // Ctrl/Cmd+F opens + focuses address search — physical key position so
+            // it works in any keyboard language. Runs before the plain-F
+            // fullscreen branch and even while typing. Suppresses browser Find.
+            if (e.code === 'KeyF' && (e.ctrlKey || e.metaKey) && !e.altKey) {
+                e.preventDefault()
+                e.stopPropagation()
+                setSearchOpen(true)
+                // Already-open case focuses immediately; closed→open case is
+                // covered by the searchOpen focus effect below.
+                searchInputRef.current?.focus()
+                searchInputRef.current?.select?.()
+                return
+            }
             // F toggles fullscreen (YouTube-style) — physical key position so it
             // works in any keyboard language (Hebrew layout produces ש here).
             // Never while typing.
@@ -338,7 +355,16 @@ export default function SupplyAreas() {
                 }
             }
             if (e.key !== 'Escape') return
-            if (typing) return
+            // ESC in the search field closes search even while typing
+            // (input is autofocused, so the generic typing guard below
+            // would otherwise swallow it).
+            if (typing) {
+                if (searchOpen && t === searchInputRef.current) {
+                    setSearchOpen(false)
+                    e.stopPropagation()
+                }
+                return
+            }
             if (unwindStep()) { e.stopPropagation(); return }
             if (document.body.classList.contains('supply-map-fullscreen')) exitFullscreen()
         }
@@ -355,6 +381,10 @@ export default function SupplyAreas() {
             document.removeEventListener('fullscreenchange', onFsChange)
         }
     })
+    // Focus search input on closed→open transitions (e.g. Ctrl+F when closed).
+    useEffect(() => {
+        if (searchOpen) searchInputRef.current?.focus()
+    }, [searchOpen])
     // Never leave fullscreen behind (unmount while fullscreen)
     useEffect(() => () => {
         document.body.classList.remove('supply-map-fullscreen')
@@ -398,8 +428,8 @@ export default function SupplyAreas() {
     const focusStoreCoords = focusStore?.address?.location?.coordinates
     const focusPoint = useMemo(() => {
         if (focusStoreCoords) return { lat: focusStoreCoords[1], lng: focusStoreCoords[0] }
-        return testPoint
-    }, [focusStoreCoords, testPoint])
+        return null
+    }, [focusStoreCoords])
 
     // Pan to the selected area group (center of its polygons, or its store when empty) — only on group selection, not on every area toggle
     const focusGroupPoint = useMemo(() => {
@@ -427,6 +457,10 @@ export default function SupplyAreas() {
         if (Array.isArray(c) && c.length === 2) return { lat: c[1], lng: c[0] }
         return null
     }, [groupDraft?.id, groups, areas, stores])
+    const groupDraftId = groupDraft?.id
+    useEffect(() => {
+        if (groupDraftId) setLastFocus('group')
+    }, [groupDraftId])
 
     function handleNewArea() {
         if (groupDraft || geometryEditingId || cuttingId) return
@@ -802,6 +836,7 @@ export default function SupplyAreas() {
             const res = await apiReq('supply_area/lookup', { lng, lat })
             setTestResult(res)
             setTestPoint({ lat, lng })
+            setLastFocus('test')
             setTestLabel(res.hasService ? `${TR('supply_in_area')}: ${res.area?.name}` : TR('supply_no_service'))
         } catch (err) {
             setTestResult({ error: toMessage(err) })
@@ -834,7 +869,10 @@ export default function SupplyAreas() {
                                 <div key={store.id} className={styles.storeBranch}>
                                     <div
                                         className={`${styles.storeListItem} ${store.id === focusStoreId ? styles.active : ''}`}
-                                        onClick={() => setFocusStoreId(prev => prev != store.id ? store.id : null)}
+                                        onClick={() => {
+                                            setFocusStoreId(prev => prev != store.id ? store.id : null)
+                                            setLastFocus('store')
+                                        }}
                                     >
                                         <span className={styles.storeListName}>{store.name}</span>
                                         <span className={styles.storeListAddress}>{[store.address?.city, store.address?.street, store.address?.building].filter(Boolean).join(', ')}</span>
@@ -1013,7 +1051,7 @@ export default function SupplyAreas() {
                             <button
                                 type="button"
                                 className={styles.cornerBtn}
-                                title={TR('supply_search_address')}
+                                title={`${TR('supply_search_address')} (Ctrl+F)`}
                                 onClick={() => setSearchOpen(true)}
                             >
                                 <Icon name="search" />
@@ -1038,6 +1076,7 @@ export default function SupplyAreas() {
                                     <Icon name={testing ? 'load' : 'search'} />
                                 </button>
                                 <input
+                                    ref={searchInputRef}
                                     className={styles.searchField}
                                     value={testQuery}
                                     onChange={e => setTestQuery(e.target.value)}
@@ -1093,12 +1132,12 @@ export default function SupplyAreas() {
                                 </div>
                             </div>
                         ) : (
-                        <button
-                            type="button"
-                            className={styles.centerPlus}
-                            title={`${TR('new area')} (A)`}
-                            onClick={handleNewArea}
-                        >
+                            <button
+                                type="button"
+                                className={styles.centerPlus}
+                                title={`${TR('new area')} (A)`}
+                                onClick={handleNewArea}
+                            >
                                 <Icon name="add" />
                             </button>
                         )
@@ -1158,6 +1197,7 @@ export default function SupplyAreas() {
                         onToggleArea={handleToggleGroupArea}
                         focusPoint={focusPoint}
                         focusGroupPoint={focusGroupPoint}
+                        lastFocus={lastFocus}
                         selectedId={selectedId}
                         unionIds={unionIds}
                         onUnionToggle={handleUnionToggle}
