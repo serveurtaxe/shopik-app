@@ -381,35 +381,6 @@
             }
         }
     }
-
-    @media screen and (max-width: 480px) {
-        padding: calc(6px + env(safe-area-inset-top, 0px)) 8px 0 8px;
-        column-gap: 6px;
-
-        .actionBtn {
-            width: 34px;
-            height: 34px;
-            min-width: 34px;
-
-            svg {
-                font-size: 17px !important;
-                width: 17px !important;
-                height: 17px !important;
-            }
-        }
-
-        .headerActions {
-            gap: 6px;
-        }
-
-        .userDelivery {
-            gap: 6px;
-            margin-left: calc(50% - 50vw);
-            margin-right: calc(50% - 50vw);
-            width: 100vw;
-            padding: 6px max(8px, calc((100vw - var(--max-width)) / 2 + 8px));
-        }
-    }
 }
 
 /* Shared dim behind open menu/drawer/popovers. Nested in the header: below
