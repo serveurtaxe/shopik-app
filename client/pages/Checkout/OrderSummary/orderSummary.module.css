@@ -194,4 +194,10 @@
     .paySticky .totalRow {
         padding: 0 4px 10px;
     }
+
+    /* Last part moved to the sticky bar — no trailing divider in the card */
+    .breakdown {
+        border-bottom: none;
+        padding-bottom: 4px;
+    }
 }

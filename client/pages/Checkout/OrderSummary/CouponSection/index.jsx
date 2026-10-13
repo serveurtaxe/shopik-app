@@ -270,7 +270,6 @@ export default function CouponSection() {
                             disabled={inputLoading}
                             autoComplete='off'
                             spellCheck={false}
-                            autoFocus={!appliedCode}
                         />
                         {inputLoading ? (
                             <Loader size={14} />
@@ -490,7 +489,6 @@ export function CouponCollapse({ defaultOpen = true }) {
                             disabled={inputLoading}
                             autoComplete='off'
                             spellCheck={false}
-                            autoFocus
                         />
                         {inputLoading ? <Loader size={14} /> : null}
                     </div>
