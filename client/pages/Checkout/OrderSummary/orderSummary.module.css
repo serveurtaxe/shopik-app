@@ -60,7 +60,7 @@
 }
 
 .editBtn:hover {
-    color: #195855;
+    color: var(--bg-brand-primary, #195855);
 }
 
 .collapseContent {
@@ -74,7 +74,7 @@
 .editCouponBtn {
     background: none;
     border: none;
-    color: #195855;
+    color: var(--bg-brand-primary, #195855);
     font-weight: 600;
     font-size: 13px;
     cursor: pointer;
@@ -139,7 +139,7 @@
 
 .payBtn {
     width: 100%;
-    background-color: #195855;
+    background-color: var(--bg-brand-primary, #195855);
     color: #ffffff;
     border: none;
     border-radius: var(--radius-full);
