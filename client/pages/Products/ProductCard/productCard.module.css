@@ -5,7 +5,7 @@
     transition: 0.2s;
     cursor: pointer;
     color: var(--text-primary);
-
+    background-color: var(--bg-primary);
     display: flex;
     flex-direction: column;
     width: 100%;

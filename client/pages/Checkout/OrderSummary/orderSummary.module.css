@@ -1,5 +1,5 @@
 .orderSummaryWrapper {
-    width: 400px;
+    width: 360px;
     max-width: 100%;
 }
 
@@ -60,7 +60,7 @@
 }
 
 .editBtn:hover {
-    color: #195855;
+    color: var(--bg-brand-primary, #195855);
 }
 
 .collapseContent {
@@ -74,7 +74,7 @@
 .editCouponBtn {
     background: none;
     border: none;
-    color: #195855;
+    color: var(--bg-brand-primary, #195855);
     font-weight: 600;
     font-size: 13px;
     cursor: pointer;
@@ -139,7 +139,7 @@
 
 .payBtn {
     width: 100%;
-    background-color: #195855;
+    background-color: var(--bg-brand-primary, #195855);
     color: #ffffff;
     border: none;
     border-radius: var(--radius-full);
@@ -164,4 +164,40 @@
 
 .payIcon {
     font-size: 20px;
+}
+
+@media (max-width: 900px) {
+    .orderSummaryWrapper {
+        width: 100%;
+        max-width: 100%;
+    }
+
+    /* Mobile payment view: title + card hidden (page shows its own title) */
+    .hideOnMobile {
+        display: none;
+    }
+
+    /* Total + pay button: fixed full-width bottom bar */
+    .paySticky {
+        position: fixed;
+        bottom: 0;
+        inset-inline: 0;
+        z-index: 50;
+        background-color: var(--bg-primary, #ffffff);
+        border-top: 1px solid var(--border-secondary, #dde4e2);
+        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.10);
+        padding: 12px 16px calc(12px + var(--safeBottom, 0px) + env(safe-area-inset-bottom, 0px));
+        padding-inline-start: calc(16px + var(--safeLeft, 0px));
+        padding-inline-end: calc(16px + var(--safeRight, 0px));
+    }
+
+    .paySticky .totalRow {
+        padding: 0 4px 10px;
+    }
+
+    /* Last part moved to the sticky bar — no trailing divider in the card */
+    .breakdown {
+        border-bottom: none;
+        padding-bottom: 4px;
+    }
 }

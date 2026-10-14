@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { useLocation } from 'react-router'
 
-const CartUIContext = createContext()
+const CartUIContext = createContext({})
 
 export const useCart = () => useContext(CartUIContext)
 

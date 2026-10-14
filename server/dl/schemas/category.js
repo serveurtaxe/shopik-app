@@ -9,6 +9,7 @@ const categorySchema = {
         trim: true
     },
     slug: String,
+    icon: String,
     path: String,
     parentId: String,
     parentIds: [String]

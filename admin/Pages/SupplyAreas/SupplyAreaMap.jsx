@@ -683,7 +683,7 @@ function AreaEditForm({ areaDraft, setAreaDraft, stores, savingArea, onCancel, o
 
 export default function SupplyAreaMap({
     areas = [], stores = [], activeStoreIds = [], servedAreaIds = [], groupAreaIds = [], draftAreaIds = [],
-    focusPoint, focusGroupPoint, testPoint, testLabel,
+    focusPoint, focusGroupPoint, testPoint, testLabel, lastFocus,
     selectedId, unionIds = [], geometryEditingId, cuttingId, areaDraft, setAreaDraft, savingArea,
     onSelect, onUnionToggle, onStartAreaPropsEdit, onSaveAreaProps, onCancelAreaPropsEdit, onDeleteArea, onStartGeometryEdit, onStartCut,
     onViewportChange, onCreateArea, cityBorders, onToggleCityBorders,
@@ -782,7 +782,14 @@ export default function SupplyAreaMap({
         return Array.isArray(c) && c.length === 2
     }), [stores])
 
-    const activeFlyPoint = useMemo(() => testPoint || focusGroupPoint || focusPoint || null, [testPoint, focusGroupPoint, focusPoint])
+    // Most recent user intent wins: a store click after a search pans to the
+    // store, a new search after a store click pans to the searched address.
+    const activeFlyPoint = useMemo(() => {
+        if (lastFocus === 'store') return focusPoint || focusGroupPoint || testPoint || null
+        if (lastFocus === 'test') return testPoint || focusPoint || focusGroupPoint || null
+        if (lastFocus === 'group') return focusGroupPoint || focusPoint || testPoint || null
+        return testPoint || focusGroupPoint || focusPoint || null
+    }, [lastFocus, testPoint, focusGroupPoint, focusPoint])
     const center = useMemo(() => {
         const c = storePins[0]?.address?.location?.coordinates
         return c ? [c[1], c[0]] : null

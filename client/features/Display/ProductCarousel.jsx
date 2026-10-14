@@ -19,18 +19,19 @@ export default function ProductCarousel({ block }) {
     if (!products.length) return null
 
     return <Flex col gap={8} className={styles.rail}>
-        <Flex className={styles.railHeader} alignItems="center">
-            <Text size="h1" bold>{title || block.name}</Text>
+        <Flex className={styles.railHeader} alignItems="end">
+            <Text size="h1" bold className={styles.railTitle}>{title || block.name}</Text>
             {showAll !== false && (
                 <Link to={`/carousel/${block.id}`} className={styles.showAll}>
-                    <Text mode="link" bold size='xl'>{showAllText || TR('display_show_all_default')}</Text>
-                    <Icon name="left" size={14} />
+                    <Text mode="link" bold size='xl' className={styles.showAllText}>{showAllText || TR('display_show_all_default')}</Text>
+                    <Icon name="left" size={24} />
                 </Link>
             )}
         </Flex>
         <HorizontalScroll
             autoplaySec={autoplaySec}
             itemClassName={styles.railCard}
+            largeArrows
             items={products.map(p => (
                 <ProductCard
                     key={p.id}

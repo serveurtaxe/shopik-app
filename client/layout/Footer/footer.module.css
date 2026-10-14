@@ -1,11 +1,279 @@
 .footer {
-    border-top: 1px solid var(--header-border);
-    padding: 20px 40px;
-    background-color: var(--header-bg);
+    --footer-fg: rgba(255, 255, 255, .82);
+    --footer-fg-strong: #fff;
+    --footer-line: rgba(255, 255, 255, .22);
+
+    background-color: var(--footer-bg);
+    color: var(--footer-fg);
+
+    padding-block: 48px 28px;
+    padding-inline: max(16px, calc((100% - var(--max-width)) / 2 + 16px));
+
+    /* Typography is declared here (not at the top level) so these rules win
+       over the shared Text_* size classes regardless of stylesheet order. */
+
+    .tagline {
+        max-width: 280px;
+        color: var(--footer-fg);
+        font-size: var(--text-sm);
+        line-height: 1.8;
+        text-align: center;
+    }
+
+    .columnTitle {
+        color: var(--footer-fg-strong);
+        font-size: var(--text-md);
+        line-height: 1.4;
+        text-align: center;
+    }
+
+    .row {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        max-width: 100%;
+        color: var(--footer-fg);
+        font-size: var(--text-sm);
+        line-height: 1.5;
+        text-align: center;
+        cursor: pointer;
+        transition: color .2s ease;
+
+        &:hover {
+            color: var(--footer-fg-strong);
+            text-decoration: underline;
+        }
+
+        /* Placeholder row - no destination configured, must not look clickable */
+        &.inert {
+            cursor: default;
+
+            &:hover {
+                text-decoration: none;
+            }
+        }
+    }
+
+    .copyright {
+        color: var(--footer-fg);
+        font-size: var(--text-sm);
+        line-height: 1.5;
+    }
 }
 
-@media (max-width: 700px) {
+.inner {
+    max-width: var(--max-width);
+    margin: auto;
+}
+
+/* =================================
+   TOP: brand + link columns + contact
+   ================================= */
+
+.top {
+    display: grid;
+    grid-template-columns: 1.25fr repeat(3, minmax(0, 1fr));
+    column-gap: 48px;
+    row-gap: 40px;
+}
+
+.brand {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 22px;
+    text-align: center;
+
+    /* Beats Logo_logo img sizing regardless of stylesheet order */
+    .logo img {
+        height: 46px;
+        width: auto;
+        max-width: 170px;
+        object-fit: contain;
+        object-position: center;
+    }
+}
+
+.column {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    min-width: 0;
+}
+
+.list {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.item {
+    display: flex;
+    justify-content: center;
+    max-width: 100%;
+}
+
+.tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 6px;
+    border: 1px solid rgba(255, 255, 255, .55);
+    border-radius: var(--radius-full);
+    color: var(--footer-fg-strong);
+    font-size: var(--text-xs);
+    line-height: 1.6;
+    white-space: nowrap;
+}
+
+.contactIcon {
+    font-size: 20px;
+    color: var(--footer-fg-strong);
+}
+
+
+/* =================================
+   BOTTOM: social + copyright
+   ================================= */
+
+.bottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+
+    margin-top: 48px;
+    padding-top: 24px;
+    border-top: 1px solid var(--footer-line);
+}
+
+.social {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+
+    /* Brand marks read left-to-right even inside the RTL document */
+    direction: ltr;
+}
+
+.socialItem {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--footer-fg);
+    font-size: 22px;
+    cursor: pointer;
+    transition: color .2s ease, transform .2s ease;
+
+    &:hover {
+        color: var(--footer-fg-strong);
+        transform: translateY(-2px);
+    }
+
+    &.inert {
+        cursor: default;
+
+        &:hover {
+            transform: none;
+        }
+    }
+}
+
+
+/* =================================
+   TABLET: brand on its own row
+   ================================= */
+
+@media screen and (max-width: 1023px) {
     .footer {
-        padding: 16px;
+        padding-block: 40px 24px;
+
+        .brand {
+            grid-column: 1 / -1;
+            align-items: flex-start;
+            text-align: start;
+            gap: 14px;
+        }
+
+        .tagline {
+            max-width: 420px;
+            text-align: start;
+        }
+    }
+
+    .top {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        column-gap: 32px;
+        row-gap: 36px;
+    }
+}
+
+
+/* =================================
+   MOBILE: brand centered, 2 link columns,
+   contact full width
+   ================================= */
+
+@media screen and (max-width: 700px) {
+    .footer {
+        padding-block: 32px 20px;
+
+        .brand {
+            grid-column: 1 / -1;
+            align-items: center;
+            text-align: center;
+            gap: 16px;
+        }
+
+        .tagline {
+            max-width: 300px;
+            text-align: center;
+        }
+
+        .copyright {
+            text-align: center;
+        }
+    }
+
+    .top {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        column-gap: 20px;
+        row-gap: 32px;
+    }
+
+    .column:last-child {
+        grid-column: 1 / -1;
+    }
+
+    .contactList {
+        align-items: stretch;
+        width: 100%;
+    }
+
+    /* RTL: flex-start pins the rows to the right edge */
+    .contactList .item {
+        justify-content: flex-start;
+    }
+
+    .bottom {
+        flex-direction: column;
+        align-items: center;
+        gap: 14px;
+
+        margin-top: 32px;
+        padding-top: 20px;
+    }
+
+    .social {
+        gap: 22px;
+    }
+
+    .socialItem {
+        font-size: 21px;
     }
 }

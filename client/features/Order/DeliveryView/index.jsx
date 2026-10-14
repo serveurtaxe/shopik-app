@@ -13,10 +13,10 @@ import events from 'common/features/events'
 import { useUser } from 'features/User'
 import { useEffect, useState } from 'react'
 import { useAppData } from 'App'
-import Icon from '#common/components/Icon/index.jsx'
-import Text from '#common/components/Text/index.jsx'
 import { useOrder } from '../OrderProvider'
 import { useText } from '#common/texts/TextProvider.jsx'
+import HeaderPopoverButton from 'common/components/HeaderPopoverButton'
+import useMediaQuery from 'common/functions/useMediaQuery'
 
 
 const deliveryMethods = {
@@ -33,6 +33,8 @@ export default function DeliveryView({ }) {
             deliveryMethods.pickup.text : deliveryMethods.delivery.text),
         [popoverOpened, setPopoverOpened] = useState(false),
         [isSwitching, setIsSwitching] = useState(false),
+        // Matches the ≤768px mobile breakpoint in header.module.css
+        isMobile = useMediaQuery('(max-width: 768px)'),
         { icon, text } = deliveryMethods[deliveryMethod],
         { TR } = useText(),
         window = order?.window,
@@ -80,16 +82,19 @@ export default function DeliveryView({ }) {
         return () => events.off('delivery-popover', openPopover)
     }, [])
 
-    return <Popover id='delivery' overlay button={<Flex alignItems='center' gap={10} className={styles.button} onClick={openPopover}>
-        <Icon name={icon} className={styles.icon} />
-        <Flex alignItems='center' justifyContent='space-between' grow={1}>
-            <Flex col gap={3}>
-                <Text bold size='s'>{buttonTitle}</Text>
-                <Text size='xs'>{buttonSubTitle}</Text>
-            </Flex>
-            <Icon name='down' className={styles.chevron} />
-        </Flex>
-    </Flex>}>
+    return <Popover
+        id='delivery'
+        // Popover base gap is 5: total 8 desktop / 2 mobile
+        topOffset={isMobile ? 4 : 10}
+        overlay
+        modal={false}
+        button={<HeaderPopoverButton
+            icon={icon}
+            title={buttonTitle}
+            subtitle={buttonSubTitle}
+            onClick={openPopover}
+        />}
+    >
         {() => <Flex col gap={25} className={styles.deliveryView}>
             {pickupStores.length ? <Tabs
                 active={deliveryMethod}

@@ -1,5 +1,6 @@
 export const ADMIN_TOKEN_EXPIRY_MS = 1000 * 60 * 60 * 24 * 30
 export const USER_TOKEN_EXPIRY_MS = 1000 * 60 * 60 * 24 * 30
+export const USER_TOKEN_EXPIRY_SHORT_MS = 1000 * 60 * 60 * 24
 export const BOT_TOKEN_EXPIRY_MS = 1000 * 60 * 60 * 24
 export const ADMIN_TOKEN_COOKIE = 'at'
 export const USER_TOKEN_COOKIE = 'ut'
@@ -16,6 +17,8 @@ export const CACHE_STRATEGIES = {
     VERSION: 'version',
     HASHSET: 'hashset'
 }
+
+export const MENU_CACHE_KEY = 'menu'
 
 export const WINDOWS_PAGE = {
     FOCUS_START_HOUR: 6,

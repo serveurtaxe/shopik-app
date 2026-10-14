@@ -1,40 +1,4 @@
 .deliveryView {
     max-width: 300px;
-}
-
-.button {
-    padding: 5px 10px;
-    cursor: pointer;
-    color: var(--text-primary-on-brand);
-    padding: 10px;
-    border-radius: var(--radius-2xl);
-    transition: background-color .2s ease;
-    min-width: 170px;
-    user-select: none;
-
-    .icon {
-        font-size: 24px;
-        transition: color .2s ease;
-    }
-
-    .chevron {
-        font-size: 16px;
-        transition: rotate .2s ease;
-    }
-
-    &:hover {
-        background-color: var(--bg-brand-primary-hover);
-    }
-}
-
-:global(.Popover_visible)+:global(.Popover_btn) .button {
-    background-color: var(--bg-brand-primary-hover);
-
-    .icon {
-        color: var(--color-brand-secondary);
-    }
-
-    .chevron {
-        rotate: 180deg;
-    }
+    min-width: 300px;
 }
