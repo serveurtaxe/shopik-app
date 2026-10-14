@@ -2,11 +2,12 @@ import pLimit from 'p-limit'
 import { enqueueFetchJobs, getFetchQueue, getProcessQueue } from '#server/queues/gs1Queues.js'
 import { flush } from './bulk.js'
 import log from '#server/utils/log.js'
+import formatISODate from '#common/functions/formatISODate.js'
 
 const RELEVANT_TYPES = new Set(['New_Publish', 'Update_Product'])
 const OVERLAP_MS = 2 * 60 * 60 * 1000
 
-const fmtDate = d => d.toISOString().slice(0, 10)
+const fmtDate = formatISODate
 
 function monthChunks(from, to, monthsPerChunk = 1) {
     const chunks = []

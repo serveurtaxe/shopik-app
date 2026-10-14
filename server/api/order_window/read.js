@@ -1,10 +1,7 @@
 import storeScope, { narrowStoreIds, assertStoreIdsAllowed } from '#server/utils/data/storeScope.js'
+import formatISODate from '#common/functions/formatISODate.js'
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
-
-function formatDate(d) {
-    return d.toISOString().split('T')[0]
-}
 
 export default async function read(payload, { DL, _admin }) {
     const { date, fromDate, toDate, storeIds } = payload
@@ -15,7 +12,7 @@ export default async function read(payload, { DL, _admin }) {
         dateFilter = date
     } else {
         const timezone = process.env.TZ ?? Intl.DateTimeFormat().resolvedOptions().timeZone
-        const todayStr = formatDate(getNowInTimezone(timezone))
+        const todayStr = formatISODate(getNowInTimezone(timezone))
         dateFilter = {
             $gte: fromDate && DATE_RE.test(fromDate) ? fromDate : todayStr,
             $lte: toDate && DATE_RE.test(toDate) ? toDate : (fromDate && DATE_RE.test(fromDate) ? fromDate : todayStr)

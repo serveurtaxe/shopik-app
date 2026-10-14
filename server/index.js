@@ -14,6 +14,7 @@ import startGs1Sync from '#server/cron/gs1Sync.js'
 import startHolidaySeed from '#server/cron/holidaySeed.js'
 import startWindowSync from '#server/cron/windowSync.js'
 import startSalesSync from '#server/cron/salesSync.js'
+import startDeliveryDocsSync from '#server/cron/deliveryDocsSync.js'
 import log from '#server/utils/log.js'
 import compression from 'compression'
 import setupSecurity from './middleware/security.js'
@@ -73,6 +74,7 @@ try {
     await startGs1FetchWorker({ DL: bootData.DL, external: bootData.external, sizing })
     await startGs1ProcessWorker({ DL: bootData.DL, sizing })
     startRefundRetry(bootData)
+    startDeliveryDocsSync(bootData)
     if (!NO_NIGHT_SYNC || PRODUCTION) {
         startNightlySync(bootData)
         startGs1Sync(bootData)

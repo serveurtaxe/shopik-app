@@ -2,15 +2,12 @@ import executeInBatches from '#common/functions/executeInBatches.js'
 import getWindowTS from '#common/functions/getWindowTS.js'
 import { buildSpecialMap, overlapsWindow } from '#common/functions/specialDay.js'
 import { groupsSignature } from '#server/utils/data/windowGroups.js'
+import formatISODate from '#common/functions/formatISODate.js'
 
 const SYNC_DAYS_AHEAD = 30
 
 async function getActiveStoreIds(DL) {
     return DL.Store.Model.distinct('id', { active: true })
-}
-
-function formatDate(d) {
-    return d.toISOString().split('T')[0]
 }
 
 /**
@@ -61,13 +58,13 @@ export default async function sync(payload, { DL }) {
 
     // Calculate date bounds
     const timezone = process.env.TZ ?? Intl.DateTimeFormat().resolvedOptions().timeZone
-    const today = getWindowTS({ date: formatDate(new Date()), hour: 12, timezone })
+    const today = getWindowTS({ date: formatISODate(new Date()), hour: 12, timezone })
 
     const endDate = new Date(today)
     endDate.setDate(endDate.getDate() + SYNC_DAYS_AHEAD)
 
-    const startDateStr = formatDate(today)
-    const endDateStr = formatDate(endDate)
+    const startDateStr = formatISODate(today)
+    const endDateStr = formatISODate(endDate)
 
     // Future-only guard: template saves pass fromDate (tomorrow) so today's
     // generated windows are never rewritten by an edit. Cron-style full sync
@@ -104,7 +101,7 @@ export default async function sync(payload, { DL }) {
     const datesInfo = []
     for (let d = new Date(today); d <= endDate; d.setDate(d.getDate() + 1)) {
         const current = new Date(d)
-        const date = formatDate(current)
+        const date = formatISODate(current)
         if (date < fromDateStr) continue
         datesInfo.push({
             date,

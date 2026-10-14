@@ -1,9 +1,7 @@
+import formatISODate from '#common/functions/formatISODate.js'
+
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 const DEFAULT_DAYS_AHEAD = 60
-
-function formatDate(d) {
-    return d.toISOString().split('T')[0]
-}
 
 export default async function read(payload, { DL }) {
     const today = new Date()
@@ -12,10 +10,10 @@ export default async function read(payload, { DL }) {
 
     const fromDate = payload.fromDate && DATE_RE.test(payload.fromDate)
         ? payload.fromDate
-        : formatDate(today)
+        : formatISODate(today)
     const toDate = payload.toDate && DATE_RE.test(payload.toDate)
         ? payload.toDate
-        : formatDate(end)
+        : formatISODate(end)
 
     return DL.SpecialDay.read(
         {

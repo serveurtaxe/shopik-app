@@ -56,7 +56,7 @@ export function buildComaxParams(options) {
         } else if (Array.isArray(value)) {
             result[comaxKey] = value.join(',')
         } else if (value instanceof Date) {
-            result[comaxKey] = formatDate(value)
+            result[comaxKey] = formatComaxDate(value)
         } else {
             result[comaxKey] = value
         }
@@ -65,11 +65,12 @@ export function buildComaxParams(options) {
     return result
 }
 
-function formatDate(date) {
-    const d = String(date.getDate()).padStart(2, '0')
-    const m = String(date.getMonth() + 1).padStart(2, '0')
-    const y = date.getFullYear()
-    return `${d}/${m}/${y}`
+export function formatComaxDate(date) {
+    const d = date instanceof Date ? date : new Date(date)
+    const day = String(d.getDate()).padStart(2, '0')
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const y = d.getFullYear()
+    return `${day}/${m}/${y}`
 }
 
 export function buildComaxPromotionParams(options = {}) {
