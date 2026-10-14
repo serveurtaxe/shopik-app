@@ -72,6 +72,8 @@ function updateCartBarcodes(products, sale, requiredSaleAmount, isReceiveSalePro
 
             p.totalAvailableAmount = round3(Math.max(p.totalAvailableAmount - saleAmount, 0))
             p.availableAmount = round3(Math.max(p.availableAmount - saleAmount, 0))
+            // Keep the ordered-remaining counter (sale-threshold basis) in sync.
+            if (p.orderAvailable != null) p.orderAvailable = round3(Math.max(p.orderAvailable - saleAmount, 0))
         }
     }
 

@@ -15,6 +15,7 @@ import Loader from 'common/components/Loader'
 import { useAppData } from 'App'
 import { useMemo, useRef } from 'react'
 import { extractLimits, getMinSumForMethod, getRemainingToMin } from '#common/functions/limits.js'
+import useMediaQuery from 'common/functions/useMediaQuery'
 import render from '#common/functions/render.js'
 
 export default function Checkout() {
@@ -37,6 +38,11 @@ export default function Checkout() {
     const isBelowMinSum = minSumThreshold > 0 && minSumRemaining > 0
 
     const cartTitle = `${TR('my_cart_title')} (${totalItemsCount} ${TR('items_suffix')})`
+    // Viewport flag for content decisions only; layout direction stays
+    // pure CSS so SSR and client render identical markup.
+    const isMobile = useMediaQuery('(max-width: 900px)')
+    // Mobile payment view: summary card hidden, title pinned to page top
+    const mobilePayment = isMobile && (paying || paymentUrl)
 
     function getLocalMissing() {
         const isNonEmpty = (v) => typeof v === 'string' && v.trim().length > 0
@@ -182,8 +188,13 @@ export default function Checkout() {
     }
 
     return user?.id && (
-        <div className={styles.checkoutPage}>
-            <Flex gap={24} className={styles.container}>
+        <div className={`${styles.checkoutPage} ${mobilePayment ? styles.payingMobile : ''}`}>
+            {mobilePayment && (
+                <Text size='xxl' bold className={styles.mobilePaymentTitle}>
+                    {TR?.('order_summary_title')?.replace('{orderNumber}', order?.number || '')}
+                </Text>
+            )}
+            <div className={styles.container}>
                 {/* Main Content Area (Start Side in RTL) */}
                 <Flex col gap={16} grow={1} className={styles.mainContent}>
                     {paying ? (
@@ -202,7 +213,7 @@ export default function Checkout() {
                             />
                         </div>
                     ) : (
-                        <>
+                        <div className={styles.cartOnly}>
                             {/* Accordion 1: Recommended Products */}
                             <Collapse
                                 title={
@@ -239,7 +250,7 @@ export default function Checkout() {
                                     </Flex>
                                 )}
                             </Collapse>
-                        </>
+                        </div>
                     )}
 
                     {payError && !payError?.missingFields && (
@@ -251,9 +262,9 @@ export default function Checkout() {
 
                 {/* Sidebar Area (End Side in RTL) */}
                 <aside className={styles.sidebar}>
-                    <OrderSummary onPayment={handlePayment} paying={paying} showPayBtn={!paymentUrl} missingFields={missingFields} />
+                    <OrderSummary onPayment={handlePayment} paying={paying} showPayBtn={!paymentUrl} missingFields={missingFields} hideSummary={isMobile && (paying || paymentUrl)} />
                 </aside>
-            </Flex>
+            </div>
         </div>
     )
 }

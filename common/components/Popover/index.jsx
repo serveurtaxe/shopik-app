@@ -2,11 +2,34 @@ import classNames from 'common/functions/classNames'
 import Button from 'common/components/Button'
 import events from 'common/features/events'
 import styles from './popover.module.css'
-import { useEffect, useRef } from 'react'
+import { registerPopover, popoverOpened, popoverClosed } from './registry'
+import { useEffect, useId, useRef } from 'react'
 
-export default function Popover({ id, className, button, children, btnClassName, disabled, leftOffset = 0, topOffset = 0, icon, overlay, ...props }) {
+export default function Popover({ id, className, button, children, btnClassName, disabled, leftOffset = 0, topOffset = 0, icon, overlay, modal = true, ...props }) {
     const ref = useRef()
     const btnRef = useRef()
+    const rafRef = useRef(0)
+    const winRafRef = useRef(0)
+    const roRef = useRef(null)
+    const viewportRef = useRef(null)
+    const closeRef = useRef()
+    const positionRef = useRef()
+    const escRef = useRef()
+    const key = id || useId()
+    if (!escRef.current) {
+        escRef.current = (e) => {
+            if (e.key === 'Escape') closeRef.current?.()
+        }
+    }
+
+    useEffect(() => {
+        return () => {
+            cancelAnimationFrame(rafRef.current)
+            teardownReposition()
+        }
+    }, [])
+
+    useEffect(() => registerPopover(key, (...args) => closeRef.current?.(...args)), [key])
 
     useEffect(() => {
         if (id) {
@@ -20,17 +43,99 @@ export default function Popover({ id, className, button, children, btnClassName,
         }
     }, [id])
 
+    function toggle(e) {
+        if (ref.current?.open) {
+            close()
+            return
+        }
+        open(e)
+    }
+
     function open(e) {
         if (disabled) return
         e?.stopPropagation()
         e?.preventDefault()
         if (ref.current.open) return
-        ref.current.showModal()
+        if (modal) {
+            ref.current.showModal()
+        } else {
+            // Windowed: no focus trap / top-layer, so the header stays
+            // interactable and dialogs switch with a single press. The
+            // single Header overlay dims the body instead of ::backdrop.
+            ref.current.show()
+            popoverOpened(key)
+            document.addEventListener('keydown', escRef.current)
+            events.emit('popover-opened', { id: key })
+        }
+        // Measure after paint: sibling state updates from the same click
+        // (e.g. DeliveryView's popoverOpened) and async content flush before
+        // rAF, so top/left derive from final — not stale — dimensions.
+        cancelAnimationFrame(rafRef.current)
+        rafRef.current = requestAnimationFrame(() => {
+            // Force reflow so the .5 -> 1 scale transition below animates
+            void ref.current?.offsetWidth
+            ref.current?.classList.add(styles.visible)
+            watchResize()
+            watchViewport()
+            positionRef.current?.()
+        })
+    }
+
+    // rAF-throttled reposition so resize drags cost one layout read per frame.
+    // Separate slot from the open-transition rAF so a resize in the same
+    // frame can't cancel the .visible class add. Goes through positionRef
+    // so resize/content observers (stored once per open) always use the
+    // latest render's topOffset/leftOffset/left props instead of open-time values.
+    function schedulePosition() {
+        cancelAnimationFrame(winRafRef.current)
+        winRafRef.current = requestAnimationFrame(() => positionRef.current?.())
+    }
+
+    // Viewport resizes and any scroll (window or nested containers, via
+    // capture) move the anchor button — re-glue the dialog to it while
+    // open. Applies to windowed and modal popovers alike: both are
+    // JS-anchored to their button (base CSS disables native centering).
+    function watchViewport() {
+        if (viewportRef.current) return
+        viewportRef.current = () => schedulePosition()
+        window.addEventListener('resize', viewportRef.current)
+        window.visualViewport?.addEventListener('resize', viewportRef.current)
+        window.addEventListener('scroll', viewportRef.current, true)
+    }
+
+    function unwatchViewport() {
+        if (!viewportRef.current) return
+        window.removeEventListener('resize', viewportRef.current)
+        window.visualViewport?.removeEventListener('resize', viewportRef.current)
+        window.removeEventListener('scroll', viewportRef.current, true)
+        viewportRef.current = null
+    }
+
+    // Shared by close() and unmount: stop all reposition signals.
+    function teardownReposition() {
+        cancelAnimationFrame(winRafRef.current)
+        roRef.current?.disconnect()
+        roRef.current = null
+        unwatchViewport()
+    }
+
+    // True (unscaled) dialog size regardless of the current .5 -> 1
+    // opening transition frame.
+    function trueSize() {
+        const rect = ref.current.getBoundingClientRect()
+        let scale = 1
+        try {
+            scale = new DOMMatrix(getComputedStyle(ref.current).transform).a || 1
+        } catch { }
+        return { width: rect.width / scale, height: rect.height / scale }
+    }
+
+    function position() {
+        const dialog = ref.current
+        if (!dialog?.open) return
         const
             btnRect = btnRef.current.getBoundingClientRect(),
-            popoverRect = ref.current.getBoundingClientRect(),
-            popoverHight = (popoverRect.height / .5),
-            popoverWidth = (popoverRect.width / .5),
+            { width: popoverWidth, height: popoverHeight } = trueSize(),
             gap = 5
 
         let
@@ -38,37 +143,52 @@ export default function Popover({ id, className, button, children, btnClassName,
             left = btnRect.left - popoverWidth + btnRect.width
 
         const
-            overflowTop = top + popoverHight > window.innerHeight - gap,
-            overflowleft = props.left || left - popoverWidth < 0
+            overflowTop = top + popoverHeight > window.innerHeight - gap,
+            overflowLeft = props.left || left < 0
 
         if (overflowTop)
-            top = btnRect.top - popoverHight - gap
-        if (overflowleft)
+            top = btnRect.top - popoverHeight - gap
+        if (overflowLeft)
             left = btnRect.left
 
         top += topOffset
         left += leftOffset
-
         left = Math.min(window.innerWidth - popoverWidth - gap, left)
-        top = Math.min(window.innerHeight - popoverHight - gap, top)
+        top = Math.min(window.innerHeight - popoverHeight - gap, top)
         left = Math.max(gap, left)
         top = Math.max(gap, top)
 
-        ref.current.style.transformOrigin =
-            `${overflowTop ? 'bottom' : 'top'} ${overflowleft ? 'left' : 'right'}`
-        ref.current.style.top = `${top}px`
-        ref.current.style.left = `${left}px`
-        ref.current.classList.add(styles.visible)
+        dialog.style.transformOrigin =
+            `${overflowTop ? 'bottom' : 'top'} ${overflowLeft ? 'left' : 'right'}`
+        dialog.style.top = `${top}px`
+        dialog.style.left = `${left}px`
+    }
+
+    // Content (address forms, window options) can change size after open —
+    // keep the dialog glued to its button while it is shown.
+    function watchResize() {
+        const dialog = ref.current
+        if (!dialog || roRef.current) return
+        roRef.current = new ResizeObserver(() => {
+            if (!ref.current?.open) return
+            schedulePosition()
+        })
+        roRef.current.observe(dialog)
     }
 
     function close() {
         const dialog = ref.current
+        cancelAnimationFrame(rafRef.current)
+        teardownReposition()
+        document.removeEventListener('keydown', escRef.current)
+        popoverClosed(key)
         if (!dialog.open) return
         dialog.classList.remove(styles.visible)
         const onCloseEnd = e => {
             if (e.target !== dialog || e.pseudoElement) return
             if (e.propertyName !== 'transform') return
             dialog.removeEventListener('transitionend', onCloseEnd)
+            if (!dialog.open) return
             dialog.close()
         }
         dialog.addEventListener('transitionend', onCloseEnd)
@@ -91,14 +211,19 @@ export default function Popover({ id, className, button, children, btnClassName,
         }
     }
 
+    // Latest close for the registry + Escape listener (stable identity),
+    // latest position for the resize/content observers (fresh offsets).
+    closeRef.current = close
+    positionRef.current = position
+
     return <>
         <dialog
             ref={ref}
             onClick={closeBD}
-            className={classNames(className, styles.popover, [styles.overlay, overlay])}>
+            className={classNames(className, styles.popover, [styles.overlay, overlay], [styles.windowed, !modal])}>
             {typeof children == 'function' ? children({ close }) : children}
         </dialog>
-        <div onClick={open} ref={btnRef} className={classNames(btnClassName, styles.btn)}>
+        <div onClick={toggle} ref={btnRef} className={classNames(btnClassName, styles.btn)}>
             {button || <Button
                 mode='text'
                 disabled={disabled}

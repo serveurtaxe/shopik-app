@@ -1,5 +1,7 @@
 import classNames from 'common/functions/classNames'
 import toSlug from 'common/functions/toSlug.js'
+import resolvePath from 'common/functions/resolvePath'
+import BackButton from 'common/components/BackButton'
 import { useEffect, useRef, useState } from 'react'
 import styles from './mainMenu.module.css'
 import Flex from 'common/components/Flex'
@@ -9,10 +11,13 @@ import { NavLink, useLocation } from 'react-router'
 import { useAppData } from 'App'
 import { useCart } from 'layout/Cart/CartProvider'
 
-export default function MainMenu({ }) {
+export default function MainMenu({ openMenu: controlledOpen, onOpenMenu }) {
     const { menu } = useAppData() || {}
     const { cartOpen } = useCart()
-    const [openMenu, setOpenMenu] = useState(null)
+    const [internalOpen, setInternalOpen] = useState(null)
+    const openMenu = controlledOpen !== undefined ? controlledOpen : internalOpen
+    const setOpenMenu = onOpenMenu || setInternalOpen
+    const isControlled = controlledOpen !== undefined || onOpenMenu
     const menuRef = useRef(null)
     const location = useLocation()
 
@@ -21,6 +26,7 @@ export default function MainMenu({ }) {
     }, [location.pathname])
 
     useEffect(() => {
+        if (isControlled) return
         const handlePointerDown = event => {
             if (!menuRef.current?.contains(event.target)) {
                 setOpenMenu(null)
@@ -32,7 +38,7 @@ export default function MainMenu({ }) {
         return () => {
             document.removeEventListener('pointerdown', handlePointerDown)
         }
-    }, [])
+    }, [isControlled])
 
     const close = () => setOpenMenu(null)
 
@@ -79,6 +85,7 @@ function MenuItem({
             <li className={styles.mainListItem}>
                 <Flex
                     className={styles.mainItem}
+                    style={menuThemeVars(to)}
                     tag={hasChildren ? 'button' : NavLink}
                     to={hasChildren ? undefined : to}
                     type={hasChildren ? 'button' : undefined}
@@ -138,7 +145,7 @@ function Level2Menu({ items, open, basePath, onClose }) {
                 const hasChildren = Boolean(
                     item.children && item.children.length > 0
                 )
-                const itemPath = item.path || `${basePath}/${toSlug(item.name)}`
+                const itemPath = resolvePath(item, basePath)
                 const itemKey = `${itemPath}-${index}`
 
                 const isItemActive = currentActiveItem === itemPath
@@ -224,14 +231,11 @@ function Level3Menu({ items, visible, parentName, basePath, onClose, onBack }) {
             style={{ display: visible ? 'flex' : 'none' }}
         >
             <li className={styles.mobileClose}>
-                <button type='button' onClick={onBack}>
-                    <Icon name='right' />
-                    <Text bold size='l'>{parentName || 'back'}</Text>
-                </button>
+                <BackButton onBack={onBack}>{parentName}</BackButton>
             </li>
 
             {items.map((item, index) => {
-                const itemPath = item.path || `${basePath}/${toSlug(item.name)}`
+                const itemPath = resolvePath(item, basePath)
 
                 return (
                     <li
@@ -255,7 +259,7 @@ function Level3Menu({ items, visible, parentName, basePath, onClose, onBack }) {
                                 className={styles.level4Menu}
                             >
                                 {item.children.map((child, childIdx) => {
-                                    const childPath = child.path || `${itemPath}/${toSlug(child.name)}`
+                                    const childPath = resolvePath(child, itemPath)
 
                                     return (
                                         <li key={`${childPath}-${childIdx}`}>
@@ -278,4 +282,23 @@ function Level3Menu({ items, visible, parentName, basePath, onClose, onBack }) {
             })}
         </Flex>
     )
+}
+
+// Theme vars for main pills come from Settings (category theme,
+// subCategory colors) — entry-server injects them as :root vars.
+// Falls back to .mainItem defaults when a setting is missing.
+const MENU_THEME_KEYS = {
+    '/products': 'departments',
+    '/sales': 'sales',
+    '/': 'home',
+}
+
+function menuThemeVars(path) {
+    const key = MENU_THEME_KEYS[path]
+    if (!key) return undefined
+    return {
+        '--main-bg': `var(--menu-${key}-bg, var(--bg-primary, #ffffff))`,
+        '--main-border': `var(--menu-${key}-border, var(--border-secondary, #dde4e2))`,
+        '--main-text': `var(--menu-${key}-text, var(--text-primary, #242a28))`,
+    }
 }

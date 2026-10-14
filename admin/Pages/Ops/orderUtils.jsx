@@ -102,12 +102,17 @@ export function RemainingTime({ window: w, ...textProps }) {
 
 
 // Waze navigation URL for a delivery address.
-// Prefers exact coordinates ([lng, lat] GeoJSON), falls back to a text query.
+// Prefers the text query ("street building, city") — Waze resolves it to the
+// correct building label. Coordinates are only a fallback when no address text
+// exists: a slightly-off pin makes Waze snap to/label the nearest street
+// (e.g. "מקס נורדאו" instead of "אוסישקין"), which confuses shippers.
 export function buildWazeUrl(address) {
+    const streetBuilding = [address?.street, address?.building].filter(v => v != null && v !== '').join(' ')
+    const q = [streetBuilding, address?.city].filter(v => v != null && v !== '').join(', ')
+    if (q) return `https://waze.com/ul?q=${encodeURIComponent(q)}&navigate=yes`
     const coords = address?.location?.coordinates
     if (coords?.length >= 2) return `https://waze.com/ul?ll=${coords[1]},${coords[0]}&navigate=yes`
-    const q = [address?.street, address?.building, address?.city].filter(v => v != null && v !== '').join(' ')
-    return `https://waze.com/ul?q=${encodeURIComponent(q)}&navigate=yes`
+    return `https://waze.com/ul?navigate=yes`
 }
 
 export function DeliveryMethodTag({ deliveryMethod }) {

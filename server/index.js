@@ -13,6 +13,7 @@ import startNightlySync from '#server/cron/nightlySync.js'
 import startGs1Sync from '#server/cron/gs1Sync.js'
 import startHolidaySeed from '#server/cron/holidaySeed.js'
 import startWindowSync from '#server/cron/windowSync.js'
+import startSalesSync from '#server/cron/salesSync.js'
 import log from '#server/utils/log.js'
 import compression from 'compression'
 import setupSecurity from './middleware/security.js'
@@ -77,6 +78,7 @@ try {
         startGs1Sync(bootData)
         startHolidaySeed(bootData)
         startWindowSync(bootData)
+        startSalesSync(bootData)
     }
 } catch (e) {
     log.warn('Jobs not started:', e?.message || e)

@@ -1,6 +1,8 @@
 import { constants as productConstants } from '#server/dl/schemas/product.js'
 import { buildCartProduct, CART_PRODUCT_STATUS } from '#common/functions/calcOrder/cart.js'
 import enrichCart from '#server/utils/data/enrichCart.js'
+import getPickLimits from '#server/utils/data/getPickLimits.js'
+import { getPickRange, isPickInRange } from '#common/functions/pickLimits.js'
 
 export default async function pick_item(payload, { DL, _admin, utils }) {
     const { id, barcode, scannedBarcode, action, finalAmount, missingReason, replacement } = payload
@@ -38,6 +40,20 @@ export default async function pick_item(payload, { DL, _admin, utils }) {
     const item = order.cart[idx]
     const isWeighted = item.unit?.type === productConstants.UNIT.WEIGHT || item.unit?.type === 'weight'
 
+    // Pick deviation limits (per-domain setting, hardcoded fallback) — the
+    // client validates for UX, this is the enforced source of truth.
+    const pickLimits = await getPickLimits(DL, order.domainId)
+    const assertInRange = (supplied, weighted, label) => {
+        if (!isPickInRange(supplied, item.amount, weighted, pickLimits)) {
+            const range = getPickRange(item.amount, weighted, pickLimits)
+            throw {
+                status: 400,
+                message: `${label} out of allowed range (ordered ${item.amount}, allowed ${range?.min ?? '?'}–${range?.max ?? '?'})`,
+                code: 'PICK_RANGE_EXCEEDED',
+            }
+        }
+    }
+
     const fullAdmin = await DL.Admin.readById(_admin.id)
     const adminName = `${_admin.name?.first ?? ''} ${_admin.name?.last ?? ''}`.trim()
 
@@ -47,6 +63,8 @@ export default async function pick_item(payload, { DL, _admin, utils }) {
     if (action === 'scan') {
         if (isWeighted) throw { status: 400, message: 'weighted items use weight action' }
         const amt = Number(finalAmount ?? item.amount)
+        if (isNaN(amt) || amt <= 0) throw { status: 400, message: 'valid finalAmount required' }
+        assertInRange(amt, false, 'picked quantity')
         update = {
             $set: {
                 'cart.$[elem].finalAmount': amt,
@@ -60,6 +78,7 @@ export default async function pick_item(payload, { DL, _admin, utils }) {
         // weighted items have no scannable barcode — picker enters weighed amount
         const amt = Number(finalAmount)
         if (isNaN(amt) || amt < 0) throw { status: 400, message: 'valid finalAmount required' }
+        assertInRange(amt, true, 'picked weight')
         update = {
             $set: {
                 'cart.$[elem].finalAmount': amt,
@@ -101,6 +120,18 @@ export default async function pick_item(payload, { DL, _admin, utils }) {
         }
         if (!repProduct) throw { status: 404, message: 'replacement product not found' }
         if (repProduct.status === DL.Product.constants.STATUS.ARCHIVED) throw { status: 400, message: 'replacement product not available' }
+
+        // Replacement amount must stay within the same deviation limits,
+        // judged by the *replacement* product's unit type vs the original ordered amount.
+        const repIsWeighted = repProduct.unit?.type === productConstants.UNIT.WEIGHT || repProduct.unit?.type === 'weight'
+        if (!isPickInRange(repAmount, item.amount, repIsWeighted, pickLimits)) {
+            const range = getPickRange(item.amount, repIsWeighted, pickLimits)
+            throw {
+                status: 400,
+                message: `replacement amount out of allowed range (ordered ${item.amount}, allowed ${range?.min ?? '?'}–${range?.max ?? '?'})`,
+                code: 'PICK_RANGE_EXCEEDED',
+            }
+        }
 
         const repBarcodeCanon = String(repProduct.barcode || repBarcode).trim()
         const adminEntry = { adminId: _admin.id, date: new Date(), amount: repAmount, status: 'replaced' }

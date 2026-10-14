@@ -6,8 +6,11 @@ import Button from 'common/components/Button'
 import ProductInline from 'common/components/ProductInline'
 import styles from './scanProduct.module.css'
 import apiReq from 'common/functions/apiReq'
+import useApi from 'common/functions/useApi'
 import classNames from 'common/functions/classNames'
 import { isWeightProduct, getUnitLabel, formatAmount } from 'common/components/Product'
+import { getPickRange, isPickInRange, DEFAULT_PICK_LIMITS } from 'common/functions/pickLimits'
+import limitDecimalInput from 'common/functions/decimalInput'
 
 export default function ScanProduct({ product = {}, orderId, onClose, onPicked, initialPhase, initialSupplied, initialBarcode, onReplace }) {
     const videoRef = useRef(null)
@@ -46,14 +49,22 @@ export default function ScanProduct({ product = {}, orderId, onClose, onPicked, 
     const suppliedNum = supplied === '' ? null : Number(supplied)
     const isSuppliedEmpty = supplied === ''
     const isSuppliedValid = !isSuppliedEmpty && !isNaN(suppliedNum) && suppliedNum > 0
+    // Deviation limits from the pickLimits setting (hard block; server re-validates).
+    // Weight: ordered*(1-down)..ordered*(1+up). Quantity: up to ordered+5, no lower bound.
+    const { data: pickLimitsData } = useApi('order/ops/pick_limits', { id: orderId })
+    const pickLimits = pickLimitsData || DEFAULT_PICK_LIMITS
+    const pickRange = getPickRange(ordered, weight, pickLimits)
+    const outOfRange = isSuppliedValid && !!pickRange && !isPickInRange(suppliedNum, ordered, weight, pickLimits)
+    const rangeLabel = pickRange
+        ? (weight
+            ? `${formatAmount(product, Math.round(pickRange.min * 1000) / 1000)} – ${formatAmount(product, Math.round(pickRange.max * 1000) / 1000)}`
+            : `עד ${formatAmount(product, pickRange.max)}`)
+        : ''
     const isMatch = isSuppliedValid && suppliedNum === ordered
-    // red if exceeds ordered significantly or exceeds limit; for now > ordered (allow small tolerance for weight)
-    const isExceeds = isSuppliedValid && suppliedNum > ordered
-    const isDifferent = isSuppliedValid && suppliedNum !== ordered && !isExceeds
-    // yellow warning when different but not exceeds
-    const isWarning = isDifferent
-    const isError = isExceeds && !weight // for weight allow exceeds (weighted items may vary)
-    const canContinue = isSuppliedValid && !isError
+    const isWarning = isSuppliedValid && !outOfRange && !isMatch
+    // yellow warning when different but within range
+    const isError = !!outOfRange
+    const canContinue = isSuppliedValid && !outOfRange
 
     async function proceedWithFinalAmount() {
         if (!canContinue || loading) return
@@ -248,7 +259,7 @@ export default function ScanProduct({ product = {}, orderId, onClose, onPicked, 
                 <Flex col center className={classNames(styles.suppliedBox, [styles.empty, isSuppliedEmpty], [styles.match, isMatch], [styles.warning, isWarning], [styles.error, isError])}>
                     <input
                         value={supplied}
-                        onChange={e => setSupplied(e.target.value.replace(/[^0-9.]/g, ''))}
+                        onChange={e => setSupplied(limitDecimalInput(e.target.value, 3))}
                         placeholder="—"
                         className={styles.suppliedInput}
                         inputMode={weight ? 'decimal' : 'numeric'}
@@ -274,11 +285,13 @@ export default function ScanProduct({ product = {}, orderId, onClose, onPicked, 
                         <Text size="s" bold className={styles.warningRed}>הכמות שהוזנה חורגת מהמותר</Text>
                         <span className={styles.errorIcon}>!</span>
                     </Flex>
+                    {rangeLabel && <Text size="xs" mode="sub">מותר: {rangeLabel}</Text>}
                     <Text size="xs" mode="sub">נא לתקן לפני המשך ליקוט</Text>
                 </Flex>
             )}
 
             <Flex col gap={10} className={styles.actions}>
+                {error && <Flex center><Text size="s" mode="error">{error}</Text></Flex>}
                 <Button disabled={!canContinue} loading={loading} onClick={proceedWithFinalAmount} className={styles.continueBtn}>המשך ליקוט</Button>
             </Flex>
         </Flex>

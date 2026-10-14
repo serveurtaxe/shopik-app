@@ -1,13 +1,11 @@
 import toSlug from '#common/functions/toSlug.js'
+import { MENU_CACHE_KEY } from '#common/constants.js'
 
 const baseMenu = [
     {
-        name: 'Home',
-        path: '/'
-    },
-    {
         name: 'Sales',
-        path: '/sales'
+        path: '/sales',
+        icon: 'salePercent'
     }
 ]
 
@@ -22,7 +20,7 @@ export default async function getMenu({ DL }) {
     })
     const categories = await DL.Category.read(
         { id: { $in: categoriesIds }, active: true },
-        { _id: 0, name: 1, slug: 1, parentId: 1, id: 1 },
+        { _id: 0, name: 1, slug: 1, parentId: 1, id: 1, icon: 1 },
         { sort: { name: 1 }, limit: 0 }
     )
     const categoriesByParent = categories.reduce((acc, category) => {
@@ -41,12 +39,18 @@ export default async function getMenu({ DL }) {
         for (const child of direct) {
             const slug = child.slug || toSlug(child.name)
             if (!slug) continue
-            if (!bySlug.has(slug)) bySlug.set(slug, { name: child.name, ids: [] })
-            bySlug.get(slug).ids.push(child.id)
+            let entry = bySlug.get(slug)
+            if (!entry) {
+                entry = { name: child.name, icon: child.icon, ids: [] }
+                bySlug.set(slug, entry)
+            }
+            // Merged duplicates: first non-empty icon wins
+            if (!entry.icon && child.icon) entry.icon = child.icon
+            entry.ids.push(child.id)
         }
-        return [...bySlug.entries()].map(([slug, { name, ids }]) => {
+        return [...bySlug.entries()].map(([slug, { name, icon, ids }]) => {
             const nodePath = `${prefix}/${slug}`
-            const node = { name }
+            const node = { name, ...(icon ? { icon } : {}) }
             const children = buildBranch(ids, nodePath)
             if (children.length > 0) node.children = children
             return node
@@ -58,10 +62,15 @@ export default async function getMenu({ DL }) {
         {
             name: 'Products',
             path: '/products',
+            icon: 'grid',
             children: tree
         },
         ...baseMenu,
     ]
     await DL.redis?.set('menu', JSON.stringify(menu), 'EX', 60 * 60)
     return menu
+}
+
+export async function invalidateMenu({ DL }) {
+    await DL.redis?.del(MENU_CACHE_KEY)
 }
