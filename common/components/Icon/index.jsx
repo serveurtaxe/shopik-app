@@ -11,8 +11,11 @@ import {
     LuShoppingBag, LuArrowUpDown, LuCode, LuPackage, LuStore, LuGlobe, LuPercent, LuTicket,
     LuSun, LuMoon, LuCloudUpload, LuMap, LuClock, LuTruck, LuCreditCard, LuBarcode, LuAlignLeft,
     LuListPlus, LuNotebookPen, LuPanelRightClose, LuPanelRightOpen, LuCalendarPlus, LuSlidersHorizontal,
-    LuBoxes, LuLightbulb, LuSnowflake, LuImage, LuBadgePercent, LuGalleryVerticalEnd, LuGalleryHorizontalEnd, LuHistory, LuPhone, LuMail, LuMessageSquare, LuArrowRightLeft, LuCalculator, LuArchiveRestore,
-    LuUpload, LuPhoneOutgoing, LuInfo, LuHeart, LuScissors
+    LuBoxes, LuLightbulb, LuSnowflake, LuImage, LuBadgePercent, LuGalleryVerticalEnd, LuGalleryHorizontalEnd,
+    LuHistory, LuPhone, LuMail, LuMessageSquare, LuArrowRightLeft, LuCalculator, LuArchiveRestore,
+    LuUpload, LuPhoneOutgoing, LuInfo, LuHeart, LuScissors, LuHouse, LuShieldCheck, LuDoorOpen,
+    LuMilk, LuSprayCan, LuCroissant, LuCigarette, LuBeef, LuShoppingBasket, LuApple, LuBaby, LuSparkles,
+    LuCupSoda, LuCircleUserRound, LuScrollText, LuMaximize, LuMinimize, LuCombine
 } from 'react-icons/lu'
 import { BsFileEarmarkExcel } from 'react-icons/bs'
 import { TbHeartPlus } from 'react-icons/tb'
@@ -101,6 +104,7 @@ const iconsList = {
     listPlus: LuListPlus,
     heartPlus: TbHeartPlus,
     note: LuNotebookPen,
+    scrollText: LuScrollText,
     filter: LuSlidersHorizontal,
     location: LuMapPin,
     stockSync: LuBoxes,
@@ -124,13 +128,30 @@ const iconsList = {
     whatsapp: FaWhatsapp,
     info: LuInfo,
     heart: LuHeart,
+    home: LuHouse,
+    shield: LuShieldCheck,
+    door: LuDoorOpen,
+    milk: LuMilk,
+    spray: LuSprayCan,
+    croissant: LuCroissant,
+    cigarette: LuCigarette,
+    beef: LuBeef,
+    basket: LuShoppingBasket,
+    apple: LuApple,
+    baby: LuBaby,
+    sparkles: LuSparkles,
+    cup: LuCupSoda,
+    circleUser: LuCircleUserRound,
     grid: LuLayoutGrid,
     cut: LuScissors,
     facebook: FaFacebookF,
     instagram: FaInstagram,
     linkedin: FaLinkedinIn,
     tiktok: FaTiktok,
-    twitter: FaXTwitter
+    twitter: FaXTwitter,
+    combine: LuCombine,
+    maximize: LuMaximize,
+    minimize: LuMinimize
 }
 
 /**

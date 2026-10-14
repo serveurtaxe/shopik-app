@@ -3,7 +3,7 @@
     flex-shrink: 0;
     position: fixed;
     inset-inline-end: calc(-1 * var(--cart-width) - 16px - var(--safeRight, 0px));
-    top: calc(var(--header-height) - 42px + var(--safeTop, 0px));
+    top: calc(var(--header-height) - 36px + var(--safeTop, 0px));
     bottom: 0;
     bottom: calc(0px + var(--safeBottom, 0px));
     z-index: 9999;
@@ -11,10 +11,9 @@
     transition: inset-inline-end .3s ease;
     display: flex;
     flex-direction: column;
-    max-height: calc(100dvh - var(--header-height) + 42px - var(--safeTop, 0px));
     padding-inline-end: var(--safeRight, 0px);
-    height: calc(100vh - var(--header-height) + 42px);
-    max-height: calc(100vh - var(--header-height) + 42px);
+    height: calc(100vh - var(--header-height) + 36px);
+    max-height: calc(100vh - var(--header-height) + 36px);
 
     .header {
         background-color: #F1F7F6;
@@ -88,17 +87,30 @@
     box-shadow: rgba(0, 0, 0, 0.1) 5px 0 5px;
 }
 
-@media (max-width: 1023px) {
+@media (max-width: 1200px) {
     .cart {
         width: 100%;
         max-width: 380px;
         inset-inline-end: calc(-100% - 16px - var(--safeRight, 0px));
-        top: calc(var(--header-height) + var(--safeTop, 0px) - 42px);
-        max-height: calc(100dvh - var(--header-height) - var(--safeTop, 0px) + 42px);
+        top: calc(var(--header-height) + var(--safeTop, 0px) - 36px);
+        max-height: calc(100dvh - var(--header-height) - var(--safeTop, 0px) + 36px);
     }
 
     .cart.open {
         inset-inline-end: var(--safeRight, 0px);
+    }
+}
+
+@media (max-width: 768px) {
+    .cart {
+        /* Full-screen takeover below the header: no shared region with any
+           header row, so nothing can overlap or trap it. */
+        width: calc(100dvw - var(--safeLeft, 0px) - var(--safeRight, 0px));
+        max-width: 100%;
+        border-radius: 0;
+        top: calc(var(--header-height) + var(--safeTop, 0px) - 48px);
+        height: calc(100vh - var(--header-height) - var(--safeTop, 0px) + 48px);
+        max-height: calc(100dvh - var(--header-height) - var(--safeTop, 0px) + 48px);
     }
 }
 
@@ -243,7 +255,7 @@
 /* Responsive Viewports */
 
 /* Desktop view: min-width 1024px */
-@media (min-width: 1024px) {
+@media (min-width: 1201px) {
     .miniCartButton {
         min-width: 250px;
         height: 58px;
@@ -256,8 +268,8 @@
     }
 }
 
-/* Tablet view: 640px to 1023px */
-@media (min-width: 640px) and (max-width: 1023px) {
+/* Tablet view: 768px to 1200px */
+@media (min-width: 768px) and (max-width: 1200px) {
     .miniCartButton {
         min-width: 130px;
         height: 56px;
@@ -277,8 +289,8 @@
     }
 }
 
-/* Mobile view: max-width 639px */
-@media (max-width: 639px) {
+/* Mobile view: max-width 767px */
+@media (max-width: 767px) {
     .miniCartButton {
         min-width: 80px;
         height: 54px;

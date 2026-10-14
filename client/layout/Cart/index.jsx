@@ -11,9 +11,12 @@ import ConfirmButton from 'common/components/ConfirmButton'
 import render from 'common/functions/render.js'
 import apiReq from 'common/functions/apiReq.js'
 import { useNavigate } from 'react-router'
-import { useMemo } from 'react'
+import { useMemo, useEffect } from 'react'
+import useMediaQuery from 'common/functions/useMediaQuery'
+import { markCartLoginPending } from './cartLoginPending'
 import { useAppData } from 'App'
 import { calcShipping, extractShippingConfig } from '#common/functions/shipping.js'
+import { fallbackCartTotals } from 'common/functions/cartTotals.js'
 import { extractLimits, getMinSumForMethod, getRemainingToMin } from '#common/functions/limits.js'
 import { useText } from 'common/texts/TextProvider'
 import events from 'common/features/events.js'
@@ -28,12 +31,14 @@ export default function Cart({ }) {
         navigate = useNavigate()
 
     const { cartOpen, setCartOpen } = useCart()
+    // Mobile login lives in the menu drawer, not in a popover
+    const isMobile = useMediaQuery('(max-width: 768px)')
     const { settings } = useAppData() || {}
     const { TR } = useText() || {}
     const shippingConfig = useMemo(() => extractShippingConfig(settings), [settings])
     const limits = useMemo(() => extractLimits(settings), [settings])
 
-    const sum = order?.sum ?? 0
+    const sum = order?.sum ?? (cart.length ? fallbackCartTotals(cart).sum : 0)
     // threshold uses post-sale pre-coupon total (sumBeforeCoupon == sum)
     const minSumThreshold = getMinSumForMethod(limits, order?.deliveryMethod)
     const minSumRemaining = getRemainingToMin({ sum, deliveryMethod: order?.deliveryMethod, limits })
@@ -48,21 +53,35 @@ export default function Cart({ }) {
         : Number(shippingConfig?.total ?? 0)
     const isFreeShipping = Number(shipping) === 0 && originalShipping > 0 && sum > 0
     const savings = (() => {
-        const before = order?.sumNoCoupon ?? order?.sum ?? 0
+        const fallback = cart.length ? fallbackCartTotals(cart) : null
+        const before = order?.sumNoCoupon ?? order?.sum ?? fallback?.sumNoCoupon ?? 0
         // include coupon discount in savings when coupon present
-        const after = hasCoupon ? (order?.finalSum ?? order?.sum ?? 0) : (order?.sum ?? 0)
+        const after = hasCoupon ? (order?.finalSum ?? sum) : sum
         return Math.max(0, before - after)
     })()
 
     function goToCheckout() {
         if (isBelowMinSum) return
         if (!user?.id) {
-            events.emit('login-popover')
+            if (isMobile) {
+                markCartLoginPending()
+                setCartOpen(false)
+                events.emit('mobile-login')
+            } else {
+                events.emit('login-popover')
+            }
         } else if (!emptyCart) {
             navigate('/checkout')
             setCartOpen(false)
         }
     }
+
+    // After a mobile menu login that started from cart pay, reopen the cart
+    useEffect(() => {
+        const reopen = () => setCartOpen(true)
+        events.on('reopen-cart', reopen)
+        return () => events.off('reopen-cart', reopen)
+    }, [setCartOpen])
 
     function clearCart() {
         if (emptyCart) return

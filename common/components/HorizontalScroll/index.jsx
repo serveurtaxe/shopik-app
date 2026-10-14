@@ -6,7 +6,7 @@ import Button from '../Button'
 import Flex from '../Flex'
 import Text from '../Text'
 
-export default function HorizontalScroll({ items = [], children = items, className = '', itemClassName = '', autoplaySec = 0 }) {
+export default function HorizontalScroll({ items = [], children = items, className = '', itemClassName = '', autoplaySec = 0, largeArrows = false }) {
     const { TR } = (useText?.() || {})
     const tr = TR || (k => k)
     const scrollContainerRef = useRef(null)
@@ -212,7 +212,7 @@ export default function HorizontalScroll({ items = [], children = items, classNa
             {showLeftArrow && (
                 <Button
                     icon='left'
-                    className={classNames(styles.arrow, styles.leftArrow)}
+                    className={classNames(styles.arrow, styles.leftArrow, [styles.arrowLarge, largeArrows])}
                     onClick={() => scroll('left')}
                     onMouseEnter={() => startHoverScroll('left')}
                     onMouseLeave={stopHoverScroll}
@@ -237,7 +237,7 @@ export default function HorizontalScroll({ items = [], children = items, classNa
             {showRightArrow && (
                 <Button
                     icon='right'
-                    className={classNames(styles.arrow, styles.rightArrow)}
+                    className={classNames(styles.arrow, styles.rightArrow, [styles.arrowLarge, largeArrows])}
                     onClick={() => scroll('right')}
                     onMouseEnter={() => startHoverScroll('right')}
                     onMouseLeave={stopHoverScroll}

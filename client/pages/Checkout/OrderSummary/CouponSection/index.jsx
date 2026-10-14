@@ -270,7 +270,6 @@ export default function CouponSection() {
                             disabled={inputLoading}
                             autoComplete='off'
                             spellCheck={false}
-                            autoFocus={!appliedCode}
                         />
                         {inputLoading ? (
                             <Loader size={14} />
@@ -355,6 +354,9 @@ export function CouponCollapse({ defaultOpen = true }) {
     const [inputError, setInputError] = useState(null)
     const [isEditing, setIsEditing] = useState(!appliedCode)
 
+    // Sync with parent (e.g. mobile collapsed by default via defaultOpen)
+    useEffect(() => { setOpen(defaultOpen) }, [defaultOpen])
+
     useEffect(() => {
         const code = (order.coupons?.[0]?.code || '').toLowerCase()
         if (code) setInputValue(code.toUpperCase())
@@ -412,6 +414,11 @@ export function CouponCollapse({ defaultOpen = true }) {
         } finally { setInputLoading(false); setCardLoadingCode(null) }
     }
 
+    const hasCoupons = Array.isArray(coupons) && coupons.length > 0
+    // No personalized coupons → grid header disabled + grayed, manual input stays enabled
+    const couponsEmpty = !loading && !hasCoupons
+    const effectiveOpen = couponsEmpty ? false : open
+
     if (loading) {
         return (
             <Collapse
@@ -436,9 +443,11 @@ export function CouponCollapse({ defaultOpen = true }) {
 
     return (<>
         <Collapse
-            open={open}
-            onToggle={setOpen}
-            className={summaryStyles.summaryCollapse}
+            open={effectiveOpen}
+            onToggle={couponsEmpty ? undefined : setOpen}
+            showChevron={!couponsEmpty}
+            className={couponsEmpty ? `${summaryStyles.summaryCollapse} ${styles.couponsDisabled}` : summaryStyles.summaryCollapse}
+            headerClassName={couponsEmpty ? styles.couponsDisabledTop : ''}
             title={
                 <Flex alignItems='center' gap={12}>
                     <div className={summaryStyles.iconCircle}>
@@ -480,7 +489,6 @@ export function CouponCollapse({ defaultOpen = true }) {
                             disabled={inputLoading}
                             autoComplete='off'
                             spellCheck={false}
-                            autoFocus
                         />
                         {inputLoading ? <Loader size={14} /> : null}
                     </div>
