@@ -20,12 +20,14 @@ import { usePage } from 'layout/Page'
 import TR from '#common/texts/TR.js'
 import { ProductButton } from 'pages/Products/ProductCard'
 import ProductCard from 'pages/Products/ProductCard'
+import { useProductCart } from '#common/components/Product/useProductCart.js'
 import {
     ProductPrice,
     ProductSaleBadge,
-    ProductBadges,
+    getFirstSale,
     getUnitInfoText
 } from 'common/components/Product'
+import { getProductState } from '#common/functions/productState.js'
 
 const PASSOVER_TEXT = {
     kosher: 'passover_kosher',
@@ -217,6 +219,7 @@ export default function Product() {
     const mainImage = images[selectedImageIndex] || images[0] || ''
     const has360 = (product?.images?.threeSixty || []).length > 0
     const sections = useMemo(() => buildSections(product || {}), [product])
+    const { amount: cartAmount } = useProductCart(product || {}, sales || {})
     const activeSection = sections.find(s => s.key === activeSpecKey) || sections[0]
     const relatedList = (related || []).filter(p => p?.id !== product?.id)
 
@@ -229,8 +232,18 @@ export default function Product() {
         return <Flex className={styles.container}><Text>product_not_found</Text></Flex>
     }
 
+    // Same state contract as the card / inline — the detail page's price, sale
+    // badge and buy button all read the --pc-* vars, so it stays consistent
+    // with the listing instead of falling back to the old green/red defaults.
+    const detailState = getProductState({
+        amount: cartAmount,
+        sale: getFirstSale(product, sales || {}),
+    })
+
     return (
-        <Flex col className={styles.container}>
+        <Flex col className={styles.container}
+            data-action={detailState.action}
+            data-price={detailState.price}>
             <div className={styles.crumbs}>
                 <Breadcrumbs path={categoryPath ? `products/${categoryPath}` : 'products'} />
             </div>
@@ -265,7 +278,6 @@ export default function Product() {
                         </Flex>
                     )}
 
-                    <ProductBadges product={product} sales={sales} />
                     {(product.kashrut || product.passoverKashrut) && (
                         <Flex className={styles.badgeRow} gap={6} wrap>
                             {product.kashrut && <Badge><Text size="s">{product.kashrut}</Text></Badge>}

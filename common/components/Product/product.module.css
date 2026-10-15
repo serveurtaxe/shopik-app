@@ -1,3 +1,65 @@
+/* === Product state color contract ===
+   JS only sets data-action / data-price on the card, inline or detail root;
+   every colour below resolves to an Admin -> Settings theme var
+   (settings.theme.*, injected as --<key> in client/entry-server.jsx).
+   Nothing here hardcodes a brand colour.
+
+   Two independent axes forming a 2x2:
+     data-action  cart axis   -> border only
+     data-price   sale axis   -> border, button, price, strikethrough, badge
+
+   ORDER MATTERS. The single-attribute selectors all have the same specificity
+   (0,1,0), so the later declaration wins the cascade. The cart axis is
+   therefore declared AFTER the price axis so it overrides the sale border;
+   the combined in-cart + sale case is a 0,2,0 selector and beats both.
+
+   Custom properties inherit, so a descendant (price, badge, button) just reads
+   var(--pc-*). The values after the first var() are static vars.css fallbacks
+   so a missing setting never leaves the component unstyled.
+
+   Border matrix (all four keys are seeded, the fallbacks mirror them):
+     regular  --product-card-border
+     in cart  --product-card-cart-border
+     sale     --product-card-sale-border
+     both     --product-card-cart-sale-border
+
+   ProductPrice only renders the struck-through "was" price inside its sale
+   branch, so --pc-strike lives solely on [data-price='sale']. */
+
+[data-action='regular'] {
+    --pc-bg: var(--bg-primary);
+    --pc-border: var(--product-card-border, #d8e7e2);
+}
+
+[data-price='regular'] {
+    --pc-price: var(--text-brand-primary);
+    --pc-badge-bg: var(--product-badge-bg, var(--product-button-bg, var(--bg-brand-primary)));
+    --pc-badge-text: var(--text-white);
+    --pc-btn-bg: var(--product-button-bg, var(--bg-brand-primary));
+    --pc-btn-text: var(--text-white);
+}
+
+[data-price='sale'] {
+    --pc-price: var(--product-price-sale-color, var(--menu-sales-border));
+    --pc-badge-bg: var(--product-sale-badge-bg, var(--product-price-sale-color, var(--menu-sales-border)));
+    --pc-badge-text: var(--text-white);
+    --pc-btn-bg: var(--product-price-sale-color, var(--menu-sales-border));
+    --pc-btn-text: var(--text-white);
+    --pc-border: var(--product-card-sale-border, #ffe3d1);
+    /* Only the sale branch renders the struck-through "was" price, so
+       --pc-strike is deliberately not defined on the regular axis. */
+    --pc-strike: var(--product-price-strike-color, var(--text-error-primary));
+}
+
+/* cart axis — declared last so its border wins over the sale border */
+[data-action='inCart'] {
+    --pc-border: var(--product-card-cart-border, #83aa9d);
+}
+
+[data-action='inCart'][data-price='sale'] {
+    --pc-border: var(--product-card-cart-sale-border, #f5bfa0);
+}
+
 .productImageWrapper {
     position: relative;
     width: 100%;
@@ -35,11 +97,11 @@
     inset-inline-start: -11px;
     bottom: 25px;
     gap: 4px;
-    background: var(--color-brand-secondary);
-    color: var(--text-primary);
+    background: var(--pc-badge-bg, var(--color-brand-secondary));
+    color: var(--pc-badge-text, var(--text-primary));
     padding: 4px;
     padding-inline-end: 5px;
-    border: 1px solid var(--color-brand-secondary-600);
+    border: 1px solid var(--pc-badge-bg, var(--color-brand-secondary-600));
     border-radius: var(--radius-full) 0 0 var(--radius-full);
     z-index: 1;
     max-width: calc(100% - var(--spacing-lg));
@@ -51,14 +113,14 @@
     font-weight: 700 !important;
     position: relative;
     top: 1px;
-    color: var(--text-primary);
+    color: var(--pc-badge-text, var(--text-primary));
 }
 
 .saleBadgeIcon {
     position: relative;
     top: 1px;
     flex-shrink: 0;
-    color: var(--text-primary);
+    color: var(--pc-badge-text, var(--text-primary));
 }
 
 .saleBadge.s {
@@ -91,15 +153,21 @@
 }
 
 .salePrice {
-    color: var(--text-success-primary);
+    color: var(--pc-price, var(--text-primary));
     font-weight: 700 !important;
     line-height: 1.2;
 }
 
 .regularPrice {
-    color: var(--text-error-primary);
+    color: var(--pc-strike, var(--text-error-primary));
     font-size: var(--text-sm);
     text-decoration: line-through;
+}
+
+/* Regular (non-sale) price — also state-driven so the card reads consistently
+   whether or not a sale exists. */
+.basePrice {
+    color: var(--pc-price, var(--text-primary));
 }
 
 .price.s .salePrice {
@@ -118,12 +186,14 @@
 
     button {
         width: 100%;
+        background-color: var(--pc-btn-bg, var(--bg-brand-primary));
+        color: var(--pc-btn-text, var(--text-white));
     }
 
     &.stepper {
         align-items: center;
         gap: 2px;
-        background-color: var(--bg-brand-primary);
+        background-color: var(--pc-btn-bg, var(--bg-brand-primary));
         border-radius: var(--radius-full);
         padding: 5px;
 
@@ -139,11 +209,40 @@
         .amount {
             flex: 1;
             text-align: center;
-            color: var(--text-white);
+            color: var(--pc-btn-text, var(--text-white));
         }
     }
 
     &.s {
         width: 120px;
     }
+}
+
+/* Favourite heart — visual only, no persistence. Positioned against the card
+   root (which sets position: relative), not the image. */
+.favorite {
+    position: absolute;
+    inset-inline-end: 10px;
+    top: 10px;
+    padding: 0;
+    color: var(--product-favorite-color, var(--text-error-primary));
+    z-index: 1;
+
+    &:hover {
+        color: var(--product-favorite-color, var(--text-error-primary));
+    }
+
+    &.on {
+        color: var(--product-favorite-color, var(--text-error-primary));
+    }
+}
+
+/* Reserved row for dietary / kashrut / brand stamps (phase 2). Collapses to
+   zero height when empty — the card opts into a reserved min-height via its
+   own className so the vertical stack doesn't reflow when stamps land. */
+.stamps {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow: hidden;
 }

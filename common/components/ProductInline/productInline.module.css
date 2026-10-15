@@ -41,6 +41,10 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    /* Colours come from the state contract in common/components/Product/
+       product.module.css (data-action / data-price -> --pc-*). */
+    background-color: var(--pc-bg, var(--bg-primary));
+    border-color: var(--pc-border, var(--border-primary));
 }
 
 .productInlineMain {
@@ -51,9 +55,8 @@
 }
 
 .saleInlineBar {
-    background: var(--color-brand-secondary, #E6FE50);
-    background-color: var(--color-brand-secondary, #E6FE50);
-    color: var(--text-primary, #0E3432);
+    background-color: var(--pc-badge-bg, var(--color-brand-secondary));
+    color: var(--pc-badge-text, var(--text-primary));
     padding: 7px 12px;
     width: 100%;
     box-sizing: border-box;
