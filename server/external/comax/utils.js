@@ -1,4 +1,14 @@
 /**
+ * Kill switch for the Comax delivery-doc flow (write + fetch + cron).
+ * Off unless explicitly enabled: COMAX_DELIVERY_ENABLED=true.
+ * When disabled, pack/retry skip silently so enabling later backfills
+ * naturally via comax_retry.
+ */
+export function isComaxDeliveryEnabled() {
+    return String(process.env.COMAX_DELIVERY_ENABLED || '').toLowerCase() === 'true'
+}
+
+/**
  * Parse Comax date format "DD/MM/YYYY" → Date or null.
  */
 export function parseComaxDate(value) {

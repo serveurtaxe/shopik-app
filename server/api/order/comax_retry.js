@@ -1,4 +1,5 @@
 import { snapshotSupplierCost } from '#server/utils/data/supplierCost.js'
+import { isComaxDeliveryEnabled } from '#server/external/comax/utils.js'
 
 /**
  * Backfill Comax doc + supplier snapshot for a packed+ order.
@@ -21,7 +22,9 @@ export default async function comaxRetry(payload, { DL, utils, external }) {
             set.supplierCapturedAt = snap.supplierCapturedAt
         } catch {}
     }
-    if (!order.comaxDoc?.docNumber) {
+    // Entire Comax delivery flow is gated by COMAX_DELIVERY_ENABLED=true;
+    // skipped silently otherwise (enabling later backfills via this retry).
+    if (isComaxDeliveryEnabled() && !order.comaxDoc?.docNumber) {
         try {
             const orderForComax = set.cart ? { ...order, cart: set.cart } : order
             const res = await external.comax.writeDeliveryDocument(orderForComax)
@@ -43,7 +46,7 @@ export default async function comaxRetry(payload, { DL, utils, external }) {
         } catch (e) {
             set.comaxDoc = { ...(order.comaxDoc || {}), capturedAt: new Date(), error: e?.message || String(e) }
         }
-    } else {
+    } else if (isComaxDeliveryEnabled()) {
         // Doc exists but its per-line prices may never have been fetched
         // (docs created before the delivery-docs flow): ensure a pending row
         // so the deliveryDocsSync cron picks it up.

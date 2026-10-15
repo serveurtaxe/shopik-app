@@ -2,6 +2,7 @@ import cron from 'node-cron'
 import log from '#server/utils/log.js'
 import { acquireLock } from '#server/utils/redisLock.js'
 import { fetchAndStoreDeliveryDoc } from '#server/external/comax/deliverySync.js'
+import { isComaxDeliveryEnabled } from '#server/external/comax/utils.js'
 
 const LOCK_KEY = 'delivery-docs-sync:lock'
 const LOCK_TTL_SECONDS = 10 * 60
@@ -26,6 +27,7 @@ async function loadDueDocs(DL) {
 export async function runDeliveryDocsSync({ DL }) {
     let release
     try {
+        if (!isComaxDeliveryEnabled()) return
         release = await acquireLock(DL.redis, LOCK_KEY, LOCK_TTL_SECONDS)
         if (!release) {
             log.warn('[DeliveryDocsSync] Skipped — another instance holds the lock')

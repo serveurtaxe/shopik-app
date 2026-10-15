@@ -1,5 +1,6 @@
 import captureOrder from '#server/utils/data/captureOrder.js'
 import { snapshotSupplierCost } from '#server/utils/data/supplierCost.js'
+import { isComaxDeliveryEnabled } from '#server/external/comax/utils.js'
 
 export default async function pack(payload, { DL, _admin, utils, external }) {
     const { id, bags, boxes } = payload
@@ -42,7 +43,8 @@ export default async function pack(payload, { DL, _admin, utils, external }) {
     // Comax delivery document, prices from price list (fail-open): pack proceeds regardless.
     // DocNumber is kept for client cancellation; retry fills it if missing.
     // Per-line prices are backfilled into comax_delivery_docs (inline attempt + cron).
-    if (!order.comaxDoc?.docNumber) {
+    // Gated by COMAX_DELIVERY_ENABLED=true; skipped silently otherwise.
+    if (isComaxDeliveryEnabled() && !order.comaxDoc?.docNumber) {
         try {
             const orderForComax = set.cart ? { ...order, cart: set.cart } : order
             const res = await external.comax.writeDeliveryDocument(orderForComax)
