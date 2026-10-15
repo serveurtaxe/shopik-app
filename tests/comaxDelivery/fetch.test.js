@@ -64,7 +64,7 @@ describe('Get_DeliveryDocument_All parsing', () => {
     it('maps line prices (qty from Cmt, conversion qty ignored)', () => {
         const rows = extractDeliveryDetails(parseXml(RESPONSE))
         assert.deepEqual(mapDeliveryLine(rows[0]), {
-            line: null, itemId: '6', itemName: 'Milk 1L', qty: 2,
+            itemId: '6', itemName: 'Milk 1L', qty: 2,
             price: 50, priceWithVat: 58.5, discount: 0, sum: 100, sumWithVat: 117
         })
         assert.equal(mapDeliveryLine(rows[1]).itemId, '10')

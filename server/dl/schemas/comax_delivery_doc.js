@@ -5,7 +5,6 @@
  * Get_DeliveryDocument_All (inline attempt + deliveryDocsSync cron).
  */
 const comaxDeliveryLineSchema = {
-    line: Number,
     itemId: String,
     itemName: String,
     qty: Number,

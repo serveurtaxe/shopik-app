@@ -38,12 +38,11 @@ function str(v) {
  * on every line) to a clean line object.
  */
 export function mapDeliveryLine(raw) {
-    const lineNo = raw?.Line != null && raw.Line !== '' ? Number(raw.Line) : null
     return {
-        line: lineNo || null,
         itemId: str(raw?.ItemID),
         itemName: str(raw?.ItemNm),
         // Cmt = ordered qty. ItemConvertionQty is the unit-conversion factor (0 here).
+        // (Comax's Line is always 0 — intentionally not stored.)
         qty: num(raw?.Cmt),
         price: num(raw?.Price),
         priceWithVat: num(raw?.PriceWithVat),
