@@ -24,3 +24,19 @@
 .stamps {
     min-height: 18px;
 }
+
+/* In-cart border — a listing affordance that tells the shopper "you're already
+   buying this". Deliberately scoped to .productCard: inside the cart every
+   row is in the cart by definition, so the cart, checkout and order-history
+   inlines keep the regular/sale border instead (see the contract in
+   common/components/Product/product.module.css).
+
+   Specificity 0,2,0 beats the shared [data-price='sale'] border, and the
+   combined rule at 0,3,0 beats both. */
+.productCard[data-action='inCart'] {
+    --pc-border: var(--product-card-cart-border, #83aa9d);
+}
+
+.productCard[data-action='inCart'][data-price='sale'] {
+    --pc-border: var(--product-card-cart-sale-border, #f5bfa0);
+}

@@ -93,7 +93,10 @@
         max-width: 380px;
         inset-inline-end: calc(-100% - 16px - var(--safeRight, 0px));
         top: calc(var(--header-height) + var(--safeTop, 0px) - 36px);
-        max-height: calc(100dvh - var(--header-height) - var(--safeTop, 0px) + 36px);
+        /* Tablet: cap the drawer at 900px. min() keeps it inside the
+           viewport on shorter tablets, where the plain 900px cap would let
+           the footer run past the fold. */
+        max-height: min(900px, calc(100dvh - var(--header-height) - var(--safeTop, 0px) + 36px));
     }
 
     .cart.open {

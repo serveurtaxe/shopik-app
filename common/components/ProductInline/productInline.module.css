@@ -55,8 +55,8 @@
 }
 
 .saleInlineBar {
-    background-color: var(--pc-badge-bg, var(--color-brand-secondary));
-    color: var(--pc-badge-text, var(--text-primary));
+    background-color: var(--pc-bar-bg, var(--color-brand-secondary));
+    color: var(--pc-bar-text, var(--text-primary));
     padding: 7px 12px;
     width: 100%;
     box-sizing: border-box;

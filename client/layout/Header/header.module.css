@@ -401,3 +401,27 @@
 .menuOverlay.belowCart {
     z-index: 9000;
 }
+
+/* Scrim behind the cart drawer, shown only where the drawer floats over the
+   page instead of pushing it: .main.shifted and .mainMenu .shifted both reset
+   at 1023px, so that is where the page stops making room.
+
+   z-index 9000 is the same tier as .menuOverlay.belowCart — above the page,
+   below the cart drawer (9999) and the lifted header top row (10002), which
+   therefore stay bright. display:none above 1023px, where the content shift
+   is the affordance instead. Gated in CSS so the breakpoint is not duplicated
+   into JS. */
+.cartOverlay {
+    position: fixed;
+    inset: 0;
+    background-color: var(--menu-overlay, #00332499);
+    z-index: 9000;
+    display: none;
+    cursor: default;
+}
+
+@media (max-width: 1023px) {
+    .cartOverlay {
+        display: block;
+    }
+}
