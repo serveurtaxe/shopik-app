@@ -134,29 +134,29 @@ export default function Cart({ }) {
         }
 
         <Flex col className={styles.footer}>
-            <Flex col gap={10} className={styles.summary}>
+            <Flex col gap={15} className={styles.summary}>
                 <Flex alignItems='center' justifyContent='space-between'>
-                    <Text mode='sub' bold>subtotal_text</Text>
-                    <Text mode='sub' bold>{render({ type: 'coin', value: sum })}</Text>
+                    <Text bold>subtotal_text</Text>
+                    <Text bold>{render({ type: 'coin', value: sum })}</Text>
                 </Flex>
                 <Flex alignItems='center' justifyContent='space-between'>
-                    <Text mode='sub' bold>handling_and_delivery</Text>
+                    <Text bold>handling_and_delivery</Text>
                     {isFreeShipping ? (
                         <Flex gap={6} alignItems='center'>
-                            <Text mode='sub' bold style={{ textDecoration: 'line-through', opacity: 0.6 }}>{render({ type: 'coin', value: originalShipping })}</Text>
-                            <Text mode='sub' bold>free_shipping</Text>
+                            <Text bold style={{ textDecoration: 'line-through', opacity: 0.6 }}>{render({ type: 'coin', value: originalShipping })}</Text>
+                            <Text bold>free_shipping</Text>
                         </Flex>
                     ) : (
-                        <Text mode='sub' bold>{render({ type: 'coin', value: shipping })}</Text>
+                        <Text bold>{render({ type: 'coin', value: shipping })}</Text>
                     )}
                 </Flex>
-                <Flex alignItems='center' justifyContent='space-between'>
+                <Flex alignItems='center' justifyContent='space-between' className={styles.totalSaved}>
                     <Text size='l' bold>total_saved_in_purchase</Text>
                     <Text size='l' bold>{render({ type: 'coin', value: savings })}</Text>
                 </Flex>
             </Flex>
             {isBelowMinSum && !emptyCart && (
-                <Text size='s' mode='sub' className={styles.minSumNote}>{TR?.('minimum_order_sum')} {render({ type: 'coin', value: minSumThreshold })}</Text>
+                <Text size='s' className={styles.minSumNote}>{TR?.('minimum_order_sum')} {render({ type: 'coin', value: minSumThreshold })}</Text>
             )}
             <Button icon='cart' onClick={goToCheckout} disabled={isBelowMinSum}>
                 <Text>to_pay</Text>

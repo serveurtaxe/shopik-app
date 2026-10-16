@@ -155,7 +155,6 @@
     .menuWrap {
         grid-area: menuWrap;
         background-color: var(--sub-header-bg);
-        border-bottom: 1px solid #ECE7DE;
         margin: 0 -16px;
         padding: 0 16px;
     }
@@ -185,7 +184,6 @@
 
         .menuWrap {
             background-color: var(--sub-header-bg);
-            border-bottom: 1px solid #ECE7DE;
             margin-left: calc(50% - 50vw);
             margin-right: calc(50% - 50vw);
             width: 100vw;
