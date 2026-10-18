@@ -19,7 +19,10 @@ export const KASHRUT_RABBINATES = [
     { rank: 11, name: 'בד"ץ בית יוסף', codes: ['67093', '67061'] }
 ]
 
-// Kosher_Supervision_Type codes → Hebrew food-category label.
+// Kosher_Supervision_Type codes → Hebrew food-category label. NOT_RELEVANT
+// (180) is intentionally not displayed anywhere.
+export const SUPERVISION_NOT_RELEVANT = '180'
+
 export const SUPERVISION_LABELS = {
     183: 'פרווה',
     182: 'חלבי',
@@ -83,6 +86,7 @@ export function selectKashrutStamps(kashrut, count = 1, { hasImage } = {}) {
 
 export function getSupervisionLabel(kashrut) {
     const { supervisionType } = normalizeKashrut(kashrut)
+    if (!supervisionType || supervisionType === SUPERVISION_NOT_RELEVANT) return ''
     return SUPERVISION_LABELS[supervisionType] || ''
 }
 

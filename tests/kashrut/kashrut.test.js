@@ -96,6 +96,7 @@ describe('getSupervisionLabel', () => {
     it('maps supervision codes to Hebrew labels', () => {
         assert.equal(getSupervisionLabel({ supervisionType: '183' }), SUPERVISION_LABELS[183])
         assert.equal(getSupervisionLabel({ supervisionType: '181' }), SUPERVISION_LABELS[181])
+        assert.equal(getSupervisionLabel({ supervisionType: '180' }), '')
         assert.equal(getSupervisionLabel({ supervisionType: '999' }), '')
         assert.equal(getSupervisionLabel(null), '')
     })
