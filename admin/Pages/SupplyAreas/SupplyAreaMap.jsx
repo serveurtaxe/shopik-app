@@ -13,6 +13,7 @@ import Flex from 'common/components/Flex'
 import StoreListEditor from './StoreListEditor'
 import VectorBasemap from './VectorBasemap'
 import CityBordersLayer from './CityBordersLayer'
+import StatisticalAreasLayer from './StatisticalAreasLayer'
 import styles from './supplyAreas.module.css'
 
 const SNAP_THRESHOLD_PX = 20
@@ -201,7 +202,8 @@ function MapController({
     onEdited,
     onGeometryCancel,
     onBackgroundClick,
-    onViewportChange
+    onViewportChange,
+    statSnapGeoms = []
 }) {
     const map = useMap()
     const { TR } = useText()
@@ -354,25 +356,32 @@ function MapController({
     useEffect(() => {
         const grid = new Map()
         const edges = []
-        areas.forEach(area =>
-            area.location?.coordinates?.forEach(ring => {
-                ring.forEach(([lng, lat]) => {
-                    const p = L.latLng(lat, lng)
-                    const k = snapKeyFor(lat, lng)
-                    if (!grid.has(k)) grid.set(k, [])
-                    grid.get(k).push(p)
-                })
-                for (let i = 0; i < ring.length - 1; i++) {
-                    const [lng1, lat1] = ring[i]
-                    const [lng2, lat2] = ring[i + 1]
-                    if (lng1 === lng2 && lat1 === lat2) continue
-                    edges.push([L.latLng(lat1, lng1), L.latLng(lat2, lng2)])
-                }
+        const addRing = (ring) => {
+            ring.forEach(([lng, lat]) => {
+                const p = L.latLng(lat, lng)
+                const k = snapKeyFor(lat, lng)
+                if (!grid.has(k)) grid.set(k, [])
+                grid.get(k).push(p)
             })
-        )
+            for (let i = 0; i < ring.length - 1; i++) {
+                const [lng1, lat1] = ring[i]
+                const [lng2, lat2] = ring[i + 1]
+                if (lng1 === lng2 && lat1 === lat2) continue
+                edges.push([L.latLng(lat1, lng1), L.latLng(lat2, lng2)])
+            }
+        }
+        const addGeometry = (geometry) => {
+            if (!geometry?.coordinates) return
+            const polys = geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.coordinates
+            for (const poly of polys) for (const ring of (poly || [])) addRing(ring)
+        }
+        areas.forEach(area => addGeometry(area.location))
+        // Statistical areas are snap targets too, but only the on-screen subset
+        // the overlay reports (it withholds them when zoomed too far out).
+        statSnapGeoms.forEach(addGeometry)
         snapTargetsRef.current = grid
         snapEdgesRef.current = edges
-    }, [areas])
+    }, [areas, statSnapGeoms])
 
     // Find nearest snap target — vertices win over edges. If any vertex within threshold, snap to vertex; otherwise try edge projection.
     const findSnapLatLng = useCallback((latlng) => {
@@ -687,6 +696,7 @@ export default function SupplyAreaMap({
     selectedId, unionIds = [], geometryEditingId, cuttingId, areaDraft, setAreaDraft, savingArea,
     onSelect, onUnionToggle, onStartAreaPropsEdit, onSaveAreaProps, onCancelAreaPropsEdit, onDeleteArea, onStartGeometryEdit, onStartCut,
     onViewportChange, onCreateArea, cityBorders, onToggleCityBorders,
+    statisticalAreas, onToggleStatisticalAreas,
     toggleMode, drawing, onToggleArea, onCreated, onCutCommit, onEdited, onGeometryCancel, onBackgroundClick,
     isFullscreen, onToggleFullscreen, sidebarOpen = true,
 }) {
@@ -777,6 +787,10 @@ export default function SupplyAreaMap({
         setLabelsVisible(next)
     }
 
+    // Geometries of the on-screen statistical areas (reported by the overlay) —
+    // folded into the drawing snap grid alongside the existing areas.
+    const [statSnapGeoms, setStatSnapGeoms] = useState([])
+
     const storePins = useMemo(() => stores.filter(s => {
         const c = s.address?.location?.coordinates
         return Array.isArray(c) && c.length === 2
@@ -827,6 +841,16 @@ export default function SupplyAreaMap({
                     darkBasemap={isDarkBasemap}
                     onCreateArea={onCreateArea}
                 />
+                <StatisticalAreasLayer
+                    visible={statisticalAreas}
+                    drawing={drawing}
+                    toggleMode={toggleMode}
+                    geometryEditingId={geometryEditingId}
+                    cuttingId={cuttingId}
+                    darkBasemap={isDarkBasemap}
+                    onCreateArea={onCreateArea}
+                    onSnapData={setStatSnapGeoms}
+                />
                 <MapController
                     areas={areas}
                     servedAreaIds={servedAreaIds}
@@ -847,6 +871,7 @@ export default function SupplyAreaMap({
                     onGeometryCancel={onGeometryCancel}
                     onBackgroundClick={onBackgroundClick}
                     onViewportChange={onViewportChange}
+                    statSnapGeoms={statSnapGeoms}
                 />
                 {selectedArea && popupPosition && !unionIds.length && (
                     <Popup
@@ -967,6 +992,14 @@ export default function SupplyAreaMap({
                         onClick={() => onToggleCityBorders()}
                     >
                         <Text size="none">supply_city_borders</Text>
+                    </button>
+                    <button
+                        type="button"
+                        title={TR('supply_statistical_areas')}
+                        className={statisticalAreas ? `${styles.tileBtn} ${styles.tileBtnActive}` : styles.tileBtn}
+                        onClick={() => onToggleStatisticalAreas()}
+                    >
+                        <Text size="none">supply_statistical_areas</Text>
                     </button>
                 </div>
                 {isVector && (

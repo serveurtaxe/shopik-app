@@ -653,6 +653,14 @@
     white-space: nowrap;
 }
 
+/* Inline warning in the reference-layer popup, e.g. a non-contiguous
+   multi-selection that cannot collapse into one polygon. */
+.cityPopupWarn {
+    font-size: .75rem;
+    color: var(--text-error, #dc2626);
+    text-align: right;
+}
+
 /* Tighter popup: less side padding so the button stretches closer to the edges */
 .cityPopupWrap :global(.leaflet-popup-content) {
     margin: 24px 12px 12px 12px;

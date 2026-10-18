@@ -262,6 +262,9 @@ const defaultSelectOne = {
 const defaultSort = {
     sortOrder: -1,
     totalSalesUnits: -1,
+    // Unique tiebreaker: sortOrder/totalSalesUnits tie for most products, and
+    // without a unique key skip/limit pagination returns overlapping pages.
+    id: 1,
 }
 
 export const meta = {
