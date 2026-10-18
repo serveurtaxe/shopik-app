@@ -1,0 +1,3 @@
+# Source PNGs (named by GS1 rabbinate code, e.g. 67085.png) are converted to
+# WebP here by server/scripts/convertKashrutAssets.js.
+*.png

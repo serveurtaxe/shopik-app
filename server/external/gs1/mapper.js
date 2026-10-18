@@ -5,8 +5,8 @@ import { pruneEmpty } from './prune.js'
 
 const firstValue = arr => (Array.isArray(arr) ? arr.map(e => e?.value).find(v => v != null && v !== '') : undefined) ?? ''
 
-const joinValues = (arr, sep = ', ') =>
-    (Array.isArray(arr) ? arr.map(e => e?.value).filter(v => v != null && v !== '') : []).join(sep)
+const firstCode = arr =>
+    (Array.isArray(arr) ? arr.map(e => e?.code).find(c => c != null && c !== '') : undefined) ?? ''
 
 // Food_Symbol_Red codes → nutrients flags (red "high in" labels)
 function mapNutrients(additionalInfo) {
@@ -22,12 +22,30 @@ function mapNutrients(additionalInfo) {
     return out
 }
 
-function mapKashrut(kashrut) {
+// Kashrut → { rabbinates: [{ code, name }], supervisionType: '<code>' }.
+// rabbinates keep the GS1 code (drives ranking/stamp images) and display name;
+// supervisionType is the Kosher_Supervision_Type code (food category), labelled
+// client-side. Blank/whitespace entries are dropped.
+export function mapKashrut(kashrut) {
     if (!kashrut) return {}
     const out = {}
-    const supervision = firstValue(kashrut.Kosher_Supervision_Type)
-    const rabbinate = joinValues(kashrut.Rabbinate)
-    out.kashrut = [supervision, rabbinate].filter(Boolean).join(' / ')
+
+    const rabbinates = []
+    const seen = new Set()
+    for (const entry of (Array.isArray(kashrut.Rabbinate) ? kashrut.Rabbinate : [])) {
+        const name = entry?.value != null ? String(entry.value).trim() : ''
+        const code = entry?.code != null ? String(entry.code).trim() : ''
+        if (!name && !code) continue
+        const key = code || `name:${name}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        rabbinates.push(code ? { code, name } : { name })
+    }
+
+    const supervision = firstCode(kashrut.Kosher_Supervision_Type)
+    if (rabbinates.length || supervision)
+        out.kashrut = { rabbinates, supervisionType: supervision }
+
     const passover = firstValue(kashrut.Kosher_for_Passover)
     if (passover && passover.includes('כשר לפסח')) out.passoverKashrut = 'kosher'
     return out
@@ -218,4 +236,4 @@ export function mapGs1ToProduct(payload) {
     }
 }
 
-export default { mapGs1ToProduct }
+export default { mapGs1ToProduct, mapKashrut }

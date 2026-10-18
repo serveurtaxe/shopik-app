@@ -8,6 +8,7 @@ import styles from './header.module.css'
 import MainMenu from 'layout/MainMenu'
 import MobileMenu from 'layout/MobileMenu'
 import Cart from 'layout/Cart'
+import { useCart } from 'layout/Cart/CartProvider'
 import { INFO_LINKS } from 'layout/infoLinks'
 import { closeAllPopovers, subscribePopoverCount } from 'common/components/Popover/registry'
 import events from 'common/features/events'
@@ -25,6 +26,7 @@ export default function Header() {
     const [drawerOpen, setDrawerOpen] = useState(false)
     const [openMenu, setOpenMenu] = useState(null)
     const [popCount, setPopCount] = useState(0)
+    const { cartOpen, setCartOpen } = useCart()
     const navigate = useNavigate()
     const { settings } = useAppData()
     const { TR } = useText?.() || {}
@@ -199,6 +201,32 @@ export default function Header() {
                         setOpenMenu(null)
                         setDrawerOpen(false)
                         closeAllPopovers()
+                    }}
+                />
+            )}
+
+            {/* Cart scrim. Separate from the menu overlay above because the
+                drawer dims the page at a different breakpoint (where the cart
+                floats over content instead of pushing it) and closes only
+                itself. Lives in the header so it inherits the same stacking
+                context as .menuOverlay: z-index 9000 puts it above the page
+                but below the cart drawer (9999) and the lifted top row
+                (10002), which stay bright. display:none above 1023px in CSS. */}
+            {cartOpen && (
+                <div
+                    aria-hidden
+                    className={styles.cartOverlay}
+                    onPointerDown={(e) => {
+                        // Shield must stay mounted until the press ends: closing
+                        // here would unmount it and let the following click land
+                        // on the product underneath. preventDefault() suppresses
+                        // the compatibility mouse/click sequence for this press.
+                        e.preventDefault()
+                        e.stopPropagation()
+                    }}
+                    onClick={(e) => {
+                        e.stopPropagation()
+                        setCartOpen(false)
                     }}
                 />
             )}

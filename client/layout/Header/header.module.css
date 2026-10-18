@@ -155,7 +155,6 @@
     .menuWrap {
         grid-area: menuWrap;
         background-color: var(--sub-header-bg);
-        border-bottom: 1px solid #ECE7DE;
         margin: 0 -16px;
         padding: 0 16px;
     }
@@ -185,7 +184,6 @@
 
         .menuWrap {
             background-color: var(--sub-header-bg);
-            border-bottom: 1px solid #ECE7DE;
             margin-left: calc(50% - 50vw);
             margin-right: calc(50% - 50vw);
             width: 100vw;
@@ -400,4 +398,29 @@
 
 .menuOverlay.belowCart {
     z-index: 9000;
+}
+
+/* Scrim behind the cart drawer. Shown on exactly the range where the drawer
+   floats: .cart switches to `inset-inline-end: 0` (overlaying the page)
+   below 1200px, and stays container-aligned above it, where .main.shifted
+   makes room and no dim is needed. Both edges must match 1200px — an iPad
+   Pro portrait at 1032px sits in the gap if this is set to 1023px.
+
+   z-index 9000 is the same tier as .menuOverlay.belowCart — above the page,
+   below the cart drawer (9999) and the lifted header top row (10002), which
+   therefore stay bright. Gated in CSS so the breakpoint is not duplicated
+   into JS. */
+.cartOverlay {
+    position: fixed;
+    inset: 0;
+    background-color: var(--menu-overlay, #00332499);
+    z-index: 9000;
+    display: none;
+    cursor: default;
+}
+
+@media (max-width: 1200px) {
+    .cartOverlay {
+        display: block;
+    }
 }

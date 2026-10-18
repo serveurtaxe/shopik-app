@@ -159,7 +159,19 @@ const productSchema = {
     },
     googleCategory: String,
     storeIds: { type: [String], filter: true },
-    kashrut: { trim: true, type: String },
+    kashrut: {
+        // GS1 rabbinates (code drives ranking + stamp image, name is the
+        // display fallback) and the Kosher_Supervision_Type food-category code
+        // (labelled client-side). Mapped by server/external/gs1/mapper.js.
+        rabbinates: {
+            type: [{
+                code: String,
+                name: String,
+                _id: false
+            }]
+        },
+        supervisionType: String
+    },
     passoverKashrut: {
         type: String,
         enum: Object.values(constants.PASSOVER_KASHRUT)
