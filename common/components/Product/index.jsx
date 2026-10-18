@@ -5,6 +5,7 @@ import Flex from 'common/components/Flex'
 import Text from 'common/components/Text'
 import Icon from 'common/components/Icon'
 import classNames from 'common/functions/classNames'
+import KashrutStamps from 'common/components/Kashrut'
 import { round2, round3 } from 'common/functions/calcOrder/utils.js'
 import { getProductImageUrl } from 'common/functions/productImageUrl.js'
 import { useState, useEffect } from 'react'
@@ -251,11 +252,18 @@ export function ProductFavorite({ className }) {
     />
 }
 
-// Reserved row for dietary / kashrut / brand stamps (phase 2). min-height is
-// set in CSS so cards don't reflow when real stamps arrive.
-export function ProductStamps({ product, className }) {
+// Row of kashrut (and later dietary/brand) stamps. Cards show one kashrut
+// stamp — the strongest rabbinate that has an image. The product page shows
+// more (kashrutCount) and falls back to a text badge per rabbinate without an
+// image. min-height is set in CSS so cards don't reflow when stamps arrive.
+export function ProductStamps({ product, className, kashrutCount = 1, imagesOnly = true }) {
     if (!product) return null
-    return <Flex className={classNames(styles.stamps, className)} />
+    return <KashrutStamps
+        kashrut={product.kashrut}
+        count={kashrutCount}
+        imagesOnly={imagesOnly}
+        className={classNames(styles.stamps, className)}
+    />
 }
 
 export function ProductPrice({ product, size = 'm', sales }) {

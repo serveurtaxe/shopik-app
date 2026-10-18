@@ -24,9 +24,11 @@ import { useProductCart } from '#common/components/Product/useProductCart.js'
 import {
     ProductPrice,
     ProductSaleBadge,
+    ProductStamps,
     getFirstSale,
     getUnitInfoText
 } from 'common/components/Product'
+import { selectKashrutStamps, getSupervisionLabel } from 'common/components/Kashrut/constants.js'
 import { getProductState } from '#common/functions/productState.js'
 
 const PASSOVER_TEXT = {
@@ -106,7 +108,12 @@ function buildSections(product) {
     const sections = []
 
     const kashrutLines = []
-    if (product?.kashrut) kashrutLines.push({ label: 'product_kashrut', value: product.kashrut })
+    const kashrutParts = []
+    const supervision = getSupervisionLabel(product?.kashrut)
+    if (supervision) kashrutParts.push(supervision)
+    const rabbinateNames = selectKashrutStamps(product?.kashrut, Infinity).map(s => s.name).filter(Boolean)
+    if (rabbinateNames.length) kashrutParts.push(rabbinateNames.join(', '))
+    if (kashrutParts.length) kashrutLines.push({ label: 'product_kashrut', value: kashrutParts.join(' · ') })
     const pass = PASSOVER_TEXT[product?.passoverKashrut]
     if (pass) kashrutLines.push({ label: 'product_passover_kashrut', value: pass })
     if (kashrutLines.length) {
@@ -278,14 +285,21 @@ export default function Product() {
                         </Flex>
                     )}
 
-                    {(product.kashrut || product.passoverKashrut) && (
-                        <Flex className={styles.badgeRow} gap={6} wrap>
-                            {product.kashrut && <Badge><Text size="s">{product.kashrut}</Text></Badge>}
-                            {PASSOVER_TEXT[product.passoverKashrut] && (
-                                <Badge><Text size="s">{PASSOVER_TEXT[product.passoverKashrut]}</Text></Badge>
-                            )}
-                        </Flex>
-                    )}
+                    {(() => {
+                        const supervisionLabel = getSupervisionLabel(product.kashrut)
+                        const hasPassover = !!PASSOVER_TEXT[product.passoverKashrut]
+                        const hasStamps = selectKashrutStamps(product.kashrut, 1).length > 0
+                        if (!supervisionLabel && !hasPassover && !hasStamps) return null
+                        return (
+                            <Flex className={styles.badgeRow} gap={6} wrap alignItems="center">
+                                <ProductStamps product={product} kashrutCount={2} imagesOnly={false} />
+                                {supervisionLabel && <Badge><Text size="s">{supervisionLabel}</Text></Badge>}
+                                {hasPassover && (
+                                    <Badge><Text size="s">{PASSOVER_TEXT[product.passoverKashrut]}</Text></Badge>
+                                )}
+                            </Flex>
+                        )
+                    })()}
                 </div>
 
                 <div className={styles.gallery}>
