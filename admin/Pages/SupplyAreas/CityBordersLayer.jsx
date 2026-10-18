@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useMap } from 'react-leaflet'
 import L from 'leaflet'
+import union from '@turf/union'
 import { useText } from 'common/texts/TextProvider'
 import styles from './supplyAreas.module.css'
 
@@ -28,6 +29,10 @@ import styles from './supplyAreas.module.css'
 const LABEL_MIN_ZOOM = 11
 // Path is publicDir-relative to admin/ (served from the admin host).
 const BORDERS_FILE = '/static/city-borders.v2026-10-11.geojson'
+// Base vs selected style. The clicked jurisdiction gets a translucent fill so
+// it reads as "picked" while a supply area is drawn over it.
+const BORDERS_STYLE = { color: '#64748b', weight: 1, fillOpacity: 0 }
+const BORDERS_SELECTED_STYLE = { color: '#64748b', weight: 2, fillOpacity: 0.18 }
 // Manual nudge (meters, [east, north]) applied to the whole layer at load.
 // The file is properly projected so this stays [0, 0] — only touch it if a
 // systematic mismatch against the basemap is ever found (e.g. [70, 40]).
@@ -103,7 +108,44 @@ export default function CityBordersLayer({ visible, drawing, toggleMode, geometr
     stRef.current = { visible, drawing, toggleMode, geometryEditingId, cuttingId, darkBasemap, onCreateArea, TR }
 
     useEffect(() => {
-        const openCityPopup = (latlng, name, geometry) => {
+        let layer = null
+        // Ctrl/Cmd+click accumulates a multi-selection; a plain click replaces it.
+        // `selected` holds the same feature objects stored in dataRef, so identity
+        // survives the pan/zoom rebuild in refresh().
+        const selected = new Set()
+        let popup = null
+        const applySelection = () => {
+            layer?.eachLayer(l => l.setStyle(selected.has(l.feature) ? BORDERS_SELECTED_STYLE : BORDERS_STYLE))
+        }
+        const resetSelection = () => { selected.clear(); applySelection() }
+
+        // Union of the current selection, or the lone geometry when one is picked.
+        const selectionGeometry = () => {
+            const feats = [...selected]
+            if (!feats.length) return null
+            if (feats.length === 1) return feats[0].geometry
+            const merged = union({
+                type: 'FeatureCollection',
+                features: feats.map(f => ({ type: 'Feature', properties: {}, geometry: f.geometry })),
+            })
+            return merged?.geometry || null
+        }
+        // Heading: the single area's name, or a generic "N selected" heading.
+        const selectionTitle = () => {
+            const feats = [...selected]
+            if (feats.length === 1) return feats[0].properties?.name || ''
+            return stRef.current.TR('supply_selected_areas')
+        }
+        const selectionMeta = () => {
+            const feats = [...selected]
+            if (feats.length === 1) return `vertices: ${countVertices(feats[0].geometry)}`
+            return `${feats.length}`
+        }
+        // Name only carries over for a single pick — a merged shape spans several
+        // localities, so it's created unnamed and the user renames it.
+        const selectionName = () => (selected.size === 1 ? selectionTitle() : '')
+
+        const openCityPopup = (latlng) => {
             const st = stRef.current
             const el = L.DomUtil.create('div', styles.cityPopup)
             // Same guard as the area popup: keep popup clicks off the map bg-click handler
@@ -111,10 +153,10 @@ export default function CityBordersLayer({ visible, drawing, toggleMode, geometr
             L.DomEvent.on(el, 'click', L.DomEvent.stopPropagation)
             const head = L.DomUtil.create('div', styles.cityPopupHead, el)
             const title = L.DomUtil.create('strong', styles.cityPopupTitle, head)
-            title.textContent = name || ''
+            title.textContent = selectionTitle()
             // Same convention as the area popup (vertices of exterior rings)
             const verts = L.DomUtil.create('span', styles.cityPopupVerts, head)
-            verts.textContent = `vertices: ${countVertices(geometry)}`
+            verts.textContent = selectionMeta()
             const btn = L.DomUtil.create('button', styles.cityPopupBtn, el)
             btn.type = 'button'
             // Plus icon matching the shared Button's `add` icon (Lucide LuPlus)
@@ -122,34 +164,63 @@ export default function CityBordersLayer({ visible, drawing, toggleMode, geometr
             btn.appendChild(document.createTextNode(st.TR('supply_create_polygon')))
             L.DomEvent.on(btn, 'click', (ev) => {
                 L.DomEvent.stop(ev)
+                const geometry = selectionGeometry()
+                if (!geometry) return
+                // Server stores one Polygon; a scattered multi-select can't collapse
+                // into one shape, so block it the way the area-merge endpoint does.
+                if (selected.size > 1 && geometry.type !== 'Polygon') {
+                    const warn = L.DomUtil.create('div', styles.cityPopupWarn, el)
+                    warn.textContent = st.TR('supply_areas_not_adjacent')
+                    return
+                }
+                // Read the name before closePopup: its 'remove' clears the selection.
+                const name = selectionName()
                 btn.disabled = true
                 map.closePopup()
                 st.onCreateArea?.(name, geometry)
             })
-            L.popup({ maxWidth: 260, closeButton: true, className: styles.cityPopupWrap })
-                .setLatLng(latlng)
-                .setContent(el)
-                .openOn(map)
+            // Reuse one popup instance, and disable closeOnClick: Leaflet closes a
+            // popup on the map's synthetic `preclick` for EVERY click, which would
+            // fire 'remove' and wipe the multi-selection we're accumulating.
+            if (!popup) popup = L.popup({ maxWidth: 260, closeButton: true, closeOnClick: false, className: styles.cityPopupWrap })
+                .on('remove', resetSelection)
+            popup.setLatLng(latlng).setContent(el)
+            if (!popup.isOpen()) popup.openOn(map)
         }
 
         // Interactive (clickable) but kept under area polygons via bringToBack,
         // so area clicks still select areas, not cities.
         // Solid (not dashed): adjacent municipalities share exact edges, and two
         // dashed strokes with different phase look like a double line.
-        const layer = L.geoJSON(null, {
-            style: { color: '#64748b', weight: 1, fillOpacity: 0 },
+        layer = L.geoJSON(null, {
+            style: BORDERS_STYLE,
             interactive: true,
             onEachFeature: (f, l) => {
                 l.on('click', (e) => {
                     const st = stRef.current
                     if (!st.visible || st.drawing || st.toggleMode || st.geometryEditingId || st.cuttingId) return
-                    // Canvas-rendered paths aren't DOM targets, so the map bg-click
-                    // guard can't filter them — stop the event here instead.
-                    if (e.originalEvent) L.DomEvent.stop(e.originalEvent)
-                    openCityPopup(e.latlng, f.properties?.name, f.geometry)
+                    // Stop the click at the layer so the map never sees it: canvas
+                    // paths aren't DOM targets, so the map bg-click guard can't filter
+                    // them. Also keeps the accumulating selection popup open.
+                    L.DomEvent.stopPropagation(e)
+                    const oe = e.originalEvent
+                    if (oe?.ctrlKey || oe?.metaKey) {
+                        // Ctrl/Cmd+click toggles this city in the multi-selection.
+                        if (selected.has(f)) selected.delete(f); else selected.add(f)
+                        if (!selected.size) { map.closePopup(); return }
+                    } else {
+                        selected.clear()
+                        selected.add(f)
+                    }
+                    applySelection()
+                    openCityPopup(e.latlng)
                 })
             },
         })
+        // Background clicks close the popup (closeOnClick is off so Ctrl+clicks on
+        // the polygons, which stopPropagation, don't close it).
+        const closeRefPopup = () => { if (popup?.isOpen()) map.closePopup() }
+        map.on('click', closeRefPopup)
         let cancelled = false
 
         const refresh = () => {
@@ -161,6 +232,7 @@ export default function CityBordersLayer({ visible, drawing, toggleMode, geometr
             layer.addData((data.features || []).filter(f => intersects(f.properties._bbox, bounds)))
             layer.bringToBack()
             layer.eachLayer(l => {
+                l.setStyle(selected.has(l.feature) ? BORDERS_SELECTED_STYLE : BORDERS_STYLE)
                 const name = l.feature?.properties?.name
                 if (showLabels && name) {
                     l.bindTooltip(name, {
@@ -188,6 +260,7 @@ export default function CityBordersLayer({ visible, drawing, toggleMode, geometr
         return () => {
             cancelled = true
             map.off('moveend zoomend', refresh)
+            map.off('click', closeRefPopup)
             map.removeLayer(layer)
         }
     }, [map, visible, darkBasemap])

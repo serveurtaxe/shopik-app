@@ -5,6 +5,7 @@ import Flex from 'common/components/Flex'
 import Text from 'common/components/Text'
 import Icon from 'common/components/Icon'
 import classNames from 'common/functions/classNames'
+import KashrutStamps from 'common/components/Kashrut'
 import { round2, round3 } from 'common/functions/calcOrder/utils.js'
 import { getProductImageUrl } from 'common/functions/productImageUrl.js'
 import { useState, useEffect } from 'react'
@@ -235,13 +236,34 @@ export function ProductButton({ product, amount = 0, onUpdateAmount, size = 'm',
     </Flex>
 }
 
-export function ProductBadges({ product, size = 'm' }) {
-    if (!product.badges) return null
-    return <Flex className={classNames(styles.badges, styles[size])}>
-        {product.badges.map(badge => (
-            <Text key={badge}>{badge}</Text>
-        ))}
-    </Flex>
+// Visual-only favourite toggle. No persistence / API yet — state is local so
+// the heart is wired into the card layout and can be lifted later without a
+// redesign. Colours come from --product-favorite-color.
+export function ProductFavorite({ className }) {
+    const [on, setOn] = useState(false)
+    return <Button
+        mode='text'
+        icon={on ? 'heartPlus' : 'heart'}
+        onClick={() => setOn(o => !o)}
+        stopPropagation
+        preventDefault
+        aria-label='favorite'
+        className={classNames(styles.favorite, [styles.on, on], className)}
+    />
+}
+
+// Row of kashrut (and later dietary/brand) stamps. Cards show one kashrut
+// stamp — the strongest rabbinate that has an image. The product page shows
+// more (kashrutCount) and falls back to a text badge per rabbinate without an
+// image. min-height is set in CSS so cards don't reflow when stamps arrive.
+export function ProductStamps({ product, className, kashrutCount = 1, imagesOnly = true }) {
+    if (!product) return null
+    return <KashrutStamps
+        kashrut={product.kashrut}
+        count={kashrutCount}
+        imagesOnly={imagesOnly}
+        className={classNames(styles.stamps, className)}
+    />
 }
 
 export function ProductPrice({ product, size = 'm', sales }) {
@@ -268,7 +290,7 @@ export function ProductPrice({ product, size = 'm', sales }) {
         }
 
         return <Flex gap={20} alignItems='center' className={classNames(styles.price, styles[size])}>
-            <Text size='xxl' bold>{CurrencySymbol}{formatPrice(price)}</Text>
+            <Text size='xxl' bold className={styles.basePrice}>{CurrencySymbol}{formatPrice(price)}</Text>
             {unitPriceText && <Text size='s' mode='sub' className={styles.forgrams}>{unitPriceText}</Text>}
         </Flex>
 

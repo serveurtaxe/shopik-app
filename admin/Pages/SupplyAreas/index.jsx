@@ -23,6 +23,7 @@ const MODE_META = {
 
 const ISRAEL_BOUNDS = { west: 34.2, south: 29.5, east: 35.9, north: 33.4 }
 const CITY_BORDERS_KEY = 'supplyMapCityBorders'
+const STAT_AREAS_KEY = 'supplyMapStatAreas'
 const MAX_RINGS = 10
 function padBounds(bounds, ratio = 0.5) {
     const latSpan = bounds.north - bounds.south
@@ -206,12 +207,30 @@ export default function SupplyAreas() {
     // address search wins the FlyTo when both points exist.
     const [lastFocus, setLastFocus] = useState(null) // 'store' | 'test' | 'group'
     const [creating, setCreating] = useState(false)
+    // City-borders and statistical-areas overlays are mutually exclusive — only
+    // one reference layer shows at a time. Toggling one on hides the other.
     // City borders overlay visibility — shared by the header switch and the map basemap picker
-    const [showCityBorders, setShowCityBorders] = useState(() => localStorage.getItem(CITY_BORDERS_KEY) !== '0')
+    const [showStatAreas, setShowStatAreas] = useState(() => localStorage.getItem(STAT_AREAS_KEY) === '1')
+    const [showCityBorders, setShowCityBorders] = useState(() =>
+        localStorage.getItem(STAT_AREAS_KEY) === '1' ? false : localStorage.getItem(CITY_BORDERS_KEY) !== '0')
     function toggleCityBorders(next) {
         const v = typeof next === 'boolean' ? next : !showCityBorders
         localStorage.setItem(CITY_BORDERS_KEY, v ? '1' : '0')
         setShowCityBorders(v)
+        if (v) {
+            localStorage.setItem(STAT_AREAS_KEY, '0')
+            setShowStatAreas(false)
+        }
+    }
+    // Statistical-areas overlay (finer, sub-city reference) — off by default
+    function toggleStatAreas(next) {
+        const v = typeof next === 'boolean' ? next : !showStatAreas
+        localStorage.setItem(STAT_AREAS_KEY, v ? '1' : '0')
+        setShowStatAreas(v)
+        if (v) {
+            localStorage.setItem(CITY_BORDERS_KEY, '0')
+            setShowCityBorders(false)
+        }
     }
     const [expandedStores, setExpandedStores] = useState([])
     const [groupDraft, setGroupDraft] = useState(null) // { id?, name, storeId, areaIds }
@@ -1225,6 +1244,8 @@ export default function SupplyAreas() {
                         onCreateArea={handleCityCreateArea}
                         cityBorders={showCityBorders}
                         onToggleCityBorders={toggleCityBorders}
+                        statisticalAreas={showStatAreas}
+                        onToggleStatisticalAreas={toggleStatAreas}
                         isFullscreen={isFullscreen}
                         onToggleFullscreen={isFullscreen ? exitFullscreen : enterFullscreen}
                         sidebarOpen={sidebarOpen}

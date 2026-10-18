@@ -20,12 +20,16 @@ import { usePage } from 'layout/Page'
 import TR from '#common/texts/TR.js'
 import { ProductButton } from 'pages/Products/ProductCard'
 import ProductCard from 'pages/Products/ProductCard'
+import { useProductCart } from '#common/components/Product/useProductCart.js'
 import {
     ProductPrice,
     ProductSaleBadge,
-    ProductBadges,
+    ProductStamps,
+    getFirstSale,
     getUnitInfoText
 } from 'common/components/Product'
+import { selectKashrutStamps, getSupervisionLabel } from 'common/components/Kashrut/constants.js'
+import { getProductState } from '#common/functions/productState.js'
 
 const PASSOVER_TEXT = {
     kosher: 'passover_kosher',
@@ -104,7 +108,12 @@ function buildSections(product) {
     const sections = []
 
     const kashrutLines = []
-    if (product?.kashrut) kashrutLines.push({ label: 'product_kashrut', value: product.kashrut })
+    const kashrutParts = []
+    const supervision = getSupervisionLabel(product?.kashrut)
+    if (supervision) kashrutParts.push(supervision)
+    const rabbinateNames = selectKashrutStamps(product?.kashrut, Infinity).map(s => s.name).filter(Boolean)
+    if (rabbinateNames.length) kashrutParts.push(rabbinateNames.join(', '))
+    if (kashrutParts.length) kashrutLines.push({ label: 'product_kashrut', value: kashrutParts.join(' · ') })
     const pass = PASSOVER_TEXT[product?.passoverKashrut]
     if (pass) kashrutLines.push({ label: 'product_passover_kashrut', value: pass })
     if (kashrutLines.length) {
@@ -217,6 +226,7 @@ export default function Product() {
     const mainImage = images[selectedImageIndex] || images[0] || ''
     const has360 = (product?.images?.threeSixty || []).length > 0
     const sections = useMemo(() => buildSections(product || {}), [product])
+    const { amount: cartAmount } = useProductCart(product || {}, sales || {})
     const activeSection = sections.find(s => s.key === activeSpecKey) || sections[0]
     const relatedList = (related || []).filter(p => p?.id !== product?.id)
 
@@ -229,8 +239,18 @@ export default function Product() {
         return <Flex className={styles.container}><Text>product_not_found</Text></Flex>
     }
 
+    // Same state contract as the card / inline — the detail page's price, sale
+    // badge and buy button all read the --pc-* vars, so it stays consistent
+    // with the listing instead of falling back to the old green/red defaults.
+    const detailState = getProductState({
+        amount: cartAmount,
+        sale: getFirstSale(product, sales || {}),
+    })
+
     return (
-        <Flex col className={styles.container}>
+        <Flex col className={styles.container}
+            data-action={detailState.action}
+            data-price={detailState.price}>
             <div className={styles.crumbs}>
                 <Breadcrumbs path={categoryPath ? `products/${categoryPath}` : 'products'} />
             </div>
@@ -265,15 +285,21 @@ export default function Product() {
                         </Flex>
                     )}
 
-                    <ProductBadges product={product} sales={sales} />
-                    {(product.kashrut || product.passoverKashrut) && (
-                        <Flex className={styles.badgeRow} gap={6} wrap>
-                            {product.kashrut && <Badge><Text size="s">{product.kashrut}</Text></Badge>}
-                            {PASSOVER_TEXT[product.passoverKashrut] && (
-                                <Badge><Text size="s">{PASSOVER_TEXT[product.passoverKashrut]}</Text></Badge>
-                            )}
-                        </Flex>
-                    )}
+                    {(() => {
+                        const supervisionLabel = getSupervisionLabel(product.kashrut)
+                        const hasPassover = !!PASSOVER_TEXT[product.passoverKashrut]
+                        const hasStamps = selectKashrutStamps(product.kashrut, 1).length > 0
+                        if (!supervisionLabel && !hasPassover && !hasStamps) return null
+                        return (
+                            <Flex className={styles.badgeRow} gap={6} wrap alignItems="center">
+                                <ProductStamps product={product} kashrutCount={2} imagesOnly={false} />
+                                {supervisionLabel && <Badge><Text size="s">{supervisionLabel}</Text></Badge>}
+                                {hasPassover && (
+                                    <Badge><Text size="s">{PASSOVER_TEXT[product.passoverKashrut]}</Text></Badge>
+                                )}
+                            </Flex>
+                        )
+                    })()}
                 </div>
 
                 <div className={styles.gallery}>
