@@ -64,6 +64,7 @@ const productSchema = {
             }
         }
     },
+    buyingPrice: Number,
     barcode: {
         type: String,
         unique: true,

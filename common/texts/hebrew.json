@@ -622,6 +622,7 @@
         "secondPhone": "טלפון נוסף",
         "ops-page": "הזמנות",
         "comax_products_import": "יבוא מוצרים",
+        "comax_products_buying_price_import": "יבוא מחירי רכש",
         "comax_products_sync": "סנכרון לאתר",
         "comax_products_stock_sync": "יבוא מלאי",
         "StockStoreID": "מספר מחסן לסנכרון מלאי (מחסן ראשי)",

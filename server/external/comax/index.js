@@ -7,12 +7,12 @@ import { getDeliveryDocument } from './deliveryFetch.js'
 import { fetchAndStoreDeliveryDoc } from './deliverySync.js'
 import { resolveDeliveryConfig } from './resolveDeliveryConfig.js'
 
-async function getProducts({ DL, ...options }) {
+async function getProducts({ DL, includeZeroPrice, skipLog, silent, timeoutMs, ...options }) {
     // 1. Build query params
     const params = buildComaxParams(options)
 
     // 2. Fetch XML
-    const xml = await fetchComax({ params }, { DL })
+    const xml = await fetchComax({ params, timeoutMs, skipLog }, { DL })
 
     // 3. Parse XML
     const parsed = parseXml(xml)
@@ -21,14 +21,16 @@ async function getProducts({ DL, ...options }) {
     const items = normalizeArray(parsed?.ArrayOfClsItems?.ClsItems)
 
     if (items.length === 0) {
-        console.log(`[Comax] No products returned`)
+        if (!silent) console.log(`[Comax] No products returned`)
         return []
     }
 
     // 5. Map to clean objects
-    const products = items.map(mapItem).filter(p => p.superDepartmentCode != 12 && p.price > 0)
+    // includeZeroPrice (buying-price import): zero-price items must survive so a
+    // removed price can clear the stored value instead of silently keeping it.
+    const products = items.map(mapItem).filter(p => p.superDepartmentCode != 12 && (includeZeroPrice || p.price > 0))
 
-    console.log(`[Comax] Fetched ${products.length} products`)
+    if (!silent) console.log(`[Comax] Fetched ${products.length} products`)
 
     return products
 }
