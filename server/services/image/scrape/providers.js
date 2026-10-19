@@ -6,6 +6,9 @@ import download from '../download.js'
 import log from '#server/utils/log.js'
 
 export const MIN_SIDE = 600
+// Folder mode accepts 500x500 packshots (pre-approved local source); CDN
+// candidates keep the stricter MIN_SIDE gate.
+const FOLDER_MIN_SIDE = 500
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36'
 
 // Priority order: Rami Levy first, others are fallback.
@@ -47,12 +50,13 @@ async function cacheWrite(barcode, { buffer, site, sourceUrl, pageUrl, width, he
 }
 
 // Folder seeding (--folder bulk mode): ingest pre-delivered files named
-// <barcode>.jpg/.jpeg/.webp/.png as if a provider had found them. Same
-// min-size gate as CDN candidates; verified bytes are written to the disk
-// cache so scrapeProduct processes them through the normal pipeline
-// (resize → upload → images.product). sourceUrl is a local:// ref — only
-// used for hashing/provenance, the stored ref is scrape://local/<barcode>.
-// Files failing the gate are reported back (the caller prints the report).
+// <barcode>.jpg/.jpeg/.webp/.png as if a provider had found them. Uses the
+// folder min-size gate (500px, see FOLDER_MIN_SIDE); verified bytes are
+// written to the disk cache so scrapeProduct processes them through the
+// normal pipeline (resize → upload → images.product). sourceUrl is a
+// local:// ref — only used for hashing/provenance, the stored ref is
+// scrape://local/<barcode>. Files failing the gate are reported back (the
+// caller prints the report).
 export async function seedFromFolder(dir) {
     const names = await fs.readdir(dir).catch(() => null)
     if (!names) throw new Error(`cannot read folder: ${dir}`)
@@ -78,7 +82,7 @@ export async function seedFromFolder(dir) {
             const meta = await sharp(buffer).metadata()
             width = meta.width || 0
             height = meta.height || 0
-            if (width < MIN_SIDE && height < MIN_SIDE) {
+            if (width < FOLDER_MIN_SIDE && height < FOLDER_MIN_SIDE) {
                 rejected.push({ file: name, barcode, reason: 'too-small', width, height })
                 continue
             }
