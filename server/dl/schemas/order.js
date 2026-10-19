@@ -93,6 +93,7 @@ const windowSchema = {
     date: { type: String, filter: true },
     start: Number,
     end: Number,
+    reservedGroupId: String,
     reservedAt: Date,
     startTimestamp: Date,
     endTimestamp: Date,

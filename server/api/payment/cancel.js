@@ -2,6 +2,7 @@ import { round2 } from '#common/functions/calcOrder/utils.js'
 import { remainderRefundItems } from '#common/functions/refundCalc.js'
 import { planRefundLegs, executeRefundPlan } from '#server/utils/data/refundCaptures.js'
 import { recordCancel, recordRefund } from '#server/utils/data/userStats.js'
+import { releaseWindowReservation } from '#server/utils/data/windowGroups.js'
 
 export default async function cancel(payload, info) {
     const { DL, external, utils, _admin } = info
@@ -27,6 +28,14 @@ export default async function cancel(payload, info) {
             outcome: { success: true },
             metadata: { source: 'payment/cancel' }
         })
+    }
+
+    const slotReleasedOnCancel = order.status === DL.Order.constants.ORDER_STATUS.PAID
+    async function releaseWindowSlot() {
+        if (!slotReleasedOnCancel || !order.window?.id) return
+        try {
+            await releaseWindowReservation(DL, order.window.id, order.window.reservedGroupId)
+        } catch { }
     }
 
     if (!hasAuth && !hasCapture) throw { status: 400, message: 'No payment to cancel' }
@@ -81,6 +90,7 @@ export default async function cancel(payload, info) {
             metadata: { source: 'payment/cancel' }
         })
         await recordStatusCanceled()
+        await releaseWindowSlot()
         return { canceled: true, mode: 'hold_released' }
     }
 
@@ -117,6 +127,7 @@ export default async function cancel(payload, info) {
             metadata: { source: 'payment/cancel' }
         })
         await recordStatusCanceled()
+        await releaseWindowSlot()
         return { canceled: true, mode: 'cancel_trans' }
     }
 
@@ -137,6 +148,7 @@ export default async function cancel(payload, info) {
                 await recordCancel(DL, order, 0)
             } catch { }
             await recordStatusCanceled()
+            await releaseWindowSlot()
             return { canceled: true, mode: 'already_refunded' }
         }
         const fallbackReason = reason || 'cancel_fallback_refund'
@@ -192,6 +204,7 @@ export default async function cancel(payload, info) {
                 metadata: { source: 'payment/cancel' }
             })
             await recordStatusCanceled()
+            await releaseWindowSlot()
             return {
                 canceled: true, mode: 'refund_pending', refunded: coveredTotal, pendingRefund: pendingAmount,
                 ...(completed[0] ? { providerTxnId: completed[0].providerTxnId } : {}),
@@ -224,6 +237,7 @@ export default async function cancel(payload, info) {
             metadata: { source: 'payment/cancel' }
         })
         await recordStatusCanceled()
+        await releaseWindowSlot()
         return { canceled: true, mode: 'refund_fallback', refunded: remaining, providerTxnId: newId, ...(multi ? { refunds: completed } : {}) }
     }
 }
