@@ -5,7 +5,7 @@ import Flex from 'common/components/Flex'
 import Icon from 'common/components/Icon'
 import Text from 'common/components/Text'
 import styles from './ops.module.css'
-import { DeliveryMethodTag, formatDepartureTime, formatFullAddress, formatWindow, isShippingStatus, RemainingTime, orderCardTone } from './orderUtils'
+import { DeliveryMethodTag, formatDepartureTime, formatWindow, isShippingStatus, RemainingTime, orderCardTone } from './orderUtils'
 import render from '#common/functions/render.js'
 import ProgressGauge from '#common/components/ProgressGauge/index.jsx'
 
@@ -55,7 +55,7 @@ export default function OrderCard({ order = {} }) {
             </Flex>
             <Flex gap={5} alignItems='center' >
                 <Icon name='location' />
-                <Text size='s'>{formatFullAddress(address)}</Text>
+                <Text size='s'>{address?.street} {address?.building}, {address?.city}</Text>
             </Flex>
             <Flex gap={5} alignItems='center' >
                 <Icon name='time' />
