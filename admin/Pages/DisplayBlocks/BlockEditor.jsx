@@ -312,6 +312,7 @@ const SlideRow = memo(function SlideRow({ slide, index, blockId, onPatchSlide, o
         try {
             const res = await apiReq('display_block/upload_image', {
                 ...payload,
+                variant: path === 'mobileImage' ? 'mobile' : 'desktop',
                 ...(blockId ? { blockId, slideKey: slide.key || `slide-${index}` } : {})
             })
             onPatch({ [path]: res.basePath })

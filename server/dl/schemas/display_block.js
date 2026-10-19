@@ -14,7 +14,7 @@ export const constants = {
 }
 
 // One image, stored as a relative object base path (no size suffix, no host):
-//   images/display-blocks/<blockId>/<slideKey>/<size>.webp
+//   images/display-blocks/<blockId>/<slideKey>/<desktop|mobile>/<size>.webp
 // Resolved client-side via common/functions/displayImageUrl.js + VITE_FILES_BASE_URL.
 const slideSchema = {
     // Stable client-generated id: row keys + GCS slideKey across reorders.
