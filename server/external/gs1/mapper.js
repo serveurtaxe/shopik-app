@@ -8,8 +8,10 @@ const firstValue = arr => (Array.isArray(arr) ? arr.map(e => e?.value).find(v =>
 const firstCode = arr =>
     (Array.isArray(arr) ? arr.map(e => e?.code).find(c => c != null && c !== '') : undefined) ?? ''
 
-// Food_Symbol_Red codes → nutrients flags (red "high in" labels)
-function mapNutrients(additionalInfo) {
+// Food_Symbol_Red codes → nutrients flags. Red "high in" labels (FSR2 sodium,
+// FSR3 sugar, FSR4 saturated fat) and the green symbol (FSR5). FSR1 ("ללא
+// סימון") is a no-label marker and is ignored.
+export function mapNutrients(additionalInfo) {
     const codes = new Set(
         (additionalInfo?.Food_Symbol_Red || []).map(e => e?.code).filter(Boolean)
     )
@@ -17,8 +19,36 @@ function mapNutrients(additionalInfo) {
     if (codes.has('FSR2')) out.sodium = true
     if (codes.has('FSR3')) out.sugar = true
     if (codes.has('FSR4')) out.fat = true
+    if (codes.has('FSR5')) out.positive = true
     const alcoholRaw = String(additionalInfo?.Alcohol_Percentage_in_Product || '')
     if (/[1-9]/.test(alcoholRaw)) out.alcohol = true
+    return out
+}
+
+// Diet_Information → [{ code, name }]. Entries are usually { code, value }, but
+// suppliers also emit code-less entries that pack several claims into one value
+// joined by '|'. Both shapes are normalized; blanks and duplicates are dropped.
+export function mapDiet(dietInformation) {
+    if (!Array.isArray(dietInformation)) return []
+    const out = []
+    const seen = new Set()
+    for (const entry of dietInformation) {
+        const code = entry?.code != null ? String(entry.code).trim() : ''
+        const value = entry?.value != null ? String(entry.value) : ''
+        const names = value.split('|').map(s => s.trim()).filter(Boolean)
+        if (code) {
+            if (seen.has(code)) continue
+            seen.add(code)
+            out.push({ code, name: names.join(', ') })
+        } else {
+            for (const name of names) {
+                const key = `name:${name}`
+                if (seen.has(key)) continue
+                seen.add(key)
+                out.push({ name })
+            }
+        }
+    }
     return out
 }
 
@@ -209,6 +239,8 @@ export function mapGs1ToProduct(payload) {
     Object.assign(doc, mapKashrut(info.Kashrut))
     const nutrients = mapNutrients(additional)
     if (Object.keys(nutrients).length) doc.nutrients = nutrients
+    const diet = mapDiet(components.Diet_Information)
+    if (diet.length) doc.diet = diet
     if (!doc.kashrut) delete doc.kashrut
     if (main.Supplier_Catalog_Number) doc.externalSerialNumber = main.Supplier_Catalog_Number
     if (internal.Name) doc.googleCategory = internal.Name
@@ -236,4 +268,4 @@ export function mapGs1ToProduct(payload) {
     }
 }
 
-export default { mapGs1ToProduct, mapKashrut }
+export default { mapGs1ToProduct, mapKashrut, mapDiet, mapNutrients }

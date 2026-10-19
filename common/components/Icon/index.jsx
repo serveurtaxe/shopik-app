@@ -15,7 +15,8 @@ import {
     LuHistory, LuPhone, LuMail, LuMessageSquare, LuArrowRightLeft, LuCalculator, LuArchiveRestore,
     LuUpload, LuPhoneOutgoing, LuInfo, LuHeart, LuScissors, LuHouse, LuShieldCheck, LuDoorOpen,
     LuMilk, LuSprayCan, LuCroissant, LuCigarette, LuBeef, LuShoppingBasket, LuApple, LuBaby, LuSparkles,
-    LuCupSoda, LuCircleUserRound, LuScrollText, LuMaximize, LuMinimize, LuCombine
+    LuCupSoda, LuCircleUserRound, LuScrollText, LuMaximize, LuMinimize, LuCombine,
+    LuLeaf, LuCandyOff, LuWheatOff, LuMilkOff, LuSalad, LuVegan, LuDrumstick
 } from 'react-icons/lu'
 import { BsFileEarmarkExcel } from 'react-icons/bs'
 import { TbHeartPlus } from 'react-icons/tb'
@@ -151,7 +152,14 @@ const iconsList = {
     twitter: FaXTwitter,
     combine: LuCombine,
     maximize: LuMaximize,
-    minimize: LuMinimize
+    minimize: LuMinimize,
+    leaf: LuLeaf,
+    candyOff: LuCandyOff,
+    wheatOff: LuWheatOff,
+    milkOff: LuMilkOff,
+    salad: LuSalad,
+    vegan: LuVegan,
+    drumstick: LuDrumstick
 }
 
 /**

@@ -29,6 +29,8 @@ import {
     getUnitInfoText
 } from 'common/components/Product'
 import { selectKashrutStamps, getSupervisionLabel } from 'common/components/Kashrut/constants.js'
+import { FoodSymbolStamps } from 'common/components/Nutrition'
+import { selectDietIcons, selectFoodSymbols } from 'common/components/Nutrition/constants.js'
 import { getProductState } from '#common/functions/productState.js'
 
 const PASSOVER_TEXT = {
@@ -289,14 +291,17 @@ export default function Product() {
                         const supervisionLabel = getSupervisionLabel(product.kashrut)
                         const hasPassover = !!PASSOVER_TEXT[product.passoverKashrut]
                         const hasStamps = selectKashrutStamps(product.kashrut, 1).length > 0
-                        if (!supervisionLabel && !hasPassover && !hasStamps) return null
+                        const hasDiet = selectDietIcons(product.diet, 1).length > 0
+                        const hasSymbols = selectFoodSymbols(product.nutrients).length > 0
+                        if (!supervisionLabel && !hasPassover && !hasStamps && !hasDiet && !hasSymbols) return null
                         return (
                             <Flex className={styles.badgeRow} gap={6} wrap alignItems="center">
-                                <ProductStamps product={product} kashrutCount={2} imagesOnly={false} />
+                                <ProductStamps product={product} kashrutCount={2} dietCount={6} imagesOnly={false} />
                                 {supervisionLabel && <Badge><Text size="s">{supervisionLabel}</Text></Badge>}
                                 {hasPassover && (
                                     <Badge><Text size="s">{PASSOVER_TEXT[product.passoverKashrut]}</Text></Badge>
                                 )}
+                                <FoodSymbolStamps nutrients={product.nutrients} />
                             </Flex>
                         )
                     })()}

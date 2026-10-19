@@ -1,0 +1,22 @@
+.icons {
+    line-height: 0;
+}
+
+.icon {
+    flex: 0 0 auto;
+    color: var(--nutrition-icon-color, #83AA9D);
+}
+
+.symbols {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow: hidden;
+}
+
+.symbol {
+    height: 50px;
+    width: auto;
+    max-width: 100%;
+    object-fit: contain;
+}
