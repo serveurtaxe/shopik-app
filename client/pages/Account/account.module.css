@@ -130,7 +130,15 @@
         flex-direction: column;
     }
 
+    /* Account nav already lives in the mobile menu drawer, so the
+       standalone page hides the redundant sidebar; the in-drawer
+       (.inPopover) instance keeps it as the drawer nav list. */
     .sidebar {
+        display: none;
+    }
+
+    .inPopover .sidebar {
+        display: flex;
         width: 100%;
     }
 }
