@@ -1,6 +1,7 @@
 import { findByLocation } from '#server/external/supplyArea.js'
+import { updateOrderAddress } from '#server/api/order/address/update.js'
 
-export default async function admin_active(payload, { DL }) {
+export default async function admin_active(payload, { DL, utils, _admin }) {
     const { userId, addressId } = payload
     const user = await DL.User.readById(userId)
     if (!user) throw { status: 404, message: 'user not found' }
@@ -44,6 +45,25 @@ export default async function admin_active(payload, { DL }) {
     try {
         await DL.User.Model.cache?.del(user.id)
     } catch { }
+
+    // Keep the user's cart order in sync with the new active address (delivery only)
+    const { DELIVERY_METHOD } = DL.Order.constants
+    const order = await DL.Order.readOne(
+        { userId: user.id, status: 'cart', active: true },
+        DL.Order.defaultSelect
+    )
+    if (order && order.deliveryMethod === DELIVERY_METHOD.DELIVERY) {
+        const activeAddress = updatedUser.addresses.find(a => a.active)
+        const updatedOrder = await updateOrderAddress({
+            DL,
+            utils,
+            order,
+            address: activeAddress,
+            actor: utils.data.timeline.adminActor(_admin)
+        })
+        return { user: updatedUser, order: updatedOrder }
+    }
+
     return { user: updatedUser }
 }
 
