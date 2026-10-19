@@ -19,6 +19,22 @@ export async function addAddress({ DL, external, user, address }) {
     return geocoded
 }
 
+const sameLocationFields = [
+    'city',
+    'street',
+    'building',
+    'apartment',
+    'residenceType'
+]
+
+export const isSameAddressLocation = (address1, address2) => {
+    const sameFields = sameLocationFields.every(f =>
+        address1[f] === address2[f]
+    )
+    const sameLocation = JSON.stringify(address1?.location?.coordinates) === JSON.stringify(address2.location?.coordinates)
+    return sameFields && sameLocation
+}
+
 export async function editAddress({ DL, external, user, addressId, address }) {
     const existingAddr = (user.addresses || []).find(a => a.addressId === addressId)
     if (!existingAddr) throw { status: 404, message: 'address not found' }
