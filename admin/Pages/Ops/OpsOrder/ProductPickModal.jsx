@@ -45,6 +45,7 @@ export default function ProductPickModal({ product = {}, orderId, onClose, onPic
             initialSupplied={initialSupplied}
             initialBarcode={product.barcode}
             onReplace={() => setPhase('replace')}
+            resettable={isScanned}
         />
     }
 
@@ -58,6 +59,7 @@ export default function ProductPickModal({ product = {}, orderId, onClose, onPic
         initialSupplied={initialSupplied}
         initialBarcode={product.barcode}
         onReplace={() => setPhase('replace')}
+        resettable={isScanned}
     />
 }
 

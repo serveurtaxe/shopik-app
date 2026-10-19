@@ -182,6 +182,56 @@ export default async function pick_item(payload, { DL, _admin, utils }) {
                 }
             }
         }
+    } else if (action === 'reset') {
+        // Return an item to the "to pick" state — undoes scan / missing /
+        // replacement. A replacement pair dissolves: the original goes back to
+        // picking, and a replacement-only cart line (admin_add) is removed.
+        const repBarcode = item.replacement?.replacementBarcode || null      // clicked item is the replaced original
+        const originalBarcode = item.replacement?.originalBarcode || null    // clicked item is the replacement
+
+        const resetItem = async resetBarcode => {
+            await DL.Order.Model.updateOne(
+                { id },
+                {
+                    $set: { 'cart.$[elem].missing': false },
+                    $unset: {
+                        'cart.$[elem].finalAmount': '',
+                        'cart.$[elem].missingReason': '',
+                        'cart.$[elem].replacement': ''
+                    },
+                    $push: { 'cart.$[elem].admins': { adminId: _admin.id, date: new Date(), status: 'reset' } }
+                },
+                { arrayFilters: [{ 'elem.barcode': resetBarcode }] }
+            )
+        }
+
+        if (repBarcode) {
+            // clicked item is the replaced original — undo the replacement
+            const repLine = order.cart.find(c => c.barcode === repBarcode)
+            if (repLine && repLine.status === CART_PRODUCT_STATUS.ADMIN_ADD && repLine.replacement?.originalBarcode === barcode) {
+                // line exists only because of the replacement — remove it
+                await DL.Order.Model.updateOne({ id }, { $pull: { cart: { barcode: repBarcode, replacement: { originalBarcode: barcode } } } })
+            } else if (repLine) {
+                await resetItem(repBarcode)
+            }
+        } else if (originalBarcode) {
+            // clicked item is the replacement — dissolve the pair and reset the original
+            if (item.status === CART_PRODUCT_STATUS.ADMIN_ADD && item.replacement?.originalBarcode === originalBarcode) {
+                await DL.Order.Model.updateOne({ id }, { $pull: { cart: { barcode: barcode, replacement: { originalBarcode } } } })
+            }
+            await resetItem(originalBarcode)
+        }
+            // otherwise the shared update below resets the clicked item itself
+
+        update = {
+            $set: { 'cart.$[elem].missing': false },
+            $unset: {
+                'cart.$[elem].finalAmount': '',
+                'cart.$[elem].missingReason': '',
+                'cart.$[elem].replacement': ''
+            },
+            $push: { 'cart.$[elem].admins': { adminId: _admin.id, date: new Date(), status: 'reset' } }
+        }
     } else {
         throw { status: 400, message: 'unknown action' }
     }
@@ -209,7 +259,7 @@ export default async function pick_item(payload, { DL, _admin, utils }) {
             categoryPathIds: item.category?.pathIds,
             action,
             amount: item.amount,
-            finalAmount: action === 'missing' ? 0 : (Number(finalAmount ?? item.amount)),
+            finalAmount: action === 'missing' || action === 'reset' ? 0 : (Number(finalAmount ?? item.amount)),
             replacedBarcode: action === 'replace' ? barcode : undefined,
             replacementBarcode: action === 'replace' ? replacement?.replacementBarcode : undefined,
             replacementReason: missingReason,

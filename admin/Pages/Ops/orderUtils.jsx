@@ -101,6 +101,25 @@ export function RemainingTime({ window: w, ...textProps }) {
 }
 
 
+// Full address including entrance/floor/apartment — used by shippers so they
+// can find the exact door without opening the customer profile.
+export function formatFullAddress(address) {
+    if (!address) return ''
+    const streetLine = [address.street, address.building].filter(v => v != null && v !== '').join(' ')
+    const details = [
+        address.entrance ? `${TR('entrance')} ${address.entrance}` : '',
+        address.floor ? `${TR('floor')} ${address.floor}` : '',
+        address.apartment ? `${TR('apartment')} ${address.apartment}` : '',
+    ].filter(Boolean).join(', ')
+    return [streetLine, details, address.city].filter(v => v != null && v !== '').join(', ')
+}
+
+// Notes the customer left for whoever handles the delivery:
+// the order comment plus the address comment (deduplicated).
+export function customerNotes(order) {
+    return [...new Set([order?.comment, order?.address?.comment].filter(Boolean))].join(' • ')
+}
+
 // Waze navigation URL for a delivery address.
 // Prefers the text query ("street building, city") — Waze resolves it to the
 // correct building label. Coordinates are only a fallback when no address text
