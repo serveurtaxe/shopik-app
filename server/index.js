@@ -13,6 +13,9 @@ import startNightlySync from '#server/cron/nightlySync.js'
 import startGs1Sync from '#server/cron/gs1Sync.js'
 import startHolidaySeed from '#server/cron/holidaySeed.js'
 import startWindowSync from '#server/cron/windowSync.js'
+import startSalesSync from '#server/cron/salesSync.js'
+import startDeliveryDocsSync from '#server/cron/deliveryDocsSync.js'
+import { isComaxDeliveryEnabled } from '#server/external/comax/utils.js'
 import log from '#server/utils/log.js'
 import compression from 'compression'
 import setupSecurity from './middleware/security.js'
@@ -111,6 +114,13 @@ try {
     }
     if (RUN_CRON) {
         startSchedules(bootData)
+        startNightlySync(bootData)
+        startGs1Sync(bootData)
+        startHolidaySeed(bootData)
+        startWindowSync(bootData)
+        startSalesSync(bootData)
+        startRefundRetry(bootData)
+        if (isComaxDeliveryEnabled()) startDeliveryDocsSync(bootData)
     } else {
         log.info('[Jobs] Crons disabled (RUN_CRON=false)')
     }
@@ -120,7 +130,8 @@ try {
 
 const staticHeaders = (res, filePath) => res.setHeader(
     'Cache-Control',
-    filePath.includes(`${path.sep}assets${path.sep}`)
+    // Versioned by filename (city-borders.v<date>.geojson), so immutable is safe.
+    filePath.endsWith('.geojson') || filePath.includes(`${path.sep}assets${path.sep}`)
         ? 'public, max-age=31536000, immutable'
         : 'public, max-age=0, must-revalidate'
 )

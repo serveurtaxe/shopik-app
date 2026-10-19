@@ -5,7 +5,12 @@ const LIST_SELECT = {
     number: 1,
     status: 1,
     time: 1,
-    window: 1,
+    'window.date': 1,
+    'window.end': 1,
+    'window.start': 1,
+    'window.startTimestamp': 1,
+    'window.endTimestamp': 1,
+    'window.leadTimestamp': 1,
     deliveryMethod: 1,
     finalSumWithShipping: 1
 }

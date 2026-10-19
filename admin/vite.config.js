@@ -9,8 +9,10 @@ const pkgPath = path.resolve(currentDir, '../package.json')
 const { version } = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'))
 
 const alias = {
+  // `public` is Vite's publicDir (copied verbatim to the build root). Aliasing it
+  // would shadow any package literally named `public`.
   ...fs.readdirSync(currentDir, { withFileTypes: true })
-    .filter(d => d.isDirectory())
+    .filter(d => d.isDirectory() && d.name !== 'public')
     .reduce((a, { name }) => ({
       ...a,
       [name]: path.resolve(currentDir, name),

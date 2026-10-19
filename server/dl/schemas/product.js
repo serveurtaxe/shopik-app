@@ -87,6 +87,9 @@ const productSchema = {
         filter: true
     },
     gs1SyncedAt: Date,
+    // Last scrape attempt with no usable candidate (any provider). Keeps
+    // bulk backfills O(n): --imageless skips tried docs unless --retry-failed.
+    scrapeTriedAt: Date,
     // Mapped GS1 extras (defined keys, flexible leaves — full payload stays in gs1_products).
     gs1: {
         netContent: {},
@@ -159,11 +162,30 @@ const productSchema = {
     },
     googleCategory: String,
     storeIds: { type: [String], filter: true },
-    kashrut: { trim: true, type: String },
+    kashrut: {
+        // GS1 rabbinates (code drives ranking + stamp image, name is the
+        // display fallback) and the Kosher_Supervision_Type food-category code
+        // (labelled client-side). Mapped by server/external/gs1/mapper.js.
+        rabbinates: {
+            type: [{
+                code: String,
+                name: String,
+                _id: false
+            }]
+        },
+        supervisionType: String
+    },
     passoverKashrut: {
         type: String,
         enum: Object.values(constants.PASSOVER_KASHRUT)
     },
+    // Normalized GS1 Diet_Information claims ({ code, name }). Drives the diet
+    // icons on the card + product page. Mapped by server/external/gs1/mapper.js.
+    diet: [{
+        code: String,
+        name: String,
+        _id: false
+    }],
     scannable: { type: Boolean, default: true },
     nutrients: {
         positive: Boolean,
@@ -221,6 +243,7 @@ const defaultSelect = {
     prices: 1,
     passoverKashrut: 1,
     kashrut: 1,
+    diet: 1,
     limit: 1,
     label: 1,
     producer: 1,
@@ -250,6 +273,9 @@ const defaultSelectOne = {
 const defaultSort = {
     sortOrder: -1,
     totalSalesUnits: -1,
+    // Unique tiebreaker: sortOrder/totalSalesUnits tie for most products, and
+    // without a unique key skip/limit pagination returns overlapping pages.
+    id: 1,
 }
 
 export const meta = {

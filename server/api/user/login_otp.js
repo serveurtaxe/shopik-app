@@ -1,6 +1,7 @@
 import uid from '#common/functions/uid.js'
+import toRemember from '#common/functions/toRemember.js'
 
-export default async function login_otp({ phone, domainId }, { DL, external }) {
+export default async function login_otp({ phone, remember, domainId }, { DL, external }) {
     const user = await DL.User.readOne({ phone }, { phone: 1 })
     // Generic message: do not reveal whether the number is registered.
     if (!user) throw { status: 400, message: 'Could not send a verification code to this number' }
@@ -22,7 +23,7 @@ export default async function login_otp({ phone, domainId }, { DL, external }) {
 
     const token = uid()
     const otp = uid(6, true)
-    await DL.Otp.create({ phone, token, otp })
+    await DL.Otp.create({ phone, token, otp, remember: toRemember(remember) })
     await external.sms.otp(phone, otp, { domainId })
 
     return { token }

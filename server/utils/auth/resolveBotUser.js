@@ -21,7 +21,7 @@ export default async function resolveBotUser({ DL, utils, domainId, userToken })
     // low and cache entries must never mix token-bearing/token-less docs.
     const user = await DL.User.Model.findOne(
         { id: decoded.id },
-        { _id: 0, tokens: 1 }
+        { _id: 0, tokens: 1, id: 1 }
     ).lean()
     if (!user) throw { status: 401, message: 'User not found' }
     if (!user.tokens?.bot || user.tokens.bot !== userToken)

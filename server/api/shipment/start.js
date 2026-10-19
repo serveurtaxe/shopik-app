@@ -1,4 +1,5 @@
 import { OPS_SHIPPING_SMS_TEXT } from '#common/constants.js'
+import { balancedRoute } from '#common/functions/routeSort.js'
 
 export default async function start(payload, { DL, _admin, external, utils }) {
     const { orderIds, coordinates } = payload
@@ -39,6 +40,23 @@ export default async function start(payload, { DL, _admin, external, utils }) {
     // attach shipmentId to orders
     await DL.Order.Model.updateMany({ id: { $in: successIds } }, { $set: { shipmentId: shipment.id } })
 
+    // static route order at leave-store time: balanced Haversine + window (store origin).
+    // Explicit recalc only via shipment/route — list order stays static afterwards.
+    let routeOrder = []
+    try {
+        const store = await DL.Store.readById(admin.currentStoreId)
+        const origin = coordinates
+            || store?.address?.location?.coordinates
+            || null
+        const routeOrders = await DL.Order.Model.find(
+            { id: { $in: successIds } },
+            { _id: 0, id: 1, address: 1, window: 1 }
+        ).lean()
+        routeOrder = balancedRoute(routeOrders, origin, Date.now())
+        if (routeOrder.length)
+            await DL.Shipment.updateOne({ id: shipment.id }, { routeOrder })
+    } catch { }
+
     // owners per order (history)
     for (const oid of successIds) {
         try {
@@ -72,7 +90,8 @@ export default async function start(payload, { DL, _admin, external, utils }) {
         })
     } catch {}
 
-    return { shipment, successIds, failures }
+    try { shipment.routeOrder = routeOrder } catch { }
+    return { shipment, successIds, failures, routeOrder }
 }
 
 start.config = {

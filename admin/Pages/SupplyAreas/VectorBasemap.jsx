@@ -73,14 +73,32 @@ function applyLabelScale(mbMap, sizeOriginals, scale) {
     })
 }
 
+// Show/hide the same name-label layers the Hebrew pass targets. Road
+// shields and house numbers (non-name text-fields) are left untouched.
+function applyLabelsVisibility(mbMap, visible) {
+    const layers = mbMap?.getStyle?.()?.layers
+    if (!layers) return
+    layers.forEach(layer => {
+        if (layer.type !== 'symbol') return
+        if (!isNameLabel(layer.layout?.['text-field'])) return
+        try {
+            mbMap.setLayoutProperty(layer.id, 'visibility', visible ? 'visible' : 'none')
+        } catch {
+            // Leave the default visibility.
+        }
+    })
+}
+
 let workerConfigured = false
 
-export default function VectorBasemap({ styleUrl, labelScale = 1 }) {
+export default function VectorBasemap({ styleUrl, labelScale = 1, labelsVisible = true }) {
     const map = useMap()
     const liveRef = useRef(null)
     const scaleRef = useRef(labelScale)
     scaleRef.current = labelScale
     const appliedScaleRef = useRef(null)
+    const visibilityRef = useRef(labelsVisible)
+    visibilityRef.current = labelsVisible
 
     useEffect(() => {
         let layer = null
@@ -107,6 +125,7 @@ export default function VectorBasemap({ styleUrl, labelScale = 1 }) {
             mbMap.once('load', () => {
                 if (cancelled) return
                 applyHebrewLabels(mbMap)
+                applyLabelsVisibility(mbMap, visibilityRef.current)
                 const sizeOriginals = new Map()
                 mbMap.getStyle()?.layers?.forEach(l => {
                     if (l.type === 'symbol') sizeOriginals.set(l.id, l.layout?.['text-size'])
@@ -143,6 +162,31 @@ export default function VectorBasemap({ styleUrl, labelScale = 1 }) {
         }, 200)
         return () => clearTimeout(t)
     }, [labelScale])
+
+    // Visibility toggles fire once per click — apply immediately, no debounce.
+    useEffect(() => {
+        const live = liveRef.current
+        if (!live) return
+        applyLabelsVisibility(live.mbMap, labelsVisible)
+    }, [labelsVisible])
+
+    // MapLibre's GL canvas doesn't follow Leaflet container growth on its own
+    // (sidebar toggle, fullscreen) — the gl-leaflet bridge resizes its wrapper
+    // div but never calls resize(). Leaflet fires 'resize' on invalidateSize —
+    // forward it so the canvas backing store matches the new container size.
+    // Deferred: the bridge grows its wrapper in a requestAnimationFrame after
+    // this handler, so resizing synchronously would lock in the old size.
+    useEffect(() => {
+        let t = null
+        const onResize = () => {
+            clearTimeout(t)
+            t = setTimeout(() => {
+                try { liveRef.current?.mbMap.resize() } catch { /* not loaded yet */ }
+            }, 80)
+        }
+        map.on('resize', onResize)
+        return () => { clearTimeout(t); map.off('resize', onResize) }
+    }, [map])
 
     return null
 }

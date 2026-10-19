@@ -1,0 +1,36 @@
+.authPanel {
+    width: 100%;
+    min-width: 300px;
+
+    .tabs {
+        width: 100%;
+    }
+
+    .hero {
+        text-align: center;
+    }
+
+    .heroIcon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 64px;
+        color: var(--text-primary);
+    }
+
+    .form {
+        width: 100%;
+
+        :global(button[type="submit"]) {
+            width: 100%;
+        }
+    }
+
+    .phoneInput {
+        width: 100%;
+    }
+
+    .remember {
+        margin-top: 8px;
+    }
+}

@@ -1,13 +1,17 @@
 // Maps a GS1 product payload (GET /external/product/{code}.json) to Shopik Product fields.
 // GS1 wins for content — Comax remains the gate for existence (checked by the caller).
 
+import { pruneEmpty } from './prune.js'
+
 const firstValue = arr => (Array.isArray(arr) ? arr.map(e => e?.value).find(v => v != null && v !== '') : undefined) ?? ''
 
-const joinValues = (arr, sep = ', ') =>
-    (Array.isArray(arr) ? arr.map(e => e?.value).filter(v => v != null && v !== '') : []).join(sep)
+const firstCode = arr =>
+    (Array.isArray(arr) ? arr.map(e => e?.code).find(c => c != null && c !== '') : undefined) ?? ''
 
-// Food_Symbol_Red codes → nutrients flags (red "high in" labels)
-function mapNutrients(additionalInfo) {
+// Food_Symbol_Red codes → nutrients flags. Red "high in" labels (FSR2 sodium,
+// FSR3 sugar, FSR4 saturated fat) and the green symbol (FSR5). FSR1 ("ללא
+// סימון") is a no-label marker and is ignored.
+export function mapNutrients(additionalInfo) {
     const codes = new Set(
         (additionalInfo?.Food_Symbol_Red || []).map(e => e?.code).filter(Boolean)
     )
@@ -15,17 +19,63 @@ function mapNutrients(additionalInfo) {
     if (codes.has('FSR2')) out.sodium = true
     if (codes.has('FSR3')) out.sugar = true
     if (codes.has('FSR4')) out.fat = true
+    if (codes.has('FSR5')) out.positive = true
     const alcoholRaw = String(additionalInfo?.Alcohol_Percentage_in_Product || '')
     if (/[1-9]/.test(alcoholRaw)) out.alcohol = true
     return out
 }
 
-function mapKashrut(kashrut) {
+// Diet_Information → [{ code, name }]. Entries are usually { code, value }, but
+// suppliers also emit code-less entries that pack several claims into one value
+// joined by '|'. Both shapes are normalized; blanks and duplicates are dropped.
+export function mapDiet(dietInformation) {
+    if (!Array.isArray(dietInformation)) return []
+    const out = []
+    const seen = new Set()
+    for (const entry of dietInformation) {
+        const code = entry?.code != null ? String(entry.code).trim() : ''
+        const value = entry?.value != null ? String(entry.value) : ''
+        const names = value.split('|').map(s => s.trim()).filter(Boolean)
+        if (code) {
+            if (seen.has(code)) continue
+            seen.add(code)
+            out.push({ code, name: names.join(', ') })
+        } else {
+            for (const name of names) {
+                const key = `name:${name}`
+                if (seen.has(key)) continue
+                seen.add(key)
+                out.push({ name })
+            }
+        }
+    }
+    return out
+}
+
+// Kashrut → { rabbinates: [{ code, name }], supervisionType: '<code>' }.
+// rabbinates keep the GS1 code (drives ranking/stamp images) and display name;
+// supervisionType is the Kosher_Supervision_Type code (food category), labelled
+// client-side. Blank/whitespace entries are dropped.
+export function mapKashrut(kashrut) {
     if (!kashrut) return {}
     const out = {}
-    const supervision = firstValue(kashrut.Kosher_Supervision_Type)
-    const rabbinate = joinValues(kashrut.Rabbinate)
-    out.kashrut = [supervision, rabbinate].filter(Boolean).join(' / ')
+
+    const rabbinates = []
+    const seen = new Set()
+    for (const entry of (Array.isArray(kashrut.Rabbinate) ? kashrut.Rabbinate : [])) {
+        const name = entry?.value != null ? String(entry.value).trim() : ''
+        const code = entry?.code != null ? String(entry.code).trim() : ''
+        if (!name && !code) continue
+        const key = code || `name:${name}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        rabbinates.push(code ? { code, name } : { name })
+    }
+
+    const supervision = firstCode(kashrut.Kosher_Supervision_Type)
+    if (rabbinates.length || supervision)
+        out.kashrut = { rabbinates, supervisionType: supervision }
+
     const passover = firstValue(kashrut.Kosher_for_Passover)
     if (passover && passover.includes('כשר לפסח')) out.passoverKashrut = 'kosher'
     return out
@@ -79,11 +129,13 @@ function mapGs1Details(item, info, main, general, marketing, additional) {
     if (!isEmpty(logisticsAdd.Product_Shelf_Life)) out.shelfLife = logisticsAdd.Product_Shelf_Life
 
     const components = info.Product_Components_and_Instructions_General || {}
-    const allergens = {
+    // pruneEmpty, not a literal: blank leaves arrive as undefined and isEmpty
+    // only counts keys, so a literal would leave a dangling `mayContain: []`.
+    const allergens = pruneEmpty({
         contains: components.Allergen_Type_Code_and_Containment,
         mayContain: components.Allergen_Type_Code_and_Containment_May_Contain
-    }
-    if (!isEmpty(allergens.contains) || !isEmpty(allergens.mayContain)) out.allergens = allergens
+    })
+    if (allergens) out.allergens = allergens
     if (Array.isArray(components.Diet_Information) && components.Diet_Information.length)
         out.diet = components.Diet_Information
 
@@ -99,11 +151,11 @@ function mapGs1Details(item, info, main, general, marketing, additional) {
     Object.keys(serving).forEach(k => { if (isEmpty(serving[k])) delete serving[k] })
     if (Object.keys(serving).length) out.serving = serving
 
-    const nutrition = {
+    const nutrition = pruneEmpty({
         main: info.Nutritional_Values,
         additional: info.Additional_Nutritional_Values
-    }
-    if (!isEmpty(nutrition.main) || !isEmpty(nutrition.additional)) out.nutrition = nutrition
+    })
+    if (nutrition) out.nutrition = nutrition
 
     const messages = [
         marketing.Trade_Item_Marketing_Message,
@@ -129,7 +181,10 @@ function mapGs1Details(item, info, main, general, marketing, additional) {
         discontinued: general.Discontinued_Date_Time,
         productStatus: info.Internal_System_Fields?.Product_Status,
         targetMarket: general.Target_Market,
-        manufacturer: { name: general.Manufacturer_Name, address: general.Manufacturer_Address },
+        manufacturer: pruneEmpty({
+            name: general.Manufacturer_Name,
+            address: general.Manufacturer_Address
+        }),
         tradeUnit: main.Trade_Item_Unit_Descriptor
     }
     Object.keys(ids).forEach(k => { if (isEmpty(ids[k])) delete ids[k] })
@@ -138,7 +193,11 @@ function mapGs1Details(item, info, main, general, marketing, additional) {
     return out
 }
 
-export function mapGs1ToProduct(item) {
+export function mapGs1ToProduct(payload) {
+    // One prune, one object: mapping and the stored raw are derived from the
+    // same tree, so they can never disagree. Idempotent, so re-mapping an
+    // already-pruned stored raw (enrich.js) is a no-op.
+    const item = pruneEmpty(payload) || {}
     const info = item?.product_info || {}
     const main = info.Main_Fields || {}
     const general = info.General_Information || {}
@@ -180,6 +239,8 @@ export function mapGs1ToProduct(item) {
     Object.assign(doc, mapKashrut(info.Kashrut))
     const nutrients = mapNutrients(additional)
     if (Object.keys(nutrients).length) doc.nutrients = nutrients
+    const diet = mapDiet(components.Diet_Information)
+    if (diet.length) doc.diet = diet
     if (!doc.kashrut) delete doc.kashrut
     if (main.Supplier_Catalog_Number) doc.externalSerialNumber = main.Supplier_Catalog_Number
     if (internal.Name) doc.googleCategory = internal.Name
@@ -207,4 +268,4 @@ export function mapGs1ToProduct(item) {
     }
 }
 
-export default { mapGs1ToProduct }
+export default { mapGs1ToProduct, mapKashrut, mapDiet, mapNutrients }

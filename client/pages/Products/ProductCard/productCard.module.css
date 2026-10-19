@@ -1,11 +1,15 @@
 .productCard {
     padding: 10px;
-    border: 1px solid var(--border-primary);
+    /* Colours come from the state contract in common/components/Product/
+       product.module.css (data-action / data-price -> --pc-*). This file only
+       wires them onto the shell. */
+    border: 1px solid var(--pc-border, var(--border-primary));
     border-radius: var(--radius-3xl);
     transition: 0.2s;
     cursor: pointer;
     color: var(--text-primary);
-
+    background-color: var(--pc-bg, var(--bg-primary));
+    position: relative;
     display: flex;
     flex-direction: column;
     width: 100%;
@@ -13,43 +17,26 @@
     max-width: 100%;
     justify-self: stretch;
     overflow: hidden;
-
 }
 
-.productButton {
-    width: 280px;
-    max-width: 100%;
-    height: 32px;
-    margin-top: auto;
+/* Reserve the stamps row height so cards don't reflow when real stamps land
+   (phase 2). The inline rows leave it collapsed. */
+.stamps {
+    min-height: 18px;
+}
 
-    button {
-        width: 100%;
-    }
+/* In-cart border — a listing affordance that tells the shopper "you're already
+   buying this". Deliberately scoped to .productCard: inside the cart every
+   row is in the cart by definition, so the cart, checkout and order-history
+   inlines keep the regular/sale border instead (see the contract in
+   common/components/Product/product.module.css).
 
-    &.stepper {
-        align-items: center;
-        gap: 8px;
-        background-color: var(--bg-brand-primary);
-        border-radius: var(--radius-full);
-        padding: 5px;
+   Specificity 0,2,0 beats the shared [data-price='sale'] border, and the
+   combined rule at 0,3,0 beats both. */
+.productCard[data-action='inCart'] {
+    --pc-border: var(--product-card-cart-border, #83aa9d);
+}
 
-        button {
-            width: 26px !important;
-            height: 26px !important;
-            padding: 0;
-            margin-top: 0;
-            flex-shrink: 0;
-            border: none;
-        }
-
-        .amount {
-            flex: 1;
-            text-align: center;
-            color: var(--text-white);
-        }
-    }
-
-    &.s {
-        width: 100px;
-    }
+.productCard[data-action='inCart'][data-price='sale'] {
+    --pc-border: var(--product-card-cart-sale-border, #f5bfa0);
 }

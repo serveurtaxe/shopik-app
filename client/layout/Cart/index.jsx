@@ -11,9 +11,12 @@ import ConfirmButton from 'common/components/ConfirmButton'
 import render from 'common/functions/render.js'
 import apiReq from 'common/functions/apiReq.js'
 import { useNavigate } from 'react-router'
-import { useMemo } from 'react'
+import { useMemo, useEffect } from 'react'
+import useMediaQuery from 'common/functions/useMediaQuery'
+import { markCartLoginPending } from './cartLoginPending'
 import { useAppData } from 'App'
 import { calcShipping, extractShippingConfig } from '#common/functions/shipping.js'
+import { fallbackCartTotals } from 'common/functions/cartTotals.js'
 import { extractLimits, getMinSumForMethod, getRemainingToMin } from '#common/functions/limits.js'
 import { useText } from 'common/texts/TextProvider'
 import events from 'common/features/events.js'
@@ -28,12 +31,14 @@ export default function Cart({ }) {
         navigate = useNavigate()
 
     const { cartOpen, setCartOpen } = useCart()
+    // Mobile login lives in the menu drawer, not in a popover
+    const isMobile = useMediaQuery('(max-width: 768px)')
     const { settings } = useAppData() || {}
     const { TR } = useText() || {}
     const shippingConfig = useMemo(() => extractShippingConfig(settings), [settings])
     const limits = useMemo(() => extractLimits(settings), [settings])
 
-    const sum = order?.sum ?? 0
+    const sum = order?.sum ?? (cart.length ? fallbackCartTotals(cart).sum : 0)
     // threshold uses post-sale pre-coupon total (sumBeforeCoupon == sum)
     const minSumThreshold = getMinSumForMethod(limits, order?.deliveryMethod)
     const minSumRemaining = getRemainingToMin({ sum, deliveryMethod: order?.deliveryMethod, limits })
@@ -48,21 +53,35 @@ export default function Cart({ }) {
         : Number(shippingConfig?.total ?? 0)
     const isFreeShipping = Number(shipping) === 0 && originalShipping > 0 && sum > 0
     const savings = (() => {
-        const before = order?.sumNoCoupon ?? order?.sum ?? 0
+        const fallback = cart.length ? fallbackCartTotals(cart) : null
+        const before = order?.sumNoCoupon ?? order?.sum ?? fallback?.sumNoCoupon ?? 0
         // include coupon discount in savings when coupon present
-        const after = hasCoupon ? (order?.finalSum ?? order?.sum ?? 0) : (order?.sum ?? 0)
+        const after = hasCoupon ? (order?.finalSum ?? sum) : sum
         return Math.max(0, before - after)
     })()
 
     function goToCheckout() {
         if (isBelowMinSum) return
         if (!user?.id) {
-            events.emit('login-popover')
+            if (isMobile) {
+                markCartLoginPending()
+                setCartOpen(false)
+                events.emit('mobile-login')
+            } else {
+                events.emit('login-popover')
+            }
         } else if (!emptyCart) {
             navigate('/checkout')
             setCartOpen(false)
         }
     }
+
+    // After a mobile menu login that started from cart pay, reopen the cart
+    useEffect(() => {
+        const reopen = () => setCartOpen(true)
+        events.on('reopen-cart', reopen)
+        return () => events.off('reopen-cart', reopen)
+    }, [setCartOpen])
 
     function clearCart() {
         if (emptyCart) return
@@ -115,29 +134,29 @@ export default function Cart({ }) {
         }
 
         <Flex col className={styles.footer}>
-            <Flex col gap={10} className={styles.summary}>
+            <Flex col gap={15} className={styles.summary}>
                 <Flex alignItems='center' justifyContent='space-between'>
-                    <Text mode='sub' bold>subtotal_text</Text>
-                    <Text mode='sub' bold>{render({ type: 'coin', value: sum })}</Text>
+                    <Text bold>subtotal_text</Text>
+                    <Text bold>{render({ type: 'coin', value: sum })}</Text>
                 </Flex>
                 <Flex alignItems='center' justifyContent='space-between'>
-                    <Text mode='sub' bold>handling_and_delivery</Text>
+                    <Text bold>handling_and_delivery</Text>
                     {isFreeShipping ? (
                         <Flex gap={6} alignItems='center'>
-                            <Text mode='sub' bold style={{ textDecoration: 'line-through', opacity: 0.6 }}>{render({ type: 'coin', value: originalShipping })}</Text>
-                            <Text mode='sub' bold>free_shipping</Text>
+                            <Text bold style={{ textDecoration: 'line-through', opacity: 0.6 }}>{render({ type: 'coin', value: originalShipping })}</Text>
+                            <Text bold>free_shipping</Text>
                         </Flex>
                     ) : (
-                        <Text mode='sub' bold>{render({ type: 'coin', value: shipping })}</Text>
+                        <Text bold>{render({ type: 'coin', value: shipping })}</Text>
                     )}
                 </Flex>
-                <Flex alignItems='center' justifyContent='space-between'>
+                <Flex alignItems='center' justifyContent='space-between' className={styles.totalSaved}>
                     <Text size='l' bold>total_saved_in_purchase</Text>
                     <Text size='l' bold>{render({ type: 'coin', value: savings })}</Text>
                 </Flex>
             </Flex>
             {isBelowMinSum && !emptyCart && (
-                <Text size='s' mode='sub' className={styles.minSumNote}>{TR?.('minimum_order_sum')} {render({ type: 'coin', value: minSumThreshold })}</Text>
+                <Text size='s' className={styles.minSumNote}>{TR?.('minimum_order_sum')} {render({ type: 'coin', value: minSumThreshold })}</Text>
             )}
             <Button icon='cart' onClick={goToCheckout} disabled={isBelowMinSum}>
                 <Text>to_pay</Text>

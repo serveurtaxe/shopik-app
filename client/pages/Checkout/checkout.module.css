@@ -9,6 +9,9 @@
 }
 
 .container {
+    display: flex;
+    flex-direction: row;
+    gap: 24px;
     align-items: flex-start;
 }
 
@@ -63,12 +66,34 @@
 
 @media (max-width: 900px) {
     .container {
-        flex-direction: column-reverse;
+        flex-direction: column;
+        gap: 0;
+        align-items: stretch;
     }
 
-    .sidebar,
-    .orderSummaryWrapper {
+    .sidebar {
         width: 100%;
         max-width: 100%;
+        position: static;
+    }
+
+    /* Mobile: hide right (cart) column, keep payment frame/loader visible */
+    .cartOnly {
+        display: none;
+    }
+
+    .checkoutPage {
+        padding-inline-start: calc(8px + var(--safeLeft, 0px));
+        padding-inline-end: calc(8px + var(--safeRight, 0px));
+        padding-bottom: calc(170px + var(--safeBottom, 0px));
+    }
+
+    /* Mobile payment view: own title on top, no sticky bar to clear */
+    .mobilePaymentTitle {
+        margin-bottom: 12px;
+    }
+
+    .payingMobile {
+        padding-bottom: calc(24px + var(--safeBottom, 0px));
     }
 }

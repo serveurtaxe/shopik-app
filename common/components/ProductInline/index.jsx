@@ -1,4 +1,4 @@
-import { ProductButton, ProductImage, ProductInfo, formatAmount, getUnitLabel, isWeightProduct, getFirstSale, getInlineSaleBarText } from 'common/components/Product'
+import { ProductButton, ProductImage, ProductInfo, ProductStamps, formatAmount, getUnitLabel, isWeightProduct, getFirstSale, getInlineSaleBarText } from 'common/components/Product'
 import classNames from 'common/functions/classNames'
 import styles from './productInline.module.css'
 import Button from 'common/components/Button'
@@ -7,6 +7,7 @@ import Flex from 'common/components/Flex'
 import Text from 'common/components/Text'
 import Icon from 'common/components/Icon'
 import { useState } from 'react'
+import { getProductState } from '#common/functions/productState.js'
 
 export default function ProductInline({
     product,
@@ -83,12 +84,22 @@ export default function ProductInline({
     const saleAmountForBar = saleTotalAmount != null ? saleTotalAmount : (amount ?? product?.amount ?? 0)
     const saleBarText = showSaleBar ? getInlineSaleBarText(sale, saleAmountForBar) : null
 
-    return <Card className={classNames(styles.productInline, styles.cardWithSaleBar)} {...props}>
+    // Same two axes as the product card — getProductState is shared so the
+    // cart row and the listing card can never disagree about a product's
+    // state. Colours resolve in common/components/Product/product.module.css.
+    const { action, price } = getProductState({ amount, sale })
+
+    return <Card
+        className={classNames(styles.productInline, styles.cardWithSaleBar)}
+        data-action={action}
+        data-price={price}
+        {...props}>
         <Flex gap={10} className={styles.productInlineMain}>
             <ProductImage product={product} size={size} hideSaleBadge />
             <Flex col gap={5} justifyContent='space-around' grow={1}>
                 {remove && onRemove && <Button icon='trash' mode='text' stopPropagation preventDefault onClick={onRemove} className={styles.remove} />}
                 <ProductInfo product={product} sales={sales} size={size} />
+                <ProductStamps product={product} />
                 <Flex alignItems='center' justifyContent='space-between'>
                     {note && <Button
                         onClick={() => setNoteOpen(n => !n)}

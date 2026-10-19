@@ -26,7 +26,8 @@ export default function OrderCard({ order = {} }) {
         otherCount = bags.freeze ?? bags.extra ?? 0,
         departureTime = formatDepartureTime(order.window),
         shippingStatusKey = status === 'shipped' ? 'ops_in_shipment' : 'ops_waiting_shipment',
-        bottomName = isShipping ? (order.shipper?.name || order.picker?.name) : order.picker?.name
+        bottomName = isShipping ? (order.shipper?.name || order.picker?.name) : order.picker?.name,
+        routeSeq = order._route?.seq
 
     function onOrderCardClick() {
         navigate(`/ops-order/${order.id}`)
@@ -43,6 +44,7 @@ export default function OrderCard({ order = {} }) {
                 <DeliveryMethodTag deliveryMethod={order.deliveryMethod} />
                 <Text bold>|</Text>
                 <Text bold>{order.number}</Text>
+                {routeSeq != null && <Text bold size='s'>#{routeSeq + 1}</Text>}
             </Flex>
             <Text size='s'>{render({ type: 'name', value: order.name })}</Text>
         </Flex>

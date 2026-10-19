@@ -7,6 +7,8 @@ export function extractFields(payload, fields) {
 const requiredAddressFields = ['address.city', 'address.street', 'address.building']
 const addressFields = [...requiredAddressFields]
 export function getAddress(payload) {
+    if (payload?.address?.city && payload?.address?.street && payload?.address?.building)
+        return payload.address
     if (requiredAddressFields.some(f => !payload[f]))
         return null
     const address = extractFields(payload, addressFields)
@@ -15,6 +17,9 @@ export function getAddress(payload) {
 
 const nameFields = ['name.first', 'name.last']
 export function getName(payload) {
+    if (payload?.name?.first && payload?.name?.last)
+        return payload.name
+
     const res = extractFields(payload, nameFields)
     if (!res.first && !res.last)
         return null

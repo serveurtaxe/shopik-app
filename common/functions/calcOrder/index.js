@@ -59,6 +59,12 @@ function normalizeProduct(cartProduct, salesMap) {
         finalAmount: cartProduct.finalAmount,
         availableAmount,
         totalAvailableAmount: availableAmount,
+        // Ordered qty remaining — the sale-threshold basis. At checkout it
+        // equals the packed qty; at pick time finalAmount can differ and the
+        // threshold is met by what the customer ordered (or supplied,
+        // whichever is higher — see isSaleEligible), while consumption stays
+        // limited to what was actually packed.
+        orderAvailable: amount,
         price: cartProduct.price,
         orderPrice,
         unit: cartProduct.unit || {},

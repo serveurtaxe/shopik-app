@@ -7,7 +7,9 @@ async function fetchFromGoogle(address) {
     if (!apiKey)
         throw new Error('Missing Google Maps API Key')
 
-    const addressString = `${address.street} ${address.building}, ${address.city}`
+    const addressString = address.q?.trim()
+        ? address.q.trim()
+        : `${address.street} ${address.building}, ${address.city}`
 
     const params = new URLSearchParams({
         address: addressString,

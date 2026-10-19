@@ -6,7 +6,7 @@ const cashRegisterSchema = {
     data: {
         StockStoreID: String,
         OrderStoreID: String,
-        OrderCustomerID: String
+        DeliveryCustomerID: String
     }
 }
 

@@ -1,0 +1,17 @@
+.stamps {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow: hidden;
+}
+
+.stamp {
+    height: 36px;
+    width: auto;
+    max-width: 100%;
+    object-fit: contain;
+}
+
+.textStamp {
+    max-width: 100%;
+}

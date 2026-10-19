@@ -14,9 +14,11 @@ import Addresses, { AddressForm } from 'pages/Account/Addresses'
 import { useText } from 'common/texts/TextProvider'
 import { CouponCollapse } from './CouponSection'
 import { calcShipping, extractShippingConfig } from '#common/functions/shipping.js'
+import { fallbackCartTotals } from 'common/functions/cartTotals.js'
 import { extractLimits, getMinSumForMethod, getRemainingToMin } from '#common/functions/limits.js'
 import Input from 'common/components/Input'
 import Form from 'common/components/Form'
+import useMediaQuery from 'common/functions/useMediaQuery'
 import {
     LuMapPinHouse,
     LuClock,
@@ -25,7 +27,7 @@ import {
     LuUserRound
 } from 'react-icons/lu'
 
-export default function OrderSummary({ onPayment, paying, showPayBtn = true, missingFields = [] }) {
+export default function OrderSummary({ onPayment, paying, showPayBtn = true, missingFields = [], hideSummary = false }) {
     const { order = {}, setOrder } = useOrder()
     const user = useUser()
     const { addresses = [] } = user || {}
@@ -34,6 +36,8 @@ export default function OrderSummary({ onPayment, paying, showPayBtn = true, mis
     const [addressOpen, setAddressOpen] = useState(false)
     const [windowOpen, setWindowOpen] = useState(false)
     const [nameOpen, setNameOpen] = useState(false)
+    // Mobile: every section starts collapsed
+    const isMobile = useMediaQuery('(max-width: 900px)')
 
     // Refs for focusing missing fields directly 
     const nameFirstRef = useRef(null)
@@ -111,7 +115,8 @@ export default function OrderSummary({ onPayment, paying, showPayBtn = true, mis
     const { settings } = useAppData() || {}
     const shippingConfig = useMemo(() => extractShippingConfig(settings), [settings])
     const cart = order.cart || []
-    const subtotal = order.sum ?? order.subtotal ?? cart.reduce((acc, item) => acc + ((item.price || 0) * (item.amount || 1)), 0)
+    const storedTotals = cart.length ? fallbackCartTotals(cart) : null
+    const subtotal = order.sum ?? order.subtotal ?? storedTotals?.sum ?? 0
     const shipping = order.shipping ?? calcShipping({ sum: subtotal, deliveryMethod: order.deliveryMethod, shippingConfig })
     const originalShipping = order.deliveryMethod === 'pickup'
         ? Number(shippingConfig?.pickupTotal ?? shippingConfig?.total ?? 0)
@@ -120,8 +125,8 @@ export default function OrderSummary({ onPayment, paying, showPayBtn = true, mis
     const deliveryFee = shipping
     const hasCoupon = !!(order?.coupons && order.coupons.length)
     const totalSavings = (() => {
-        const before = order.sumNoCoupon ?? order.sum ?? subtotal
-        const after = hasCoupon ? (order.finalSum ?? order.sum ?? subtotal) : (order.sum ?? subtotal)
+        const before = order.sumNoCoupon ?? order.sum ?? storedTotals?.sumNoCoupon ?? subtotal
+        const after = hasCoupon ? (order.finalSum ?? subtotal) : (order.sum ?? subtotal)
         return Math.max(0, Number(before || 0) - Number(after || 0))
     })()
     const total = hasCoupon && order.finalSumWithShipping != null
@@ -133,11 +138,11 @@ export default function OrderSummary({ onPayment, paying, showPayBtn = true, mis
     const isBelowMinSum = minSumThreshold > 0 && minSumRemaining > 0
     return (
         <Flex col gap={15} className={styles.orderSummaryWrapper}>
-            <Text size='xxl' bold className={styles.title}>
+            <Text size='xxl' bold className={`${styles.title} ${hideSummary ? styles.hideOnMobile : ''}`}>
                 {TR?.('order_summary_title').replace('{orderNumber}', order?.number || '')}
             </Text>
 
-            <Card className={styles.summaryCard}>
+            <Card className={`${styles.summaryCard} ${hideSummary ? styles.hideOnMobile : ''}`}>
                 <Flex col>
                     {/* 0. Name Collapse Item */}
                     <Collapse
@@ -259,7 +264,7 @@ export default function OrderSummary({ onPayment, paying, showPayBtn = true, mis
                     </Collapse>
 
                     {/* 3. Coupon Collapse Item — only shown if user/coupon returns relevant coupons */}
-                    <CouponCollapse defaultOpen={true} />
+                    <CouponCollapse defaultOpen={!isMobile} />
 
                     {/* Financial Breakdown */}
                     <Flex col gap={8} className={styles.breakdown}>
@@ -298,37 +303,40 @@ export default function OrderSummary({ onPayment, paying, showPayBtn = true, mis
                         </Flex>
                     </Flex>
 
-                    {/* Total Amount Row */}
-                    <Flex alignItems='center' justifyContent='space-between' className={styles.totalRow}>
-                        <Text size='xl' bold>
-                            total_to_pay
-                        </Text>
-                        <Text size='xxl' bold className={styles.totalAmount}>
-                            {render({ type: 'coin', value: total })}
-                        </Text>
-                    </Flex>
+                    {/* Total + Pay — fixed full-width bottom bar on mobile */}
+                    <div className={styles.paySticky}>
+                        {/* Total Amount Row */}
+                        <Flex alignItems='center' justifyContent='space-between' className={styles.totalRow}>
+                            <Text size='xl' bold>
+                                total_to_pay
+                            </Text>
+                            <Text size='xxl' bold className={styles.totalAmount}>
+                                {render({ type: 'coin', value: total })}
+                            </Text>
+                        </Flex>
 
-                    {isBelowMinSum && (
-                        <Text size='s' mode='sub' style={{ textAlign: 'center' }}>{TR?.('minimum_order_sum')} {render({ type: 'coin', value: minSumThreshold })}</Text>
-                    )}
-                    {/* CTA Pay Button */}
-                    {showPayBtn && (
-                        <button
-                            type='button'
-                            className={styles.payBtn}
-                            onClick={onPayment}
-                            disabled={paying || isBelowMinSum}
-                        >
-                            {paying ? (
-                                <Loader size={16} />
-                            ) : (
-                                <>
-                                    <LuCreditCard className={styles.payIcon} />
-                                    <Text size='l' bold className={styles.payBtnText}>to_payment_btn</Text>
-                                </>
-                            )}
-                        </button>
-                    )}
+                        {isBelowMinSum && (
+                            <Text size='s' mode='sub' style={{ textAlign: 'center' }}>{TR?.('minimum_order_sum')} {render({ type: 'coin', value: minSumThreshold })}</Text>
+                        )}
+                        {/* CTA Pay Button */}
+                        {showPayBtn && (
+                            <button
+                                type='button'
+                                className={styles.payBtn}
+                                onClick={onPayment}
+                                disabled={paying || isBelowMinSum}
+                            >
+                                {paying ? (
+                                    <Loader size={16} />
+                                ) : (
+                                    <>
+                                        <LuCreditCard className={styles.payIcon} />
+                                        <Text size='l' bold className={styles.payBtnText}>to_payment_btn</Text>
+                                    </>
+                                )}
+                            </button>
+                        )}
+                    </div>
                 </Flex>
             </Card>
         </Flex>
@@ -345,12 +353,19 @@ function NameForm({ initialName, initialEmail, initialPhone, initialSecondPhone,
         setFormState({ loading: true, error: '' })
         try {
             const payload = {}
-            if (data['name.first'] !== undefined) payload['name.first'] = data['name.first']
-            if (data['name.last'] !== undefined) payload['name.last'] = data['name.last']
+            // Form deep-expands dotted names (name.first → { name: { first } }),
+            // so read the nested shape (flat-key fallback for safety).
+            const first = data?.name?.first ?? data['name.first']
+            const last = data?.name?.last ?? data['name.last']
+            if (first !== undefined || last !== undefined) {
+                payload.name = {}
+                if (first !== undefined) payload.name.first = String(first).trim()
+                if (last !== undefined) payload.name.last = String(last).trim()
+            }
             if (data.email !== undefined) payload.email = data.email
             if (data.secondPhone !== undefined && String(data.secondPhone).trim() !== '') payload.secondPhone = String(data.secondPhone).trim()
             const res = await user.userEdit(payload)
-            const updatedName = res?.user?.name || { first: data['name.first'], last: data['name.last'] }
+            const updatedName = res?.user?.name || { first, last }
             const updatedEmail = res?.user?.email || data.email
             const updatedSecondPhone = res?.user?.secondPhone || data.secondPhone
             setOrder(prev => ({

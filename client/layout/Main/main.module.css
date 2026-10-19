@@ -4,7 +4,7 @@
     padding-bottom: calc(20px + var(--safeBottom, 0px));
     padding-inline-start: var(--safeLeft, 0px);
     padding-inline-end: var(--safeRight, 0px);
-    min-height: calc(100dvh - var(--header-height) - var(--safeTop, 0px) - 50px);
+    min-height: 0;
     max-width: min(var(--max-width), calc(100vw - 60px - var(--safeLeft, 0px) - var(--safeRight, 0px)));
     margin: auto;
     transition: padding-inline-end .3s ease;

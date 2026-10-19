@@ -1,6 +1,6 @@
 :global(.Popover_):has(.contextMenu) {
     padding: 10px;
-    border-radius: 30px;
+    border-radius: 0 0 var(--radius-3xl) var(--radius-3xl);
 }
 
 .contextMenu {

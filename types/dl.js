@@ -165,6 +165,10 @@
  */
 
 /**
+ * @typedef {DLModel<any>} DL.ComaxDeliveryDoc
+ */
+
+/**
  * Root Data Layer.
  *
  * @typedef {Object} DL
@@ -184,6 +188,7 @@
  * @property {DL.Role} Role
  * @property {DL.Otp} Otp
  * @property {DL.CashRegister} CashRegister
+ * @property {DL.ComaxDeliveryDoc} ComaxDeliveryDoc
  *
  * @property {(docs: any[], docField: string, sourceMap: Record<string, string>) => Promise<any[]>} populate
  */

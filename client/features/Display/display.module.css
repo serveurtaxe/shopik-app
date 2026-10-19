@@ -20,10 +20,6 @@
     min-width: 0;
     display: block;
     width: 100%;
-    /* Fixed box reserves space before images load and keeps the page from
-       jumping when slides have different aspect ratios. Compose uploads to
-       ~21:9 desktop / ~16:10 mobile; cover crops the overflow. */
-    aspect-ratio: 21 / 9;
 }
 
 /* .hero .slideImg {
@@ -94,7 +90,7 @@
 .mosaic {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 10px;
+    gap: 24px;
     width: 100%;
     min-height: 300px;
 }
@@ -108,6 +104,16 @@
 .rail {
     width: 100%;
     container-type: inline-size;
+    background-color: var(--carousel-bg, var(--bg-secondary));
+    padding-block: 12px;
+    /* Full-bleed background with zero layout effect: layout stays 100% so
+       the rail resizes with .main (e.g. cart drawer padding) exactly like
+       the banners. The shadow paints the bg to the viewport edges — hidden
+       behind the opaque cart drawer when open, same as the header.
+       clip-path keeps it to the rail's vertical band and prevents any
+       horizontal scrollbar (no vw-sized boxes, so .shifted needs no math). */
+    box-shadow: 0 0 0 100vmax var(--carousel-bg, var(--bg-secondary));
+    clip-path: inset(0 -100vmax);
 }
 
 .railHeader {
@@ -115,12 +121,42 @@
     padding: 10px 10px;
 }
 
+.railTitle,
+.showAll,
+.showAll .showAllText {
+    color: var(--carousel-title, #003324);
+}
+
+/* Text size="h1" sets its own font-size — out-specify it. */
+.railHeader .railTitle {
+    font-size: var(--display-lg);
+    line-height: var(--line-height-display-lg);
+}
+
 .showAll {
-    color: var(--text-brand-tertiary);
     text-decoration: none;
     display: inline-flex;
     align-items: center;
     gap: 4px;
+}
+
+/* Text mode="link" sets its own color — out-specify it so the whole
+   "show all" control follows the theme color. */
+.showAll .showAllText {
+    font-size: var(--display-xs);
+    line-height: var(--line-height-display-xs);
+}
+
+@media (max-width: 700px) {
+    .railHeader .railTitle {
+        font-size: 32px;
+        line-height: 1.2;
+    }
+
+    .showAll .showAllText {
+        font-size: 16px;
+        line-height: 1.5;
+    }
 }
 
 /* Same card size as the products grid (products.module.css breakpoints):

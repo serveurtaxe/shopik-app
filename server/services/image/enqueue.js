@@ -13,6 +13,7 @@ export default async function enqueueChangedImages(DL) {
     let scanned = 0
     let enqueued = 0
     let skippedGs1 = 0
+    let skippedScrape = 0
     for (let skip = 0; skip < total; skip += BATCH) {
         const comaxProducts = await DL.ComaxProduct.Model.find(
             filter,
@@ -38,9 +39,14 @@ export default async function enqueueChangedImages(DL) {
             if (!product || !comax.picUrl) continue
 
             const mainImage = (product.images?.product || []).find(img => img?.main)
-            // GS1-sourced images are never touched — neither filled nor refreshed.
+            // GS1- and scrape-sourced images are never touched — neither
+            // filled nor refreshed. Priority: GS1 > scrape > Comax picUrl.
             if (mainImage?.sourceUrl?.startsWith('gs1://')) {
                 skippedGs1++
+                continue
+            }
+            if (mainImage?.sourceUrl?.startsWith('scrape://')) {
+                skippedScrape++
                 continue
             }
             // Own (Comax/manual) main unchanged and complete → skip;
@@ -54,7 +60,7 @@ export default async function enqueueChangedImages(DL) {
         enqueued += jobs.length
     }
 
-    log.info(`[ImageQueue] Enqueued ${enqueued}/${scanned} products with images (skipped ${skippedGs1} GS1-imaged)`)
+    log.info(`[ImageQueue] Enqueued ${enqueued}/${scanned} products with images (skipped ${skippedGs1} GS1-imaged, ${skippedScrape} scraped)`)
 
     return { scanned, enqueued }
 }

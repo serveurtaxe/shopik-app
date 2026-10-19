@@ -2,9 +2,14 @@
     box-sizing: border-box;
     position: sticky;
     top: 0;
-    z-index: 999;
+    /* Own stacking context above page content: shields all header paint at
+       once. Inside it: top row + open menus/dialogs (10002) > overlay-high
+       (10001) > cart drawer (9999) > open menu bar + dropdown (9500) >
+       overlay-low (9000) > static menu row. The cart lives here (not in
+       Main) so it slots into this order instead of competing from outside. */
+    z-index: 10000;
     width: 100%;
-    background-color: var(--bg-brand-primary, #0B3B2B);
+    background-color: var(--header-bg);
     transition: background-color .3s ease, padding .3s ease;
 
     /* Safe Area Insets (iOS Notch, Dynamic Island, Status Bar, Landscape mode) */
@@ -12,16 +17,32 @@
     padding-inline-start: env(safe-area-inset-left, 0px);
     padding-inline-end: env(safe-area-inset-right, 0px);
 
-    /* Grid layout with actions placed between search and cart */
+    /* Grid: top bar + menu row. The top bar carries the header background
+       as its own layer (lifted above the single overlay); sub-rows and
+       body fall below it. */
     display: grid;
-    grid-template-columns: auto auto 1fr auto auto;
+    grid-template-columns: 1fr;
     grid-template-areas:
-        "logo userDelivery search actions cart"
-        "menuWrap menuWrap menuWrap menuWrap menuWrap";
+        "top"
+        "menuWrap";
     align-items: center;
-    column-gap: 12px;
     row-gap: 8px;
-    padding: calc(10px + env(safe-area-inset-top, 0px)) 16px 0 16px;
+
+    .topBar {
+        grid-area: top;
+        display: contents;
+    }
+
+    /* Row-1 controls ride above the overlay (10001) so buttons stay
+       clickable and popovers switch with a single press. */
+    .menuBtn,
+    .logoWrap,
+    .searchWrap,
+    .headerActions,
+    .cartWrap {
+        position: relative;
+        z-index: 10002;
+    }
 
     .menuBtn {
         grid-area: menuBtn;
@@ -66,6 +87,16 @@
         align-items: center;
         gap: 10px;
         flex-shrink: 0;
+        height: 56px;
+    }
+
+    .userViewWrap,
+    .deliveryWrap {
+        display: contents;
+    }
+
+    .desktopMenu {
+        display: contents;
     }
 
     .headerActions {
@@ -123,39 +154,36 @@
 
     .menuWrap {
         grid-area: menuWrap;
-        background-color: #FAF7F2;
-        border-bottom: 1px solid #ECE7DE;
+        background-color: var(--sub-header-bg);
         margin: 0 -16px;
         padding: 0 16px;
     }
 
-    .backdrop {
-        position: fixed;
-        inset: 0;
-        top: calc(var(--header-height, 120px) + env(safe-area-inset-top, 0px));
-        background: rgba(0, 0, 0, 0.32);
-        border: 0;
-        padding: 0;
-        z-index: 998;
-        display: none;
-    }
-
     /* Desktop grid */
     @media screen and (min-width: 769px) {
-        grid-template-columns: auto auto 1fr auto auto;
-        grid-template-areas:
-            "logo userDelivery search actions cart"
-            "menuWrap menuWrap menuWrap menuWrap menuWrap";
-        padding-left: max(16px, calc((100% - var(--max-width)) / 2 + 16px));
-        padding-right: max(16px, calc((100% - var(--max-width)) / 2 + 16px));
 
-        .menuBtn {
-            display: none !important;
+        /* Row 1 is a real bar: header background, lifted above the overlay
+           (and, globally, above the cart drawer) */
+        .topBar {
+            display: flex;
+            align-items: center;
+            column-gap: 12px;
+            height: 76px;
+            background-color: var(--header-bg);
+            position: relative;
+            z-index: 10002;
+            transition: background-color .3s ease;
+            padding: calc(10px + env(safe-area-inset-top, 0px)) max(16px, calc((100% - var(--max-width)) / 2 + 16px)) 0 max(16px, calc((100% - var(--max-width)) / 2 + 16px));
+            padding-inline-start: max(env(safe-area-inset-left, 0px), max(16px, calc((100% - var(--max-width)) / 2 + 16px)));
+            padding-inline-end: max(env(safe-area-inset-right, 0px), max(16px, calc((100% - var(--max-width)) / 2 + 16px)));
+        }
+
+        .searchWrap {
+            flex: 1;
         }
 
         .menuWrap {
-            background-color: #FAF7F2;
-            border-bottom: 1px solid #ECE7DE;
+            background-color: var(--sub-header-bg);
             margin-left: calc(50% - 50vw);
             margin-right: calc(50% - 50vw);
             width: 100vw;
@@ -164,18 +192,53 @@
             box-sizing: border-box;
         }
 
-        .backdrop {
-            display: none !important;
+        /* The open menu sits between the tiers: bright above the low
+           overlay (9000) when only the menu is open, but below the cart
+           (9999) — the cart always covers bar and dropdown. The high
+           overlay (10001) dims it along with everything but the top row. */
+        .menuWrap.menuAbove {
+            position: relative;
+            z-index: 9500;
         }
     }
 
-    /* Mobile: row1 = menuBtn logo search actions cart, row2 = UserView|DeliveryView, menu = drawer */
+    /* Tablet (769-1023px): desktop layout, compact — small logo + icon-only
+       delivery/login buttons (texts + chevrons hidden) */
+    @media screen and (min-width: 769px) and (max-width: 1023px) {
+        .topBar {
+            column-gap: 8px;
+        }
+
+        .userDelivery {
+            gap: 4px;
+
+            :global([class*="button"]) {
+                min-width: 0 !important;
+                padding: 10px !important;
+            }
+
+            :global(.btnTexts) {
+                display: none !important;
+            }
+
+            :global([class*="chevron"]) {
+                display: none !important;
+            }
+        }
+
+        .headerActions {
+            gap: 4px;
+        }
+    }
+
+    /* Mobile: row1 = menuBtn logo search cart (headerActions move into the
+       drawer rail), row2 = DeliveryView only, menu = icon-rail drawer */
     @media screen and (max-width: 768px) {
-        grid-template-columns: auto auto 1fr auto auto;
+        grid-template-columns: auto auto 1fr auto;
         grid-template-areas:
-            "menuBtn logo search actions cart"
-            "userDelivery userDelivery userDelivery userDelivery userDelivery"
-            "menuWrap menuWrap menuWrap menuWrap menuWrap";
+            "menuBtn logo search cart"
+            "userDelivery userDelivery userDelivery userDelivery"
+            "menuWrap menuWrap menuWrap menuWrap";
         padding: calc(8px + env(safe-area-inset-top, 0px)) 12px 0 12px;
         column-gap: 8px;
         row-gap: 0;
@@ -184,8 +247,17 @@
             display: flex;
         }
 
+        /* WhatsApp + info live in the drawer rail on mobile */
+        .headerActions {
+            display: none;
+        }
+
+        .desktopMenu {
+            display: none;
+        }
+
         .userDelivery {
-            background-color: var(--bg-brand-secondary-hover, #DCEBEA);
+            background-color: var(--sub-header-bg, #FAF6F2);
             margin-left: calc(50% - 50vw);
             margin-right: calc(50% - 50vw);
             width: 100vw;
@@ -193,6 +265,26 @@
             box-sizing: border-box;
             gap: 8px;
             margin-top: 8px;
+
+            /* Login lives at the top of the drawer on mobile — this bar
+               shows the shipping method (DeliveryView) only.
+               Drawer closed: the bar lifts above the single overlay so the
+               button that opened a dialog stays bright + switchable.
+               Drawer open: it stays below the overlay (dims, taps dismiss). */
+            .userViewWrap {
+                display: none;
+            }
+
+            &.liftAbove {
+                position: relative;
+                z-index: 10002;
+            }
+
+            /* The desktop "popover open" pill background looks wrong on the
+               light mobile bar — keep it transparent. */
+            :global(.Popover_visible)+:global(.Popover_btn) [class*="button"] {
+                background-color: transparent !important;
+            }
 
             &>* {
                 flex: 1 1 50%;
@@ -216,12 +308,26 @@
                 flex: 1;
                 padding: 6px 8px !important;
                 gap: 6px !important;
-                border-radius: 12px !important;
+                background-color: transparent !important;
                 color: var(--text-primary) !important;
             }
 
             :global([class*="button"]:hover) {
-                background-color: var(--bg-brand-secondary) !important;
+                background-color: transparent !important;
+            }
+
+            /* Title on the right (by the icon), subtitle on the left
+               (by the chevron) — one vertically-centered row. */
+            :global(.btnTexts) {
+                gap: 8px !important;
+            }
+
+            :global(.btnTexts)>div:first-child {
+                display: contents;
+            }
+
+            :global(.btnTexts)>div>small:last-child {
+                margin-inline-start: auto;
             }
 
             :global([class*="icon"]) {
@@ -238,21 +344,23 @@
         .menuWrap {
             display: none;
             position: absolute;
-            top: 100%;
+            top: -55px;
             right: 0;
             left: 0;
             background-color: var(--bg-primary, #fff);
             margin: 0;
-            padding: 12px 12px calc(20px + env(safe-area-inset-bottom, 0px));
-            overflow-y: auto;
-            z-index: 999;
+            padding: 0;
+            z-index: 10002;
             border-top: 1px solid #e3ebea;
             box-shadow: 0 6px 20px rgba(0, 0, 0, .08);
             max-height: calc(100dvh - 100% - env(safe-area-inset-top, 0px));
+            max-width: 410px;
         }
 
         .menuWrapOpen {
-            display: block;
+            display: flex;
+            overflow: hidden;
+            border-radius: 0 0 20px 20px;
 
             :global([class*="content"]) {
                 flex-direction: column !important;
@@ -270,45 +378,49 @@
                 justify-content: flex-start;
             }
         }
-
-        .backdrop {
-            display: block;
-            position: fixed;
-            inset: 0;
-        }
     }
+}
 
-    @media screen and (max-width: 480px) {
-        padding: calc(6px + env(safe-area-inset-top, 0px)) 8px 0 8px;
-        column-gap: 6px;
+/* Shared dim behind open menu/drawer/popovers. Nested in the header: below
+   the lifted rows (10002). Two heights: full (10001, above the cart) when a
+   popover or the drawer is open; menu-only (9000, below the cart) when just
+   the departments menu is open, so bar, dropdown and cart all stay bright
+   while only the page dims. A press here only closes. */
+.menuOverlay {
+    position: fixed;
+    inset: 0;
+    background-color: var(--menu-overlay, #00332499);
+    border: 0;
+    padding: 0;
+    z-index: 10001;
+    cursor: default;
+}
 
-        .actionBtn {
-            width: 34px;
-            height: 34px;
-            min-width: 34px;
+.menuOverlay.belowCart {
+    z-index: 9000;
+}
 
-            svg {
-                font-size: 17px !important;
-                width: 17px !important;
-                height: 17px !important;
-            }
-        }
+/* Scrim behind the cart drawer. Shown on exactly the range where the drawer
+   floats: .cart switches to `inset-inline-end: 0` (overlaying the page)
+   below 1200px, and stays container-aligned above it, where .main.shifted
+   makes room and no dim is needed. Both edges must match 1200px — an iPad
+   Pro portrait at 1032px sits in the gap if this is set to 1023px.
 
-        .headerActions {
-            gap: 6px;
-        }
+   z-index 9000 is the same tier as .menuOverlay.belowCart — above the page,
+   below the cart drawer (9999) and the lifted header top row (10002), which
+   therefore stay bright. Gated in CSS so the breakpoint is not duplicated
+   into JS. */
+.cartOverlay {
+    position: fixed;
+    inset: 0;
+    background-color: var(--menu-overlay, #00332499);
+    z-index: 9000;
+    display: none;
+    cursor: default;
+}
 
-        .menuWrap {
-            margin: 0 -8px;
-            padding-inline: 8px;
-        }
-
-        .userDelivery {
-            gap: 6px;
-            margin-left: calc(50% - 50vw);
-            margin-right: calc(50% - 50vw);
-            width: 100vw;
-            padding: 6px max(8px, calc((100vw - var(--max-width)) / 2 + 8px));
-        }
+@media (max-width: 1200px) {
+    .cartOverlay {
+        display: block;
     }
 }

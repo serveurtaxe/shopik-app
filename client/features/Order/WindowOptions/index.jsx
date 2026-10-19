@@ -42,7 +42,6 @@ export default function WindowOptions({ onChangeStore, onChangeAddress, hideAddr
     const selectedStore = isPickup ? pickupStores?.find(s => s.id === order.storeId) : null
 
     const onChoose = async (window) => {
-        console.log(window)
         if (window.chosen || window.disabled || windowLoading) return
         try {
             setWindowLoading(window.id)

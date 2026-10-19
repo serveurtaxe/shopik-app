@@ -2,12 +2,9 @@ import { validateAddress } from '#server/external/addressProvider/index.js'
 import { findByLocation } from '#server/external/supplyArea.js'
 import getShippingConfig from '#server/utils/data/getShippingConfig.js'
 import { extractLimits, getMinSumForMethod } from '#common/functions/limits.js'
+import formatISODate from '#common/functions/formatISODate.js'
 
 const DAYS_AHEAD = 10
-
-function formatDate(d) {
-    return d.toISOString().split('T')[0]
-}
 
 /**
  * POST /api/bot/delivery_check
@@ -62,7 +59,7 @@ export default async function delivery_check(payload, { DL }) {
             end.setDate(end.getDate() + DAYS_AHEAD)
             const rows = await DL.OrderWindow.Model.find({
                 storeId,
-                date: { $gte: formatDate(today), $lte: formatDate(end) },
+                date: { $gte: formatISODate(today), $lte: formatISODate(end) },
                 active: true
             })
                 .select({ _id: 0, date: 1, dayOfWeek: 1, start: 1, end: 1, leadTimestamp: 1, disabled: 1 })

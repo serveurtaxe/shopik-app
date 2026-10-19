@@ -6,65 +6,157 @@
     border-radius: var(--radius-lg);
 }
 
-.header {
+/* Action row in the top row, right of the Leaflet zoom control.
+   The search button expands inline here to reveal the input. */
+.cornerStack {
+    position: absolute;
+    top: .6rem;
+    left: 3.85rem;
+    z-index: 1100;
     display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: .75rem 1.25rem;
-    border-bottom: 1px solid var(--border-primary);
+    flex-direction: row;
+    align-items: center;
+    gap: .4rem;
+    max-width: calc(100% - 4.5rem);
 }
 
-.headerControls {
-    display: flex;
-    align-items: flex-end;
-    gap: .5rem;
-    flex-wrap: wrap;
+.cornerBtn {
+    display: grid;
+    place-items: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border: 1px solid var(--border-primary);
+    border-radius: 50%;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 1.2rem;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, .25);
+    cursor: pointer;
 }
 
-.headerActions {
+.cornerBtn:hover:not(:disabled) {
+    border-color: var(--border-brand);
+    color: var(--text-brand);
+}
+
+.cornerBtn:disabled {
+    opacity: .4;
+    cursor: default;
+}
+
+/* New-area button, back in its top-center spot (idle only, no pill chrome) */
+.centerPlus {
+    position: absolute;
+    top: .6rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1100;
+    display: grid;
+    place-items: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border: 1px solid var(--border-primary);
+    border-radius: 50%;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 1.2rem;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, .25);
+    cursor: pointer;
+}
+
+.centerPlus:hover {
+    border-color: var(--border-brand);
+    color: var(--text-brand);
+}
+
+/* Search result chip floating below the expanded row */
+.searchResult {
+    position: absolute;
+    top: 3.7rem;
+    left: 3.85rem;
+    z-index: 1100;
+    max-width: calc(100% - 4.5rem);
+}
+
+/* Pill-shaped input revealed inline by the search button */
+.searchField {
+    flex: 1;
+    min-width: 0;
+    width: 14rem;
+    height: 2.5rem;
+    box-sizing: border-box;
+    padding: 0 .9rem;
+    border: 1px solid var(--border-primary);
+    border-radius: 999px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: .875rem;
+    outline: none;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, .25);
+}
+
+.searchField:focus {
+    border-color: var(--border-brand);
+    box-shadow: var(--focus-ring);
+}
+
+.searchGo {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border: none;
+    border-radius: 50%;
+    background: var(--bg-brand-primary);
+    color: var(--text-primary-on-brand);
+    font-size: 1.2rem;
+    cursor: pointer;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, .25);
+}
+
+.searchGo:hover:not(:disabled) {
+    background: var(--bg-brand-primary-hover);
+}
+
+.searchGo:disabled {
+    opacity: .7;
+    cursor: default;
+}
+
+/* Slim contextual hint/error bar, bottom-center of the map */
+.hintBar {
+    position: absolute;
+    bottom: .6rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1100;
     display: flex;
-    align-items: flex-end;
-    justify-content: flex-end;
-    gap: .5rem;
+    justify-content: center;
+    max-width: calc(100% - 1.2rem);
+    pointer-events: none;
+}
+
+.hintBar>* {
+    pointer-events: auto;
+}
+
+/* Header switch next to the New Area button. The shared Checkbox positions
+   its knob absolutely over the label box, so the text carries its own
+   clearance via margin (padding on the label can't win against the shared
+   `padding: 0 !important`). Centered against the 36px header buttons. */
+.headerSwitch {
+    align-self: center !important;
     flex-shrink: 0;
-}
-
-.headerInput {
-    margin: 0 !important;
-    display: flex;
-    flex-direction: column;
-}
-
-.headerInput :global(span),
-.headerInput label {
-    margin-top: 0 !important;
-    padding-bottom: 4px !important;
-    font-size: .8rem !important;
-    line-height: 1.2 !important;
-}
-
-.headerInput input {
-    height: 36px !important;
-    min-height: 36px !important;
-    max-height: 36px !important;
-    padding: 0 .75rem !important;
-    box-sizing: border-box !important;
+    height: auto !important;
+    min-height: 30px;
     font-size: .875rem !important;
-    line-height: 34px !important;
+    color: var(--text-secondary);
+    white-space: nowrap;
 }
 
-.headerBtn {
-    height: 36px !important;
-    min-height: 36px !important;
-    max-height: 36px !important;
-    padding: 0 .9rem !important;
-    box-sizing: border-box !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    font-size: .875rem !important;
-    line-height: 1 !important;
+.headerSwitchLabel {
+    margin-inline-end: 58px;
 }
 
 .title {
@@ -415,6 +507,12 @@
     flex-direction: column;
     align-items: stretch;
     gap: .4rem;
+    transition: top .25s ease, right .25s ease;
+}
+
+/* Store FAB occupies the top-right corner — picker sits left of it, same row */
+.tilePickerWrapShifted {
+    right: 3.7rem;
 }
 
 .tilePicker {
@@ -443,11 +541,34 @@
     color: var(--bg-brand-primary);
 }
 
+/* Eye toggle inside the label-size row — same visual language as the size icon */
+.labelScaleToggle {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: .15rem;
+    border: none;
+    background: transparent;
+    color: var(--bg-brand-primary);
+    font-size: 1.5rem;
+    cursor: pointer;
+}
+
+.labelScaleToggleOff {
+    color: var(--text-secondary);
+}
+
 .labelScaleSlider {
     flex: 1;
     min-width: 0;
     accent-color: var(--bg-brand-primary);
     cursor: pointer;
+}
+
+.labelScaleSlider:disabled {
+    opacity: .35;
+    cursor: default;
 }
 
 .tileBtn {
@@ -469,6 +590,109 @@
 .tileBtnActive:hover {
     background: var(--bg-brand-primary);
     color: var(--text-primary-on-brand);
+}
+
+/* City-borders name labels: beat Leaflet's .leaflet-tooltip (0,1,0) with (0,2,0).
+   Non-interactive (tooltip pane ignores pointer events) — visual reference only. */
+:global(.leaflet-tooltip).cityLabel {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    font-size: .85rem;
+    font-weight: var(--font-weight-medium);
+    color: var(--text-secondary);
+    text-shadow:
+        0 0 3px var(--bg-primary),
+        0 0 3px var(--bg-primary),
+        0 0 6px var(--bg-primary);
+}
+
+/* Dark basemap (dark tiles / satellite): light text + dark halo.
+   The base rule follows the admin UI theme, which mismatches when the
+   basemap is dark while the UI is light — hence the white "glow". */
+:global(.leaflet-tooltip).cityLabelDark {
+    color: #f1f5f9;
+    text-shadow:
+        0 0 3px rgba(0, 0, 0, .9),
+        0 0 3px rgba(0, 0, 0, .9),
+        0 0 6px rgba(0, 0, 0, .9);
+}
+
+:global(.leaflet-tooltip).cityLabel::before {
+    display: none;
+}
+
+/* City-border click popup: name + "create polygon" button (built imperatively).
+   Button mirrors the shared Button component (pill, brand bg, 16px icon). */
+.cityPopup {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    min-width: 180px;
+    direction: rtl;
+}
+
+.cityPopupTitle {
+    font-size: .85rem;
+    font-weight: var(--font-weight-bold);
+    color: var(--text-primary);
+    text-align: right;
+}
+
+.cityPopupHead {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: .5rem;
+}
+
+.cityPopupVerts {
+    font-size: .75rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+/* Inline warning in the reference-layer popup, e.g. a non-contiguous
+   multi-selection that cannot collapse into one polygon. */
+.cityPopupWarn {
+    font-size: .75rem;
+    color: var(--text-error, #dc2626);
+    text-align: right;
+}
+
+/* Tighter popup: less side padding so the button stretches closer to the edges */
+.cityPopupWrap :global(.leaflet-popup-content) {
+    margin: 24px 12px 12px 12px;
+}
+
+.cityPopupBtn {
+    border: none;
+    cursor: pointer;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    padding: 10px 14px;
+    border-radius: var(--radius-3xl);
+    background-color: var(--bg-brand-primary);
+    border: 2px solid var(--Gradient-skeuemorphic-gradient-border, #ffffff1f);
+    user-select: none;
+    color: var(--text-white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+}
+
+.cityPopupBtn svg {
+    width: 16px;
+    height: 16px;
+    flex: none;
+}
+
+.cityPopupBtn:disabled {
+    opacity: .45;
+    cursor: default;
 }
 
 .groupCard {
@@ -746,4 +970,260 @@
     .mapPane {
         flex: 0 0 55vh;
     }
+}
+
+/* ——— Fullscreen mode: the container itself takes over the viewport ——— */
+.containerFs {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 1500;
+    min-height: 0;
+    border-radius: 0;
+}
+
+.containerFs .body {
+    position: relative;
+    overflow: hidden;
+}
+
+/* Mobile forces .mapPane to 55vh — in fullscreen the map must fill */
+.containerFs .mapPane {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+/* Regular mode: collapsed sidebar leaves the layout (map fills the space) */
+.sidebarClosed {
+    display: none;
+}
+
+/* Fullscreen: sidebar becomes an overlay drawer (starts closed) */
+.sidebarDrawer {
+    position: absolute;
+    inset-inline-start: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 1200;
+    flex: none;
+    width: 24rem;
+    max-width: 85vw;
+    border-inline-end: 1px solid var(--border-primary);
+    border-bottom: none;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, .25);
+    transition: transform .25s ease;
+}
+
+.sidebarDrawerClosed {
+    transform: translateX(-110%);
+}
+
+[dir="rtl"] .sidebarDrawerClosed {
+    transform: translateX(110%);
+}
+
+.drawerBackdrop {
+    position: absolute;
+    inset: 0;
+    z-index: 1190;
+    background: transparent;
+}
+
+.storeListTitle {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+}
+
+.drawerClose {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    margin-inline-start: auto;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+.drawerClose:hover {
+    background: var(--bg-secondary-hover);
+    color: var(--text-primary);
+}
+
+/* Round icon buttons floating over the map */
+.storeFab,
+.fullscreenBtn {
+    position: absolute;
+    z-index: 1100;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--border-primary);
+    border-radius: 50%;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, .25);
+    cursor: pointer;
+}
+
+.storeFab:hover,
+.fullscreenBtn:hover {
+    border-color: var(--border-brand);
+    color: var(--text-brand);
+}
+
+.storeFab {
+    top: .6rem;
+    right: .6rem;
+    width: 2.5rem;
+    height: 2.5rem;
+    font-size: 1.25rem;
+}
+
+.fullscreenBtn {
+    left: .6rem;
+    bottom: .6rem;
+    width: 2.25rem;
+    height: 2.25rem;
+    font-size: 1.1rem;
+}
+
+/* Leaflet zoom bar restyled into a pill matching the round floating buttons */
+.mapPane :global(.leaflet-bar) {
+    border: 1px solid var(--border-primary);
+    border-radius: 999px;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, .25);
+}
+
+.mapPane :global(.leaflet-bar a) {
+    width: 2.5rem;
+    height: 2.5rem;
+    line-height: 2.5rem;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-primary);
+}
+
+.mapPane :global(.leaflet-bar a:last-child) {
+    border-bottom: none;
+}
+
+.mapPane :global(.leaflet-bar a:hover) {
+    background: var(--bg-primary);
+    color: var(--text-brand);
+}
+
+.mapPane :global(.leaflet-bar a.leaflet-disabled) {
+    background: var(--bg-primary);
+    color: var(--text-tertiary);
+}
+
+/* Floating toolbar: minimized pill, expands to full controls */
+.toolbarWrap {
+    position: absolute;
+    top: .6rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1100;
+    display: flex;
+    justify-content: center;
+    max-width: calc(100% - 1.2rem);
+    pointer-events: none;
+}
+
+.toolbarWrap>* {
+    pointer-events: auto;
+}
+
+.toolbarPill {
+    display: flex;
+    align-items: center;
+    gap: .15rem;
+    padding: .25rem;
+    border: 1px solid var(--border-primary);
+    border-radius: 999px;
+    background: var(--bg-primary);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, .25);
+}
+
+.pillMain {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .35rem .5rem;
+    border: none;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 1.1rem;
+    cursor: pointer;
+}
+
+.pillMain:hover {
+    background: var(--bg-secondary-hover);
+}
+
+/* Static mode indicator (not clickable) */
+.pillStatic,
+.pillStatic:hover {
+    background: transparent;
+    cursor: default;
+}
+
+.pillX {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: .9rem;
+    cursor: pointer;
+}
+
+.pillX:hover:not(:disabled) {
+    background: var(--bg-secondary-hover);
+    color: var(--fg-error-primary);
+}
+
+.pillX:disabled {
+    opacity: .4;
+    cursor: default;
+}
+
+/* Pill tint follows the active map mode */
+.pillMode_new {
+    color: #2563eb;
+}
+
+.pillMode_split {
+    color: #dc2626;
+}
+
+.pillMode_edit {
+    color: #195855;
+}
+
+.pillMode_group {
+    color: #7c3aed;
+}
+
+.pillMode_union {
+    color: #2563eb;
+}
+
+.pillLabel {
+    font-size: .8rem;
+    font-weight: var(--font-weight-semibold);
+    white-space: nowrap;
 }
