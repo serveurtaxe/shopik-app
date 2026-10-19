@@ -8,8 +8,11 @@ export function buildObjectPath(productId, size, key = '') {
         : path.posix.join('images', 'products', productId, `${size}.webp`)
 }
 
-export function buildDisplayObjectPath(blockId, slideKey, size) {
-    return path.posix.join('images', 'display-blocks', blockId, slideKey, `${size}.webp`)
+// variant keeps the desktop and mobile art-direction images in separate
+// folders — they share a slideKey, so a shared path would overwrite one with
+// the other.
+export function buildDisplayObjectPath(blockId, slideKey, size, variant = 'desktop') {
+    return path.posix.join('images', 'display-blocks', blockId, slideKey, variant, `${size}.webp`)
 }
 
 export function buildUrl(productId, size, key = '') {

@@ -14,9 +14,12 @@ const MAX_BYTES = 8 * 1024 * 1024
 // Stores/returns only the RELATIVE base path — the client prepends
 // VITE_FILES_BASE_URL (see common/functions/displayImageUrl.js).
 export default async function upload_image(payload) {
-    const { imageBase64, sourceUrl, blockId, slideKey } = payload
+    const { imageBase64, sourceUrl, blockId, slideKey, variant } = payload
     if (!imageBase64 && !sourceUrl)
         throw { status: 400, message: 'imageBase64 or sourceUrl required' }
+    // Separate folders per slot so the desktop and mobile uploads for one slide
+    // don't overwrite each other (both share the same slideKey).
+    const slot = variant === 'mobile' ? 'mobile' : 'desktop'
 
     let buffer
     if (imageBase64) {
@@ -40,12 +43,12 @@ export default async function upload_image(payload) {
     }
     const blockDir = blockId || `tmp-${uid()}`
     const key = slideKey || uid()
-    const basePath = `images/display-blocks/${blockDir}/${key}`
+    const basePath = `images/display-blocks/${blockDir}/${key}/${slot}`
 
     await Promise.all(
         Object.entries(sizes).map(([name, data]) =>
             storage.uploadFile({
-                path: buildDisplayObjectPath(blockDir, key, name),
+                path: buildDisplayObjectPath(blockDir, key, name, slot),
                 data,
                 contentType: 'image/webp',
                 cacheControl: 'public, max-age=31536000, immutable'
