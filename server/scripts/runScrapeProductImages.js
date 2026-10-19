@@ -3,6 +3,7 @@ import scrapeProductImages from './scrapeProductImages.js'
 
 // Usage: node server/scripts/runScrapeProductImages.js --barcode 7290000066318 [--dry-run] [--force] [--providers rami-levy,super-pharm]
 //        node server/scripts/runScrapeProductImages.js --imageless [--limit N] [--dry-run] [--force] [--concurrency N] [--providers rami-levy,super-pharm]
+//        node server/scripts/runScrapeProductImages.js --folder "C:\path\to\imgs" [--limit N] [--dry-run] [--concurrency N]
 const args = process.argv.slice(2)
 const flag = (name, def) => {
     const i = args.findIndex(a => a === `--${name}` || a.startsWith(`--${name}=`))
@@ -17,6 +18,7 @@ const bootData = await boot()
 console.log('[runScrapeProductImages] Boot done, starting...')
 await scrapeProductImages(bootData, {
     barcode: String(flag('barcode', '') || ''),
+    folder: String(flag('folder', '') || ''),
     imageless: !!flag('imageless', false),
     limit: Number(flag('limit', 0)) || 0,
     force: !!flag('force', false),

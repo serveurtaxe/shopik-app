@@ -16,17 +16,50 @@
  *
  * Usage: node server/scripts/runScrapeProductImages.js --barcode 7290000066318 [--dry-run] [--force] [--providers rami-levy,super-pharm]
  *        node server/scripts/runScrapeProductImages.js --imageless [--limit N] [--dry-run] [--force] [--concurrency N] [--providers rami-levy,super-pharm] [--delay-ms 1200] [--retry-failed]
+ *        node server/scripts/runScrapeProductImages.js --folder "C:\path\to\imgs" [--limit N] [--dry-run] [--concurrency N]
+ *                                                     folder mode: local files <barcode>.{jpg,jpeg,webp,png} are the only
+ *                                                     source; min-size gate + provenance via seedFromFolder; a final
+ *                                                     report lists folder-covered products still imageless.
  */
 import scrapeProductImage from '#server/services/image/scrape/scrapeProduct.js'
-import { PROVIDER_ORDER } from '#server/services/image/scrape/providers.js'
+import { PROVIDER_ORDER, seedFromFolder } from '#server/services/image/scrape/providers.js'
 
 export default async function scrapeProductImages(
     { DL } = {},
-    { barcode = '', imageless = false, limit = 0, force = false, dryRun = false, concurrency = 3, providers = '', delayMs = 0, retryFailed = false, nameMatch = '' } = {}
+    { barcode = '', imageless = false, limit = 0, force = false, dryRun = false, concurrency = 3, providers = '', delayMs = 0, retryFailed = false, nameMatch = '', folder = '' } = {}
 ) {
     if (!DL) throw new Error('DL required')
     let barcodes = []
-    if (barcode) {
+    let folderReport = null
+    if (folder) {
+        // Folder mode (--folder): verified local files (see seedFromFolder)
+        // are the ONLY source for this run — no CDN probing. scrapeTriedAt
+        // parking is ignored (a local file is new evidence); scrapeProduct
+        // still skips gs1-present / has-images products.
+        const { matched, rejected, ignored } = await seedFromFolder(folder)
+        console.log(`[scrape] folder: ${matched.size} usable, ${rejected.length} rejected, ${ignored} ignored files`)
+        for (const r of rejected)
+            console.log(`[scrape] folder rejected: ${r.file} → ${r.barcode}: ${r.reason}${r.width ? ` ${r.width}x${r.height}` : ''}${r.error ? ` (${r.error})` : ''}`)
+        if (!matched.size) {
+            console.log('[scrape] done: 0 ok (nothing usable in folder)')
+            return { ok: 0, skipped: { 'folder-rejected': rejected.length, 'folder-ignored': ignored } }
+        }
+        // Raw Model: processFilter strips $and/$size/non-whitelisted fields,
+        // so DL.Product.read can't express this (same bypass as order/ops/list).
+        const docs = await DL.Product.Model.find(
+            {
+                $and: [
+                    { $or: [{ images: { $exists: false } }, { 'images.product': { $size: 0 } }] },
+                    { barcode: { $in: [...matched.keys()] } }
+                ]
+            },
+            { _id: 0, barcode: 1 }
+        ).limit(Number(limit) || 0).lean()
+        barcodes = [...new Set((docs || []).map(p => p?.barcode).filter(Boolean))]
+        console.log(`[scrape] folder: ${barcodes.length} imageless products matched`)
+        // Snapshot before the workers consume the array (nextJob splices).
+        folderReport = { rejected, processed: barcodes.slice() }
+    } else if (barcode) {
         barcodes = [String(barcode)]
     } else if (imageless) {
         // Raw Model: processFilter strips $and/$size/non-whitelisted fields,
@@ -50,7 +83,7 @@ export default async function scrapeProductImages(
         ).limit(Number(limit) || 0).lean()
         barcodes = [...new Set((docs || []).map(p => p?.barcode).filter(Boolean))]
     } else {
-        throw new Error('pass --barcode <bc> or --imageless [--limit N]')
+        throw new Error('pass --barcode <bc>, --folder <dir>, or --imageless [--limit N]')
     }
 
     console.log(`[scrape] ${barcodes.length} barcodes${dryRun ? ' (DRY RUN)' : ''}${force ? ' (force)' : ''}`)
@@ -86,6 +119,26 @@ export default async function scrapeProductImages(
         }
     }
     await Promise.all(Array.from({ length: Math.min(workers, barcodes.length || 1) }, worker))
+
+    // Folder mode: close the loop — which folder-covered products remain
+    // imageless after the run (rejected files, run errors, limit cutoff)?
+    if (folderReport) {
+        const covered = [...folderReport.processed, ...folderReport.rejected.map(r => r.barcode)]
+        const docs = await DL.Product.Model.find(
+            {
+                $and: [
+                    { $or: [{ images: { $exists: false } }, { 'images.product': { $size: 0 } }] },
+                    { barcode: { $in: covered } }
+                ]
+            },
+            { _id: 0, barcode: 1 }
+        ).lean()
+        const reasonFor = new Map(folderReport.rejected.map(r => [r.barcode, `file rejected: ${r.reason}`]))
+        const still = [...new Set((docs || []).map(d => d.barcode))]
+        console.log(`[scrape] folder report: ${still.length} folder products still imageless${dryRun ? ' (dry run — nothing was written)' : ''}:`)
+        for (const bc of still)
+            console.log(`  ${bc}: ${reasonFor.get(bc) || (dryRun ? 'dry run — not processed' : 'error during run (see logs above)')}`)
+    }
 
     console.log(`[scrape] done: ${totals.ok} ok, skipped=${JSON.stringify(totals.skipped)}`)
     return totals

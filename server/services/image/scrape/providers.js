@@ -46,6 +46,58 @@ async function cacheWrite(barcode, { buffer, site, sourceUrl, pageUrl, width, he
     }
 }
 
+// Folder seeding (--folder bulk mode): ingest pre-delivered files named
+// <barcode>.jpg/.jpeg/.webp/.png as if a provider had found them. Same
+// min-size gate as CDN candidates; verified bytes are written to the disk
+// cache so scrapeProduct processes them through the normal pipeline
+// (resize → upload → images.product). sourceUrl is a local:// ref — only
+// used for hashing/provenance, the stored ref is scrape://local/<barcode>.
+// Files failing the gate are reported back (the caller prints the report).
+export async function seedFromFolder(dir) {
+    const names = await fs.readdir(dir).catch(() => null)
+    if (!names) throw new Error(`cannot read folder: ${dir}`)
+    const matched = new Map() // barcode → { file, width, height }
+    const rejected = [] // { file, barcode, reason, width, height, error }
+    let ignored = 0 // non-barcode files (xlsx, stray files etc.)
+    for (const name of names.sort()) {
+        const m = /^(\d{8,14})\.(jpe?g|webp|png)$/i.exec(name)
+        if (!m) {
+            ignored++
+            continue
+        }
+        const barcode = m[1]
+        if (matched.has(barcode)) {
+            rejected.push({ file: name, barcode, reason: 'duplicate-barcode' })
+            continue
+        }
+        const file = path.join(dir, name)
+        let width = 0
+        let height = 0
+        try {
+            const buffer = await fs.readFile(file)
+            const meta = await sharp(buffer).metadata()
+            width = meta.width || 0
+            height = meta.height || 0
+            if (width < MIN_SIDE && height < MIN_SIDE) {
+                rejected.push({ file: name, barcode, reason: 'too-small', width, height })
+                continue
+            }
+            await cacheWrite(barcode, {
+                buffer,
+                site: 'local',
+                sourceUrl: `local://${file.split(path.sep).join('/')}`,
+                pageUrl: '',
+                width,
+                height
+            })
+            matched.set(barcode, { file: name, width, height })
+        } catch (e) {
+            rejected.push({ file: name, barcode, reason: 'unreadable', width, height, error: e?.message || String(e) })
+        }
+    }
+    return { matched, rejected, ignored }
+}
+
 async function fetchText(url, { timeoutMs = 25000, referer = 'https://www.google.com/' } = {}) {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeoutMs)
