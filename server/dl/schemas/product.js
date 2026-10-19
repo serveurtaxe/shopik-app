@@ -87,6 +87,9 @@ const productSchema = {
         filter: true
     },
     gs1SyncedAt: Date,
+    // Last scrape attempt with no usable candidate (any provider). Keeps
+    // bulk backfills O(n): --imageless skips tried docs unless --retry-failed.
+    scrapeTriedAt: Date,
     // Mapped GS1 extras (defined keys, flexible leaves — full payload stays in gs1_products).
     gs1: {
         netContent: {},

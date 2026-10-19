@@ -40,6 +40,14 @@ export default async function startImageWorker({ DL }) {
                 log.warn(`[ImageWorker] Skipped ${productId} — GS1 image present`)
                 return { skipped: 'gs1-present' }
             }
+            // Race guard: a scraped image may have landed between enqueue and
+            // processing — a Comax picUrl job must never overwrite it
+            // (priority GS1 > scrape > Comax). Scrape/GS1 jobs still proceed.
+            if (currentMain?.sourceUrl?.startsWith('scrape://') &&
+                !sourceUrl.startsWith('scrape://') && !sourceUrl.startsWith('gs1://')) {
+                log.warn(`[ImageWorker] Skipped ${productId} — scraped image present`)
+                return { skipped: 'scrape-present' }
+            }
 
             // Unchanged source with a complete previous write → skip the
             // expensive download/resize/upload (covers duplicate enqueues,

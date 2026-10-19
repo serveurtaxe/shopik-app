@@ -5,7 +5,8 @@ const cashRegisterSchema = {
     storeId: { type: String, required: true, unique: true, filter: true },
     data: {
         StockStoreID: String,
-        OrderStoreID: String
+        OrderStoreID: String,
+        DeliveryCustomerID: String
     }
 }
 

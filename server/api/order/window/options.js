@@ -1,4 +1,5 @@
 import getWindowTS from '#common/functions/getWindowTS.js'
+import formatISODate from '#common/functions/formatISODate.js'
 import { buildSpecialMap, specialDaysFor, overlapsWindow } from '#common/functions/specialDay.js'
 import { findUserGroupIds } from '#server/utils/data/windowGroups.js'
 const GET_DAYS_AHEAD = 10
@@ -10,12 +11,12 @@ export default async function options(payload, { DL, _user, utils }) {
 
     const { storeId, window } = cartOrder
     const timezone = process.env.TZ ?? Intl.DateTimeFormat().resolvedOptions().timeZone
-    const today = getWindowTS({ date: formatDate(new Date()), hour: 12, timezone })
+    const today = getWindowTS({ date: formatISODate(new Date()), hour: 12, timezone })
     const endDate = new Date(today)
     endDate.setDate(endDate.getDate() + GET_DAYS_AHEAD)
 
-    const dateFrom = formatDate(today)
-    const dateTo = formatDate(endDate)
+    const dateFrom = formatISODate(today)
+    const dateTo = formatISODate(endDate)
 
     // Group-restricted windows apply to delivery orders only: the shopper's
     // address area decides which restricted windows they may see.
@@ -100,10 +101,6 @@ export default async function options(payload, { DL, _user, utils }) {
     }
 
     return Object.values(grouped)
-}
-
-function formatDate(date) {
-    return date.toISOString().split('T')[0]
 }
 
 options.config = { auth: 'required' }

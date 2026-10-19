@@ -206,7 +206,9 @@ export const cartSchema = [{
     },
     shelfLife: Number,
     shelfLifeDate: Date,
-    refundedAmount: { type: Number, default: 0 }
+    refundedAmount: { type: Number, default: 0 },
+    supplierPrice: Number,
+    supplierSum: Number
 }]
 
 const orderSchema = {
@@ -345,6 +347,15 @@ const orderSchema = {
     paidOrderUpdatedAt: Date,
     paymentError: String,
     invoiceError: String,
+    supplierTotal: Number,
+    supplierMissingCount: { type: Number, default: 0 },
+    supplierCapturedAt: Date,
+    comaxDoc: {
+        docNumber: { type: String, filter: true },
+        totalSum: Number,
+        capturedAt: Date,
+        error: String
+    },
     cancelReason: String,
     pickTargetDuration: Number,
     pickStart: Date,

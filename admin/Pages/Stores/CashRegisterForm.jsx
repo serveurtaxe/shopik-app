@@ -21,7 +21,8 @@ export default function CashRegisterForm({ storeId }) {
             active: vals.active === 'on' || vals.active === true || vals.active === 'true',
             data: {
                 StockStoreID: vals.StockStoreID || undefined,
-                OrderStoreID: vals.OrderStoreID || undefined
+                OrderStoreID: vals.OrderStoreID || undefined,
+                DeliveryCustomerID: vals.DeliveryCustomerID || undefined
             }
         }
         if (vals.active === undefined) payload.active = existing ? existing.active : true
@@ -36,6 +37,7 @@ export default function CashRegisterForm({ storeId }) {
         <Form key={key} className={styles.form} action={handleSubmit} submitText='שמור'>
             <Input name='StockStoreID' label='StockStoreID' defaultValue={existing?.data?.StockStoreID || ''} />
             <Input name='OrderStoreID' label='OrderStoreID' defaultValue={existing?.data?.OrderStoreID || ''} />
+            <Input name='DeliveryCustomerID' label='DeliveryCustomerID' defaultValue={existing?.data?.DeliveryCustomerID || ''} />
             <Input name='active' label='פעיל' type='checkbox' defaultValue={existing ? existing.active : false} />
         </Form>
     </Flex>
