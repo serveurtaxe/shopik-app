@@ -1,4 +1,4 @@
-import { findClosestStore } from '#server/api/order/address/update.js'
+import getStoreForAddress from './getStoreForAddress.js'
 import handleSelect from '#server/dl/handleSelect.js'
 import { record, userActor } from './timeline.js'
 import enrichCart from './enrichCart.js'
@@ -27,7 +27,7 @@ export default async function getUserOrder({ DL, _user }) {
 
     if (activeAddress && order.deliveryMethod === DELIVERY_METHOD.DELIVERY) {
         order.address = activeAddress
-        const storeId = await findClosestStore(activeAddress, DL)
+        const storeId = await getStoreForAddress({ DL, address: activeAddress })
         if (storeId) order.storeId = storeId
     } else if (order.deliveryMethod === DELIVERY_METHOD.PICKUP) {
         if (_user.pickupStoreId) {
