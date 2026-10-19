@@ -81,8 +81,6 @@ app.use(compression())
 
 router(app, bootData)
 
-router(app, bootData)
-
 // Process role: single-process default runs everything (current behavior).
 // For multi-replica deploys, split into web + worker services:
 //   web:    RUN_WORKERS=false RUN_CRON=false  (serves traffic only)
