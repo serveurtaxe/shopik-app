@@ -96,10 +96,13 @@ const RUN_CRON = process.env.RUN_CRON !== 'false' && process.env.RUN_CRON !== '0
 function startSchedules(data) {
     startRefundRetry(data)
     if (!NO_NIGHT_SYNC) {
-        startNightlySync(data)
-        startGs1Sync(data)
-        startHolidaySeed(data)
-        startWindowSync(data)
+        startNightlySync(bootData)
+        startGs1Sync(bootData)
+        startHolidaySeed(bootData)
+        startWindowSync(bootData)
+        startSalesSync(bootData)
+        startRefundRetry(bootData)
+        if (isComaxDeliveryEnabled()) startDeliveryDocsSync(bootData)
     }
 }
 
@@ -114,13 +117,6 @@ try {
     }
     if (RUN_CRON) {
         startSchedules(bootData)
-        startNightlySync(bootData)
-        startGs1Sync(bootData)
-        startHolidaySeed(bootData)
-        startWindowSync(bootData)
-        startSalesSync(bootData)
-        startRefundRetry(bootData)
-        if (isComaxDeliveryEnabled()) startDeliveryDocsSync(bootData)
     } else {
         log.info('[Jobs] Crons disabled (RUN_CRON=false)')
     }
