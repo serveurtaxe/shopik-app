@@ -2,9 +2,8 @@ import { useNavigate } from 'react-router'
 import Flex from 'common/components/Flex'
 import Text from 'common/components/Text'
 import Icon from 'common/components/Icon'
-import render from 'common/functions/render'
 import { useText } from 'common/texts/TextProvider'
-import { DeliveryMethodTag, formatWindow } from 'Pages/Ops/orderUtils'
+import { DeliveryMethodTag, formatFullAddress, formatWindow } from 'Pages/Ops/orderUtils'
 import InfoCard, { InfoRow } from 'components/Detail/InfoCard'
 
 export default function OrderDetailsCard({ order }) {
@@ -27,7 +26,7 @@ export default function OrderDetailsCard({ order }) {
             </Flex>}
         </InfoRow>}
         {order.address && <InfoRow icon='location' label='customer_address'>
-            <Text size='m'>{render({ type: 'address', value: order.address })}</Text>
+            <Text size='m'>{formatFullAddress(order.address)}</Text>
             {order.address.comment && <Text size='m' mode='sub'>{order.address.comment}</Text>}
         </InfoRow>}
         <InfoRow icon='time' label='order_window'>
