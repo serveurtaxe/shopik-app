@@ -376,8 +376,13 @@ function OrderPick({ order = {}, setStep, onPicked }) {
                 />
             ))}
         </Flex>
-        <Flex center gap={20} className={styles.footer}>
+        <Flex center gap={10} col className={styles.footer}>
             <Button disabled={!allHandled} loading={completing} onClick={handleFinishPick} className={styles.finishBtn}>finish_pick</Button>
+            {toPickItems.length === 0 && order.phone && <Button
+                mode='text-brand'
+                icon='phoneOutgoing'
+                onClick={() => { window.location.href = `tel:${String(order.phone).replace(/[^+\d]/g, '')}` }}
+            >ops_call_customer</Button>}
         </Flex>
     </Flex>
 }
