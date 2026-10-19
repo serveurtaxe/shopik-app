@@ -1,4 +1,3 @@
-import { findClosestStore } from '#server/api/order/address/update.js'
 import { releaseWindowReservation } from '#server/utils/data/windowGroups.js'
 import getShippingConfig from '#server/utils/data/getShippingConfig.js'
 import { calcShipping } from '#common/functions/shipping.js'
@@ -44,7 +43,7 @@ export default async function deliveryMethod(payload, { DL, utils, _user }) {
             const activeAddress = _user.addresses.find(a => a.active)
             if (activeAddress) {
                 orderChanges.address = activeAddress
-                orderChanges.storeId = await findClosestStore(activeAddress, DL)
+                orderChanges.storeId = await utils.data.getStoreForAddress({ DL, address: activeAddress })
             } else {
                 orderChanges.address = null
                 orderChanges.storeId = null

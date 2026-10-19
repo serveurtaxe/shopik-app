@@ -1,36 +1,29 @@
 import { releaseWindowReservation } from '#server/utils/data/windowGroups.js'
 
-const MAX_DIST_FROM_STORE_KM = 10
-
-export async function findClosestStore(address, DL) {
-    const store = await DL.Store.Model.findOne({
-        'address.location': {
-            $nearSphere: {
-                $geometry: address.location,
-                $maxDistance: MAX_DIST_FROM_STORE_KM * 1000
-            }
-        }
-    }, { _id: 0, id: 1 }).lean()
-
-    return store?.id ?? null
-}
-
 export async function updateOrderAddress({ DL, utils, address, order, select = DL.Order.defaultSelect, actor }) {
-    const update = { address }
     const { DELIVERY_METHOD } = DL.Order.constants
+    const update = { address }
     if (order.deliveryMethod === DELIVERY_METHOD.DELIVERY) {
-        const storeId = await findClosestStore(address, DL)
-        if (storeId)
-            update.storeId = storeId
+        // Area-assigned store is authoritative; resolve it every time so a
+        // stale storeId is cleared rather than kept when no store is found.
+        update.storeId = await utils.data.getStoreForAddress({ DL, address })
     }
 
-    const updatedOrder = await DL.Order.updateOne({ id: order.id }, update, { select })
+    const storeChanged = order.deliveryMethod === DELIVERY_METHOD.DELIVERY && update.storeId !== order.storeId
+    const orderUpdate = { $set: update }
+    if (storeChanged && order.window?.id) {
+        orderUpdate.$unset = { window: 1 }
+        try {
+            await releaseWindowReservation(DL, order.window.id, order.window.reservedGroupId)
+        } catch { }
+    }
+
+    const updatedOrder = await DL.Order.updateOne({ id: order.id }, orderUpdate, { select })
 
     if (order.userId) {
         await DL.redis?.del(`user_store:${order.userId}`).catch(() => {})
     }
 
-    const storeChanged = update.storeId && update.storeId !== order.storeId
     const oldData = { address: order.address }
     const newData = { address: update.address }
     if (storeChanged) {
@@ -41,8 +34,16 @@ export async function updateOrderAddress({ DL, utils, address, order, select = D
             const oldStore = await DL.Store.readById(order.storeId, { _id: 0, name: 1 })
             oldData.storeName = oldStore?.name || null
         }
-        const newStore = await DL.Store.readById(update.storeId, { _id: 0, name: 1 })
-        newData.storeName = newStore?.name || null
+        if (update.storeId) {
+            const newStore = await DL.Store.readById(update.storeId, { _id: 0, name: 1 })
+            newData.storeName = newStore?.name || null
+        } else {
+            newData.storeName = null
+        }
+    }
+    if (orderUpdate.$unset?.window) {
+        oldData.window = order.window
+        newData.window = null
     }
 
     utils.data.timeline.record({

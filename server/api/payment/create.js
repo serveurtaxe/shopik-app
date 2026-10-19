@@ -81,27 +81,22 @@ export default async function create(payload, info) {
     } else {
         const addr = order.address
         const hasDeliveryAddress = addr && isNonEmpty(addr.city) && isNonEmpty(addr.street) && addr.building != null && String(addr.building).trim() !== ''
+        let deliveryAddr = hasDeliveryAddress ? addr : null
         if (!hasDeliveryAddress) {
             const activeAddr = _user.addresses?.find((a) => a.active) || _user.addresses?.[0]
             const hasCandidate = activeAddr && isNonEmpty(activeAddr.city) && isNonEmpty(activeAddr.street) && activeAddr.building != null && String(activeAddr.building).trim() !== ''
             if (hasCandidate) {
                 updates.address = activeAddr
-                if (!order.storeId && activeAddr.location?.coordinates?.length) {
-                    try {
-                        const store = await DL.Store.Model.findOne({
-                            'address.location': {
-                                $nearSphere: {
-                                    $geometry: activeAddr.location,
-                                    $maxDistance: 10 * 1000
-                                }
-                            }
-                        }, { _id: 0, id: 1 }).lean()
-                        if (store?.id) updates.storeId = store.id
-                    } catch { }
-                }
+                deliveryAddr = activeAddr
             } else {
                 missingFields.push('address')
             }
+        }
+        // Area-assigned store is authoritative; recompute every time so a
+        // stale/wrong storeId is corrected before payment.
+        if (deliveryAddr) {
+            const storeId = await utils.data.getStoreForAddress({ DL, address: deliveryAddr })
+            if (storeId !== (order.storeId ?? null)) updates.storeId = storeId
         }
     }
 
