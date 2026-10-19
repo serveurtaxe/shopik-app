@@ -12,7 +12,7 @@ import { isWeightProduct, getUnitLabel, formatAmount } from 'common/components/P
 import { getPickRange, isPickInRange, DEFAULT_PICK_LIMITS } from 'common/functions/pickLimits'
 import limitDecimalInput from 'common/functions/decimalInput'
 
-export default function ScanProduct({ product = {}, orderId, onClose, onPicked, initialPhase, initialSupplied, initialBarcode, onReplace }) {
+export default function ScanProduct({ product = {}, orderId, onClose, onPicked, initialPhase, initialSupplied, initialBarcode, onReplace, resettable = false }) {
     const videoRef = useRef(null)
     const streamRef = useRef(null)
     const rafRef = useRef(null)
@@ -23,6 +23,7 @@ export default function ScanProduct({ product = {}, orderId, onClose, onPicked, 
     const [manualMode, setManualMode] = useState(false)
     const [manualBarcode, setManualBarcode] = useState('')
     const [loading, setLoading] = useState(false)
+    const [resetLoading, setResetLoading] = useState(false)
     const [phase, setPhase] = useState(initialPhase || 'scanning') // scanning | amount | weight
     const [scannedBarcode, setScannedBarcode] = useState(initialBarcode || '')
     const [mismatch, setMismatch] = useState(null) // wrong barcode that was scanned
@@ -225,6 +226,27 @@ export default function ScanProduct({ product = {}, orderId, onClose, onPicked, 
         }
     }
 
+    async function handleReturnToPick() {
+        if (resetLoading) return
+        setResetLoading(true)
+        try {
+            const res = await apiReq('order/ops/pick_item', {
+                id: orderId,
+                barcode: product.barcode,
+                action: 'reset'
+            })
+            if (res?.error) setError(res.error)
+            else {
+                onPicked?.(res)
+                onClose?.()
+            }
+        } catch (e) {
+            setError(e.message || 'return to pick failed')
+        } finally {
+            setResetLoading(false)
+        }
+    }
+
     if (phase === 'amount' || phase === 'weight') {
         const isWeightPhase = weight || phase === 'weight'
         return <Flex col className={styles.scanProduct}>
@@ -290,9 +312,10 @@ export default function ScanProduct({ product = {}, orderId, onClose, onPicked, 
                 </Flex>
             )}
 
-            <Flex col gap={10} className={styles.actions}>
+            <Flex center col gap={20} className={styles.actions}>
                 {error && <Flex center><Text size="s" mode="error">{error}</Text></Flex>}
                 <Button disabled={!canContinue} loading={loading} onClick={proceedWithFinalAmount} className={styles.continueBtn}>המשך ליקוט</Button>
+                {resettable && <Button mode='text-brand' loading={resetLoading} onClick={handleReturnToPick}>ops_return_to_pick</Button>}
             </Flex>
         </Flex>
     }

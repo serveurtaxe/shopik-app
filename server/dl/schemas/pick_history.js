@@ -16,7 +16,7 @@ const pickHistorySchema = {
     storageType: String,
     action: {
         type: String,
-        enum: ['scan', 'weight', 'replace', 'missing', 'complete', 'pack'],
+        enum: ['scan', 'weight', 'replace', 'missing', 'complete', 'pack', 'reset'],
         required: true,
         filter: true
     },
