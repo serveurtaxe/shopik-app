@@ -14,7 +14,7 @@ export async function addAddress({ DL, external, user, address }) {
     geocoded.hasService = !!area
 
     const hasActiveAddress = user.addresses && user.addresses.some(a => a.active)
-    geocoded.active = !hasActiveAddress
+    geocoded.active = !hasActiveAddress && geocoded.hasService
 
     return geocoded
 }
@@ -26,12 +26,12 @@ export async function editAddress({ DL, external, user, addressId, address }) {
     const geocoded = await external.geocode.address(address)
     geocoded.addressId = addressId
     geocoded.name = address.name ?? existingAddr.name
-    geocoded.active = existingAddr.active
     if (!geocoded.location) geocoded.location = existingAddr.location
 
     const area = await findByLocation(DL, geocoded.location)
     geocoded.areaId = area?.id ?? null
     geocoded.hasService = !!area
+    geocoded.active = existingAddr.active && geocoded.hasService
 
     return { geocoded, existingAddr }
 }

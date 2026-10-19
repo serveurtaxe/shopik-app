@@ -1,3 +1,18 @@
+@keyframes blink {
+    0% {
+        border-color: var(--border-primary);
+        box-shadow: var(--shadowL);
+        background-color: var(--bg-primary);
+    }
+
+    50%,
+    100% {
+        border-color: var(--border-primary);
+        box-shadow: 0 0 0 4px rgba(217, 48, 37, 0.22), var(--shadowL);
+        background-color: rgba(217, 48, 37, 0.08);
+    }
+}
+
 .address {
     position: relative;
     cursor: pointer;
@@ -14,6 +29,10 @@
 
     &.active {
         border-color: var(--text-success-primary) !important;
+    }
+
+    &.blink {
+        animation: blink 0.9s ease-in-out 3 forwards;
     }
 
     :global(.Button_text) {

@@ -1,5 +1,5 @@
 import { editAddress } from '#server/utils/data/userAddress.js'
-import { updateOrderAddress } from '#server/api/order/address/update.js'
+import { clearOrderAddress, updateOrderAddress } from '#server/api/order/address/update.js'
 
 const sameLocationFields = [
     'city',
@@ -29,21 +29,18 @@ export default async function edit(payload, { DL, _user, external, utils }) {
     )
 
     await DL.redis?.del(`user_auth:${_user.id}`)
-    if (sameLocation) return { user }
+    if (sameLocation && geocoded.active === existingAddr.active) return { user }
 
     const order = await utils.data.getUserOrder({ DL, _user })
 
     const { DELIVERY_METHOD } = DL.Order.constants
-    const orderUpdateRequired = geocoded.active && order.deliveryMethod === DELIVERY_METHOD.DELIVERY
+    const orderUpdateRequired = existingAddr.active && order.deliveryMethod === DELIVERY_METHOD.DELIVERY
     if (!orderUpdateRequired) return { user }
 
-    const updatedOrder = await updateOrderAddress({
-        DL,
-        utils,
-        order,
-        address: geocoded,
-        actor: utils.data.timeline.userActor(_user)
-    })
+    const actor = utils.data.timeline.userActor(_user)
+    const updatedOrder = geocoded.active
+        ? await updateOrderAddress({ DL, utils, order, address: geocoded, actor })
+        : await clearOrderAddress({ DL, utils, order, actor })
 
     return {
         user,
