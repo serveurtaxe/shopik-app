@@ -1,0 +1,3 @@
+# Source PNGs (named by GS1 Food_Symbol_Red code, e.g. FSR3.png) are converted
+# to WebP here by server/scripts/convertNutritionAssets.js.
+*.png

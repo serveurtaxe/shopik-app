@@ -6,6 +6,7 @@ import Text from 'common/components/Text'
 import Icon from 'common/components/Icon'
 import classNames from 'common/functions/classNames'
 import KashrutStamps from 'common/components/Kashrut'
+import { DietIcons } from 'common/components/Nutrition'
 import { round2, round3 } from 'common/functions/calcOrder/utils.js'
 import { getProductImageUrl } from 'common/functions/productImageUrl.js'
 import { useState, useEffect } from 'react'
@@ -252,18 +253,20 @@ export function ProductFavorite({ className }) {
     />
 }
 
-// Row of kashrut (and later dietary/brand) stamps. Cards show one kashrut
-// stamp — the strongest rabbinate that has an image. The product page shows
-// more (kashrutCount) and falls back to a text badge per rabbinate without an
-// image. min-height is set in CSS so cards don't reflow when stamps arrive.
-export function ProductStamps({ product, className, kashrutCount = 1, imagesOnly = true }) {
+// Row of kashrut + diet stamps. Cards show one kashrut stamp (strongest
+// rabbinate with an image) and a couple of diet icons. The product page shows
+// more (kashrutCount / dietCount) and falls back to a text badge per rabbinate
+// without an image. min-height is set in CSS so cards don't reflow.
+export function ProductStamps({ product, className, kashrutCount = 1, dietCount = 2, imagesOnly = true }) {
     if (!product) return null
-    return <KashrutStamps
-        kashrut={product.kashrut}
-        count={kashrutCount}
-        imagesOnly={imagesOnly}
-        className={classNames(styles.stamps, className)}
-    />
+    return <Flex gap={6} alignItems="center" wrap justifyContent='space-between' className={classNames(styles.stamps, className)}>
+        <KashrutStamps
+            kashrut={product.kashrut}
+            count={kashrutCount}
+            imagesOnly={imagesOnly}
+        />
+        <DietIcons diet={product.diet} count={dietCount} />
+    </Flex>
 }
 
 export function ProductPrice({ product, size = 'm', sales }) {

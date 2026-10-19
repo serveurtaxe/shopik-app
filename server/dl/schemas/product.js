@@ -176,6 +176,13 @@ const productSchema = {
         type: String,
         enum: Object.values(constants.PASSOVER_KASHRUT)
     },
+    // Normalized GS1 Diet_Information claims ({ code, name }). Drives the diet
+    // icons on the card + product page. Mapped by server/external/gs1/mapper.js.
+    diet: [{
+        code: String,
+        name: String,
+        _id: false
+    }],
     scannable: { type: Boolean, default: true },
     nutrients: {
         positive: Boolean,
@@ -233,6 +240,7 @@ const defaultSelect = {
     prices: 1,
     passoverKashrut: 1,
     kashrut: 1,
+    diet: 1,
     limit: 1,
     label: 1,
     producer: 1,
