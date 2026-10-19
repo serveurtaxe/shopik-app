@@ -27,7 +27,7 @@ import {
     LuUserRound
 } from 'react-icons/lu'
 
-export default function OrderSummary({ onPayment, paying, showPayBtn = true, missingFields = [], hideSummary = false }) {
+export default function OrderSummary({ onPayment, paying, showPayBtn = true, missingFields = [], hasNoService = false, hideSummary = false }) {
     const { order = {}, setOrder } = useOrder()
     const user = useUser()
     const { addresses = [] } = user || {}
@@ -45,6 +45,12 @@ export default function OrderSummary({ onPayment, paying, showPayBtn = true, mis
     const secondPhoneRef = useRef(null)
     const cityRef = useRef(null)
     const windowRef = useRef(null)
+
+    // A no-service address is not a missing field, but it still needs the
+    // address section open so the shopper can edit it.
+    useEffect(() => {
+        if (hasNoService) setAddressOpen(true)
+    }, [hasNoService])
 
     // Auto-open collapses for missing fields + focus first missing via refs
     useEffect(() => {
@@ -221,7 +227,7 @@ export default function OrderSummary({ onPayment, paying, showPayBtn = true, mis
                     >
                         <div className={styles.collapseContent}>
                             {addresses.length > 0 ? (
-                                <Addresses hideHeader action={{ onClick: () => setAddressOpen(false) }} />
+                                <Addresses hideHeader blinkNoService={addressOpen} action={{ onClick: () => setAddressOpen(false) }} />
                             ) : (
                                 <AddressForm onDone={() => setAddressOpen(false)} cityRef={cityRef} />
                             )}

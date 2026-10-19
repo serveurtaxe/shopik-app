@@ -36,6 +36,8 @@ export default function Checkout() {
     const minSumThreshold = getMinSumForMethod(limits, order?.deliveryMethod)
     const minSumRemaining = getRemainingToMin({ sum: order?.sum ?? 0, deliveryMethod: order?.deliveryMethod, limits })
     const isBelowMinSum = minSumThreshold > 0 && minSumRemaining > 0
+    const serviceAddress = user?.addresses?.find(a => a.active) || user?.addresses?.[0]
+    const hasNoService = (order?.deliveryMethod || 'delivery') !== 'pickup' && serviceAddress?.hasService === false
 
     const cartTitle = `${TR('my_cart_title')} (${totalItemsCount} ${TR('items_suffix')})`
     // Viewport flag for content decisions only; layout direction stays
@@ -57,6 +59,8 @@ export default function Checkout() {
         if (isPickup) {
             const hasPickup = order?.storeId || (order?.address && isNonEmpty(order.address.city))
             if (!hasPickup && !user?.pickupStoreId) missing.push('address')
+        } else if (hasNoService) {
+            missing.push('address')
         } else {
             const addr = order?.address
             const hasDelivery = addr && isNonEmpty(addr.city) && isNonEmpty(addr.street) && addr.building != null && String(addr.building).trim() !== ''
@@ -139,6 +143,11 @@ export default function Checkout() {
 
     async function handlePayment() {
         if (paying) return
+        setPayError()
+        if (hasNoService) {
+            setMissingFields(['address'])
+            return
+        }
         if (isBelowMinSum) {
             const label = TR?.('minimum_order_sum')
             setPayError({ message: `${label} ${minSumThreshold}` })
@@ -158,7 +167,6 @@ export default function Checkout() {
             return
         }
         setPaying(true)
-        setPayError()
         setMissingFields([])
         try {
             const res = await apiReq('payment/create', { orderId: order.id })
@@ -262,7 +270,7 @@ export default function Checkout() {
 
                 {/* Sidebar Area (End Side in RTL) */}
                 <aside className={styles.sidebar}>
-                    <OrderSummary onPayment={handlePayment} paying={paying} showPayBtn={!paymentUrl} missingFields={missingFields} hideSummary={isMobile && (paying || paymentUrl)} />
+                    <OrderSummary onPayment={handlePayment} paying={paying} showPayBtn={!paymentUrl} missingFields={missingFields} hasNoService={hasNoService} hideSummary={isMobile && (paying || paymentUrl)} />
                 </aside>
             </div>
         </div>

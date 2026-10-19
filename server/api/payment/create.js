@@ -1,4 +1,5 @@
 import { releaseWindowReservation } from '#server/utils/data/windowGroups.js'
+import { findByLocation } from '#server/external/supplyArea.js'
 
 export default async function create(payload, info) {
     const { DL, external, utils, _user } = info
@@ -113,6 +114,19 @@ export default async function create(payload, info) {
             try { await releaseWindowReservation(DL, expiredWindowId, expiredGroupId) } catch {}
             try { await DL.Order.updateOne({ id: order.id }, { $unset: { window: 1 } }) } catch {}
             order.window = undefined
+        }
+    }
+
+    if (!isPickup) {
+        const deliveryAddr = updates.address || order.address
+        if (deliveryAddr) {
+            const area = await findByLocation(DL, deliveryAddr.location)
+            if (!area) throw {
+                status: 400,
+                message: 'Address has no service',
+                code: 'NO_SERVICE',
+                missingFields: ['address']
+            }
         }
     }
 

@@ -9,7 +9,7 @@ import Flex from 'common/components/Flex'
 import Text from 'common/components/Text'
 import { useText } from 'common/texts/TextProvider'
 
-export default function Address({ store, address = {}, active: activeProp, action = {}, onEdit, onRemove }) {
+export default function Address({ store, address = {}, active: activeProp, action = {}, onEdit, onRemove, blink = false }) {
     const { city, street, apartment, building, active: addressActive, hasService } = store?.address || address
     const active = activeProp ?? addressActive
     const isNoService = !store && hasService === false
@@ -18,7 +18,7 @@ export default function Address({ store, address = {}, active: activeProp, actio
 
     return <Flex
         onClick={isDisabled ? undefined : action.onClick}
-        tag={Card} gap={10} className={classNames(styles.address, [styles.active, active], [styles.disabled, isDisabled || isNoService])}>
+        tag={Card} gap={10} className={classNames(styles.address, [styles.active, active && !isNoService], [styles.disabled, isDisabled || isNoService], [styles.blink, blink && isNoService])}>
         <Image size={74} src={mapImage} />
 
         <Flex col gap={7} justifyContent='center'>

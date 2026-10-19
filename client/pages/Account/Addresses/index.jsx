@@ -64,7 +64,7 @@ export function AddressForm({ initialData, onDone, cityRef }) {
     )
 }
 
-export default function Addresses({ action, hideHeader }) {
+export default function Addresses({ action, hideHeader, blinkNoService = false }) {
     const user = useUser()
     const [mode, setMode] = useState(action ? 'select' : 'browse')
     const [editAddress, setEditAddress] = useState(null)
@@ -116,6 +116,7 @@ export default function Addresses({ action, hideHeader }) {
                     {addresses.map((address) => <Address
                         key={address.addressId}
                         address={address}
+                        blink={blinkNoService && address.hasService === false}
                         onEdit={handleEdit}
                         onRemove={handleRemove}
                         action={{ onClick: () => setActive(address), text: 'setActive', disabled: address.hasService === false }}

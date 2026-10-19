@@ -1,3 +1,5 @@
+import { releaseWindowReservation } from '#server/utils/data/windowGroups.js'
+
 const MAX_DIST_FROM_STORE_KM = 10
 
 export async function findClosestStore(address, DL) {
@@ -20,7 +22,6 @@ export async function updateOrderAddress({ DL, utils, address, order, select = D
         const storeId = await findClosestStore(address, DL)
         if (storeId)
             update.storeId = storeId
-        update.address.hasService = Boolean(storeId)
     }
 
     const updatedOrder = await DL.Order.updateOne({ id: order.id }, update, { select })
@@ -50,6 +51,35 @@ export async function updateOrderAddress({ DL, utils, address, order, select = D
         eventType: DL.Timeline.constants.EVENT_TYPES.ORDER_ADDRESS,
         actor,
         changes: { oldData, newData }
+    })
+
+    return updatedOrder
+}
+
+export async function clearOrderAddress({ DL, utils, order, select = DL.Order.defaultSelect, actor }) {
+    const update = { $set: { address: null, storeId: null } }
+    if (order.window?.id) {
+        update.$unset = { window: 1 }
+        try {
+            await releaseWindowReservation(DL, order.window.id, order.window.reservedGroupId)
+        } catch { }
+    }
+
+    const updatedOrder = await DL.Order.updateOne({ id: order.id }, update, { select })
+
+    if (order.userId) {
+        await DL.redis?.del(`user_store:${order.userId}`).catch(() => {})
+    }
+
+    utils.data.timeline.record({
+        DL,
+        order,
+        eventType: DL.Timeline.constants.EVENT_TYPES.ORDER_ADDRESS,
+        actor,
+        changes: {
+            oldData: { address: order.address, storeId: order.storeId, window: order.window },
+            newData: { address: null, storeId: null, window: null }
+        }
     })
 
     return updatedOrder
