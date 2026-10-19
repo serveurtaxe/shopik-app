@@ -70,7 +70,7 @@ export default async function deliveryMethod(payload, { DL, utils, _user }) {
     const orderUpdate = { $set: orderChanges }
     if (order.storeId != orderChanges.storeId) {
         if (order.window?.id) {
-            orderUpdate.$unset = { window: 0 }
+            orderUpdate.$unset = { window: 1 }
             await releaseWindowReservation(DL, order.window.id, order.window.reservedGroupId)
         }
     }
