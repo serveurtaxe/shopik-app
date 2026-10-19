@@ -96,13 +96,12 @@ const RUN_CRON = process.env.RUN_CRON !== 'false' && process.env.RUN_CRON !== '0
 function startSchedules(data) {
     startRefundRetry(data)
     if (!NO_NIGHT_SYNC) {
-        startNightlySync(bootData)
-        startGs1Sync(bootData)
-        startHolidaySeed(bootData)
-        startWindowSync(bootData)
-        startSalesSync(bootData)
-        startRefundRetry(bootData)
-        if (isComaxDeliveryEnabled()) startDeliveryDocsSync(bootData)
+        startNightlySync(data)
+        startGs1Sync(data)
+        startHolidaySeed(data)
+        startWindowSync(data)
+        startSalesSync(data)
+        if (isComaxDeliveryEnabled()) startDeliveryDocsSync(data)
     }
 }
 
