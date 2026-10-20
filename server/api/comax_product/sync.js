@@ -1,4 +1,5 @@
 import buildCategories from './build_categories.js'
+import { buildCategoryPathIds, groupId, subGroupId } from './categoryIds.js'
 import enqueueChangedImages from '#server/services/image/enqueue.js'
 import log from '#server/utils/log.js'
 
@@ -34,14 +35,15 @@ function buildUnit(comax, DL) {
 
 function buildProduct(comax, DL, defaultDomainId, existing, enforceBuyingPrice) {
     const category = {}
+    const categoryPathIds = buildCategoryPathIds(comax)
     if (comax.subGroup) {
-        category.id = comax.subGroupCode
+        category.id = subGroupId(comax.subGroupCode)
         category.title = comax.subGroup
-        category.pathIds = [comax.superDepartmentCode, comax.departmentCode, comax.groupCode, comax.subGroupCode]
+        category.pathIds = categoryPathIds
     } else if (comax.group) {
-        category.id = comax.groupCode
+        category.id = groupId(comax.groupCode)
         category.title = comax.group
-        category.pathIds = [comax.superDepartmentCode, comax.departmentCode, comax.groupCode]
+        category.pathIds = categoryPathIds
     }
     // No image file = hidden. Re-evaluated every sync, so products flip back to
     // ACTIVE on the first sync after the image worker attaches their image.
@@ -83,8 +85,6 @@ function mergePrices(existingPrices, defaultDomainId, comaxPrice) {
 }
 
 export default async function syncComax(payload, { DL }) {
-    await buildCategories(payload, { DL })
-
     // Batched sync: the catalog (10-50k docs) must never be fully loaded.
     // A single read({ limit: 0 }) + $in:[all barcodes] + mapped + bulkOps array
     // held 4-5 full copies at once and OOMed 256MB containers.
@@ -200,6 +200,10 @@ export default async function syncComax(payload, { DL }) {
             log.warn('[Comax Sync] Image enqueue skipped:', e?.message || e)
         }
     }
+
+    // Rebuild after the product writes so categories reflect this run's statuses.
+    // Products hidden for missing images only become active on a later sync.
+    await buildCategories(payload, { DL })
 
     return {
         synced,

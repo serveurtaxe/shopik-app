@@ -1,29 +1,61 @@
 import toSlug from '#common/functions/toSlug.js'
 import { invalidateMenu } from '#server/utils/data/getMenu.js'
+import { superDepartmentId, departmentId, groupId, subGroupId } from './categoryIds.js'
 
 export default async function buildCategories(payload, { DL }) {
-    // Distinct category tuples via aggregation — never load the full catalog.
-    // A full DL.ComaxProduct.read({ limit: 0 }) here held all 10-50k docs in
-    // memory and OOMed 256MB containers (see comax_product/sync).
-    const tuples = await DL.ComaxProduct.Model.aggregate([
+    // Distinct category tuples for ACTIVE products only. Start from Product so
+    // hidden/archived docs never create categories, then join ComaxProduct for
+    // the full name hierarchy. Aggregation keeps the 10-50k catalog in the DB
+    // (a full read here OOMed 256MB containers — see comax_product/sync).
+    const tuples = await DL.Product.Model.aggregate([
         {
             $match: {
-                superDepartmentCode: { $exists: true, $nin: ['12', null] },
-                departmentCode: { $exists: true },
-                groupCode: { $exists: true }
+                status: DL.Product.constants.STATUS.ACTIVE
+            }
+        },
+        {
+            $lookup: {
+                from: DL.ComaxProduct.Model.collection.name,
+                localField: 'barcode',
+                foreignField: 'barcode',
+                pipeline: [
+                    {
+                        $project: {
+                            _id: 0,
+                            superDepartmentCode: 1,
+                            superDepartment: 1,
+                            departmentCode: 1,
+                            department: 1,
+                            groupCode: 1,
+                            group: 1,
+                            subGroupCode: 1,
+                            subGroup: 1
+                        }
+                    },
+                    { $limit: 1 }
+                ],
+                as: 'comax'
+            }
+        },
+        { $unwind: '$comax' },
+        {
+            $match: {
+                'comax.superDepartmentCode': { $exists: true, $nin: ['12', null] },
+                'comax.departmentCode': { $exists: true },
+                'comax.groupCode': { $exists: true }
             }
         },
         {
             $group: {
                 _id: {
-                    superDepartmentCode: '$superDepartmentCode',
-                    superDepartment: '$superDepartment',
-                    departmentCode: '$departmentCode',
-                    department: '$department',
-                    groupCode: '$groupCode',
-                    group: '$group',
-                    subGroupCode: '$subGroupCode',
-                    subGroup: '$subGroup'
+                    superDepartmentCode: '$comax.superDepartmentCode',
+                    superDepartment: '$comax.superDepartment',
+                    departmentCode: '$comax.departmentCode',
+                    department: '$comax.department',
+                    groupCode: '$comax.groupCode',
+                    group: '$comax.group',
+                    subGroupCode: '$comax.subGroupCode',
+                    subGroup: '$comax.subGroup'
                 }
             }
         },
@@ -41,10 +73,6 @@ export default async function buildCategories(payload, { DL }) {
             }
         }
     ])
-
-    if (tuples.length === 0) {
-        return { message: 'No comax products to extract categories from', count: 0 }
-    }
 
     const superDepartmentMap = new Map()
     const departmentMap = new Map()
@@ -66,7 +94,11 @@ export default async function buildCategories(payload, { DL }) {
         const groupSlug = toSlug(p.group)
         const subGroupSlug = toSlug(p.subGroup)
 
-        superDepartmentMap.set(p.superDepartmentCode, {
+        const superDepartmentKey = superDepartmentId(p.superDepartmentCode)
+        const departmentKey = departmentId(p.departmentCode)
+        const groupKey = groupId(p.groupCode)
+
+        superDepartmentMap.set(superDepartmentKey, {
             name: p.superDepartment,
             slug: superDepartmentSlug,
             path: superDepartmentSlug,
@@ -74,28 +106,28 @@ export default async function buildCategories(payload, { DL }) {
             parentIds: []
         })
 
-        departmentMap.set(p.departmentCode, {
+        departmentMap.set(departmentKey, {
             name: p.department,
             slug: departmentSlug,
             path: `${superDepartmentSlug}/${departmentSlug}`,
-            parentId: p.superDepartmentCode,
-            parentIds: [p.superDepartmentCode]
+            parentId: superDepartmentKey,
+            parentIds: [superDepartmentKey]
         })
 
-        groupMap.set(p.groupCode, {
+        groupMap.set(groupKey, {
             name: p.group,
             slug: groupSlug,
             path: `${superDepartmentSlug}/${departmentSlug}/${groupSlug}`,
-            parentId: p.departmentCode,
-            parentIds: p.departmentCode ? [p.superDepartmentCode, p.departmentCode] : []
+            parentId: departmentKey,
+            parentIds: [superDepartmentKey, departmentKey]
         })
 
-        subGroupMap.set(p.subGroupCode, {
+        subGroupMap.set(subGroupId(p.subGroupCode), {
             name: p.subGroup,
             slug: subGroupSlug,
             path: `${superDepartmentSlug}/${departmentSlug}/${groupSlug}/${subGroupSlug}`,
-            parentId: p.groupCode,
-            parentIds: p.groupCode ? [p.superDepartmentCode, p.departmentCode, p.groupCode] : []
+            parentId: groupKey,
+            parentIds: [superDepartmentKey, departmentKey, groupKey]
         })
     }
 
@@ -145,19 +177,32 @@ export default async function buildCategories(payload, { DL }) {
         })
     }
 
-    if (categories.length > 0) {
+    const categoryIds = categories.map(c => c.id)
+
+    if (categories.length > 0)
         await DL.Category.bulkWrite({ docs: categories })
+
+    // Categories are fully derived from active products, so anything left over
+    // is stale. Delete the docs and their HASHSET cache entries.
+    const staleIds = await DL.Category.Model.distinct('id', { id: { $nin: categoryIds } })
+    if (staleIds.length > 0) {
+        await DL.Category.Model.deleteMany({ id: { $in: staleIds } })
+        await DL.Category.cache?.del(staleIds)
+    }
+
+    if (categories.length > 0 || staleIds.length > 0) {
         // Category docs feed the storefront menu (60min Redis cache) — the
         // bulkWrite $set only touches synced fields so manual `icon` values
         // survive, but the cached menu must be rebuilt on next request.
         await invalidateMenu({ DL })
     }
 
-    console.log(`[Comax Categories] Built ${categories.length} categories from comax products`)
+    console.log(`[Comax Categories] Built ${categories.length} categories from active comax products, removed ${staleIds.length} stale`)
 
     return {
         message: 'Categories built successfully',
-        count: categories.length
+        count: categories.length,
+        removed: staleIds.length
     }
 }
 
