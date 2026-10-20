@@ -1,6 +1,7 @@
 import { withDomainPrice } from '#server/utils/data/withDomainPrice.js'
+import { ADMIN_TOKEN_COOKIE } from '#common/constants.js'
 
-export default async function search(payload, { DL, req, _user, utils, platform }) {
+export default async function search(payload, { DL, req, _user, _admin, utils, platform }) {
     const { value = '', filter = {}, skip = 0, limit = 20, domainId } = payload
     // Admin traffic keeps the full multi-domain `prices` array; the
     // storefront gets a resolved flat `price` only (see withDomainPrice).
@@ -13,7 +14,17 @@ export default async function search(payload, { DL, req, _user, utils, platform 
     const wantAnnotate = mode === 'annotate' && !!storeId
 
     const effectiveFilter = wantFilter ? utils.data.withStock.applyStockFilter(filter, storeId, mode) : filter
-    effectiveFilter.status = DL.Product.constants.STATUS.ACTIVE
+    // Hidden products are replacement candidates for the admin picker flow only.
+    // Public routes skip admin auth in the router, so resolve the admin session
+    // here (token verified by getAdmin) when the admin cookie is present.
+    let admin = _admin
+    if (!admin && req?.cookies?.[ADMIN_TOKEN_COOKIE]) {
+        try { admin = await utils.auth.getAdmin(req, { DL, utils }) } catch { }
+    }
+    const isAdminViewer = !!admin && !admin.isApiKey
+    effectiveFilter.status = isAdminViewer
+        ? { $in: [DL.Product.constants.STATUS.ACTIVE, DL.Product.constants.STATUS.HIDDEN] }
+        : DL.Product.constants.STATUS.ACTIVE
     if (domainId)
         effectiveFilter['prices.domainId'] = domainId
 

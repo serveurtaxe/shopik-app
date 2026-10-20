@@ -2,23 +2,27 @@ const COMAX_URL = 'https://ws.comax.co.il/Comax_WebServices/items_service.asmx/G
 const COMAX_BALANCE_URL = 'https://ws.comax.co.il/Comax_WebServices/Items_Service.asmx/Get_AllItemsBalanceBySearch'
 const COMAX_PROMOTIONS_URL = 'https://ws.comax.co.il/Comax_WebServices/Promotions_Service.asmx/GetPromotionsDef'
 
-async function fetchComaxXml({ url, params, timeoutMs = 120000, action }, { DL }) {
+async function fetchComaxXml({ url, params, timeoutMs = 120000, action, skipLog }, { DL }) {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeoutMs)
     let logPromise, log
     try {
         const fullUrl = `${url}?${new URLSearchParams(params)}`
-        const logData = {
-            action,
-            direction: DL.Log.constants.DIRECTION.OUT,
-            data: { request: { url: fullUrl, params } }
+        // skipLog: per-item backfills fire tens of thousands of requests; one Log
+        // doc each would flood the collection. Callers opt out explicitly.
+        if (!skipLog) {
+            const logData = {
+                action,
+                direction: DL.Log.constants.DIRECTION.OUT,
+                data: { request: { url: fullUrl, params } }
+            }
+            log = DL.Log.start(logData)
+            log.actor({ type: DL.Log.constants.ACTOR.API })
         }
-        log = DL.Log.start(logData)
-        log.actor({ type: DL.Log.constants.ACTOR.API })
         const response = await fetch(fullUrl, { signal: controller.signal })
         if (!response.ok) throw new Error(`Comax HTTP ${response.status}: ${response.statusText}`)
         const xml = await response.text()
-        logPromise = log.success(`xml: ${xml.length} characters`)
+        if (log) logPromise = log.success(`xml: ${xml.length} characters`)
         return xml
     } catch (error) {
         if (log) {
@@ -31,8 +35,8 @@ async function fetchComaxXml({ url, params, timeoutMs = 120000, action }, { DL }
     }
 }
 
-export async function fetchComax({ params, timeoutMs = 120000 }, { DL }) {
-    return fetchComaxXml({ url: COMAX_URL, params, timeoutMs, action: 'comax_fetch_products' }, { DL })
+export async function fetchComax({ params, timeoutMs = 120000, skipLog }, { DL }) {
+    return fetchComaxXml({ url: COMAX_URL, params, timeoutMs, action: 'comax_fetch_products', skipLog }, { DL })
 }
 
 export async function fetchComaxBalance({ params, timeoutMs = 120000 }, { DL }) {

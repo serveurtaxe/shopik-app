@@ -32,7 +32,7 @@ function buildUnit(comax, DL) {
     }
 }
 
-function buildProduct(comax, DL, defaultDomainId, existing) {
+function buildProduct(comax, DL, defaultDomainId, existing, enforceBuyingPrice) {
     const category = {}
     if (comax.subGroup) {
         category.id = comax.subGroupCode
@@ -45,14 +45,18 @@ function buildProduct(comax, DL, defaultDomainId, existing) {
     }
     // No image file = hidden. Re-evaluated every sync, so products flip back to
     // ACTIVE on the first sync after the image worker attaches their image.
+    // Missing sale price or buying price = archived (never created).
     const hasImages = (existing?.images?.product || []).length > 0
+    const missingPrice = !(comax.price > 0) || (enforceBuyingPrice && !(comax.buyingPrice > 0))
     const status = comax.archived ?
         DL.Product.constants.STATUS.ARCHIVED :
-        !hasImages ?
-            DL.Product.constants.STATUS.HIDDEN :
-            comax.showInWeb ?
-                DL.Product.constants.STATUS.ACTIVE :
-                DL.Product.constants.STATUS.HIDDEN
+        missingPrice ?
+            DL.Product.constants.STATUS.ARCHIVED :
+            !hasImages ?
+                DL.Product.constants.STATUS.HIDDEN :
+                comax.showInWeb ?
+                    DL.Product.constants.STATUS.ACTIVE :
+                    DL.Product.constants.STATUS.HIDDEN
 
     return {
         barcode: comax.barcode,
@@ -60,7 +64,8 @@ function buildProduct(comax, DL, defaultDomainId, existing) {
         description: comax.description,
         producer: comax.manufacturer,
         category,
-        prices: mergePrices(existing?.prices, defaultDomainId, comax.price),
+        prices: mergePrices(existing?.prices, defaultDomainId, comax.price > 0 ? comax.price : null),
+        buyingPrice: comax.buyingPrice > 0 ? comax.buyingPrice : null,
         status,
         nutrients: {
             alcohol: comax.alcohol
@@ -106,6 +111,7 @@ export default async function syncComax(payload, { DL }) {
         subGroupCode: 1,
         subGroup: 1,
         price: 1,
+        buyingPrice: 1,
         showInWeb: 1,
         archived: 1,
         Size: 1,
@@ -124,10 +130,17 @@ export default async function syncComax(payload, { DL }) {
     const defaultDomain = await DL.Domain.readOne({ isDefault: true, active: true }, { _id: 0, id: 1 })
     if (!defaultDomain?.id) throw { status: 500, message: 'no default domain configured' }
 
+    // Buying-price requirement is enforced only once buying prices were
+    // actually imported — otherwise the first deploy would archive everything.
+    const enforceBuyingPrice = await DL.ComaxProduct.count({ buyingPrice: { $gt: 0 } }) > 0
+    if (!enforceBuyingPrice)
+        console.warn('[Comax Sync] No buying prices imported yet — buyingPrice requirement skipped for this run')
+
     let synced = 0
     let created = 0
     let updated = 0
     let hiddenNoImage = 0
+    let archivedNoPrice = 0
 
     for (let skip = 0; skip < total; skip += BATCH) {
         const comaxProducts = await DL.ComaxProduct.read(filter, select, {
@@ -146,10 +159,15 @@ export default async function syncComax(payload, { DL }) {
         )
         const existingByBarcode = new Map((existingProducts || []).map(p => [p.barcode, p]))
 
-        const productsToSync = comaxProducts.map(c => buildProduct(c, DL, defaultDomain.id, existingByBarcode.get(c.barcode)))
+        const productsToSync = comaxProducts.map(c => buildProduct(c, DL, defaultDomain.id, existingByBarcode.get(c.barcode), enforceBuyingPrice))
         hiddenNoImage += productsToSync.filter(p =>
             p.status === DL.Product.constants.STATUS.HIDDEN &&
             (existingByBarcode.get(p.barcode)?.images?.product || []).length === 0
+        ).length
+        archivedNoPrice += comaxProducts.filter((c, i) =>
+            !c.archived &&
+            productsToSync[i].status === DL.Product.constants.STATUS.ARCHIVED &&
+            (!(c.price > 0) || (enforceBuyingPrice && !(c.buyingPrice > 0)))
         ).length
 
         const result = await DL.Product.bulkWrite({
@@ -172,7 +190,7 @@ export default async function syncComax(payload, { DL }) {
         console.log(`[Comax Sync] batch ${Math.floor(skip / BATCH) + 1}/${Math.ceil(total / BATCH)}: ${synced}/${total} (heap ${Math.round(m.heapUsed / 1048576)}MB)`)
     }
 
-    console.log(`[Comax Sync] Created ${created}, updated ${updated}, hidden (no image): ${hiddenNoImage}`)
+    console.log(`[Comax Sync] Created ${created}, updated ${updated}, hidden (no image): ${hiddenNoImage}, archived (no price): ${archivedNoPrice}`)
 
     if (!payload?.skipImageEnqueue) {
         try {
@@ -187,7 +205,8 @@ export default async function syncComax(payload, { DL }) {
         synced,
         created,
         updated,
-        hiddenNoImage
+        hiddenNoImage,
+        archivedNoPrice
     }
 }
 

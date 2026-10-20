@@ -11,6 +11,15 @@ export default function ComaxProducts({ }) {
         },
         permission: 'comax_product:update'
     }
+    const importBuyingPrices = {
+        icon: 'download',
+        text: 'comax_products_buying_price_import',
+        onClick: async ({ refresh }) => {
+            await apiReq(`comax_product/import_buying_price`)
+            refresh?.()
+        },
+        permission: 'comax_product:update'
+    }
     const syncProducts = {
         icon: 'sync',
         text: 'comax_products_sync',
@@ -31,13 +40,14 @@ export default function ComaxProducts({ }) {
     }
     return <DataManager
         apiRoute='comax_product'
-        actions={[importProducts, syncProducts, syncStock, 'export', 'refresh']}
+        actions={[importProducts, importBuyingPrices, syncProducts, syncStock, 'export', 'refresh']}
         defaultSort={{ lastImportedAt: -1 }}
         cols={[
             { key: 'barcode' },
             { key: 'name' },
             { key: 'description' },
             { key: 'price', type: 'coin' },
+            { key: 'buyingPrice', type: 'coin' },
             { key: 'superDepartment' },
             { key: 'department' },
             { key: 'group' },

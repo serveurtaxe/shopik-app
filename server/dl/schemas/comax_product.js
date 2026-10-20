@@ -15,6 +15,7 @@ const comaxProductSchema = {
     quantity: Number,
     price: Number,
     supplierPrice: Number,
+    buyingPrice: Number,
 
     superDepartmentCode: String,
     departmentCode: String,
@@ -70,7 +71,8 @@ const comaxProductSchema = {
     },
 
     syncedAt: Date,
-    lastImportedAt: Date
+    lastImportedAt: Date,
+    buyingPriceImportedAt: Date
 }
 
 export default comaxProductSchema
