@@ -12,7 +12,7 @@ const elevatorRequiredError = {
     status: 400,
     code: 'ELEVATOR_REQUIRED',
     field: 'hasElevator',
-    message: 'לא ניתן להזמין לכתובת בקומה 5 ומעלה ללא מעלית'
+    message: 'address_elevator_required'
 }
 
 function assertElevatorAllowed(address, allowNoElevator) {

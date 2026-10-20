@@ -1,3 +1,9 @@
+import AddressAutocomplete from 'common/components/AddressAutocomplete'
+import { isElevatorRequired } from '#common/functions/address'
+import Checkbox from '#common/components/Checkbox/index'
+import { useOrder } from 'features/Order/OrderProvider'
+import { useText } from 'common/texts/TextProvider'
+import Title from '#common/components/Title/index'
 import Button from 'common/components/Button'
 import apiReq from 'common/functions/apiReq'
 import styles from './addresses.module.css'
@@ -8,13 +14,6 @@ import Form from 'common/components/Form'
 import { useUser } from 'features/User'
 import { useState } from 'react'
 import Address from './Address'
-import Title from '#common/components/Title/index.jsx'
-import { useOrder } from 'features/Order/OrderProvider'
-import AddressAutocomplete from 'common/components/AddressAutocomplete'
-import { isElevatorRequired } from '#common/functions/address.js'
-import { useText } from 'common/texts/TextProvider'
-import Checkout from 'pages/Checkout'
-import Checkbox from '#common/components/Checkbox/index.jsx'
 
 export function AddressForm({ initialData, onDone, cityRef }) {
     const [formState, setFormState] = useState()

@@ -107,8 +107,8 @@ export default async function create(payload, info) {
         if (!Number.isNaN(lead) && lead < Date.now()) {
             const expiredWindowId = order.window.id
             const expiredGroupId = order.window.reservedGroupId
-            try { await releaseWindowReservation(DL, expiredWindowId, expiredGroupId) } catch {}
-            try { await DL.Order.updateOne({ id: order.id }, { $unset: { window: 1 } }) } catch {}
+            try { await releaseWindowReservation(DL, expiredWindowId, expiredGroupId) } catch { }
+            try { await DL.Order.updateOne({ id: order.id }, { $unset: { window: 1 } }) } catch { }
             order.window = undefined
         }
     }
@@ -118,7 +118,7 @@ export default async function create(payload, info) {
         if (deliveryAddr) {
             if (isElevatorRequired(deliveryAddr)) throw {
                 status: 400,
-                message: 'לא ניתן להזמין לכתובת בקומה 5 ומעלה ללא מעלית',
+                message: 'address_elevator_required',
                 code: 'ELEVATOR_REQUIRED',
                 missingFields: ['address']
             }
