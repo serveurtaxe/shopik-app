@@ -31,7 +31,7 @@ export function usePage(initialData) {
                 .then(pageData => {
                     pageData.prevPath = pathname
                     setData(pageData)
-                    document.title = `Shopik | ${pageData.title}`
+                    document.title = `${appData.settings?.appearance?.siteName?.trim() || 'Shopik'} | ${pageData.title}`
                     document.querySelector("meta[name='description']")
                         ?.setAttribute('content', pageData.description || '')
                 })

@@ -6,6 +6,7 @@ import Flex from '#common/components/Flex'
 import Text from '#common/components/Text'
 import ProductCard from 'pages/Products/ProductCard'
 import { usePage } from 'layout/Page'
+import { useAppData } from 'App'
 import { useText } from '#common/texts/TextProvider'
 import styles from 'pages/Products/products.module.css'
 import { setSalesCache } from '#common/functions/salesCache.js'
@@ -21,6 +22,7 @@ export default function Search() {
     const [searchParams] = useSearchParams()
     const q = (searchParams.get('q') || '').trim()
     const { pageData } = usePage()
+    const { settings } = useAppData() || {}
     const latestRequest = useRef(0)
     const moreReqId = useRef(0)
     const seeded = useRef(pageData?.q === q && Array.isArray(pageData?.results))
@@ -97,8 +99,8 @@ export default function Search() {
     }, [hasMore, loadingMore, q])
 
     useEffect(() => {
-        document.title = `Shopik | ${q ? `${TR('search_results_title')}: ${q}` : TR('search')}`
-    }, [q, loading])
+        document.title = `${settings?.appearance?.siteName?.trim() || 'Shopik'} | ${q ? `${TR('search_results_title')}: ${q}` : TR('search')}`
+    }, [q, loading, settings])
 
     return <Flex col className={styles.products} direction='column' gap={10}>
         <Text size='h1' bold>{q ? `${TR('search_results_title')}: ${q}` : TR('search')}</Text>
