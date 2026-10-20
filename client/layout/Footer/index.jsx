@@ -95,13 +95,13 @@ export default function Footer() {
     const columns = Array.isArray(footer.columns) && footer.columns.length ? footer.columns : DEFAULT_COLUMNS
     const social = Array.isArray(footer.social) && footer.social.length ? footer.social : DEFAULT_SOCIAL
 
-    const email = footer.email || customerService.email || 'admin@shefa.click'
+    const email = footer.email || customerService.supportEmail || 'admin@shefa.click'
     const phone = footer.phone || customerService.phone || '053-1234567'
     const whatsapp = footer.whatsappNumber || customerService.whatsappNumber || '053-1234567'
 
     const contact = [
         { icon: 'mail', label: 'aria_email', text: email, href: `mailto:${email}` },
-        { icon: 'phone', label: 'aria_phone', text: phone, href: `tel:${phone.replace(/[^\d+]/g, '')}` },
+        /*    { icon: 'phone', label: 'aria_phone', text: phone, href: `tel:${phone.replace(/[^\d+]/g, '')}` }, */
         { icon: 'whatsapp', label: 'aria_whatsapp', text: whatsapp, href: whatsappUrl(whatsapp) }
     ].filter(({ text, href }) => !!text && !!href)
 
@@ -137,10 +137,11 @@ export default function Footer() {
             </div>
 
             <div className={styles.bottom}>
-                <nav className={styles.social} aria-label={TR?.('footer_social')}>
+                {/*<nav className={styles.social} aria-label={TR?.('footer_social')}>
                     {social.map((item, si) => <SocialItem key={si} item={item} />)}
-                </nav>
-                <Text size='s' className={styles.copyright}>footer_powered_by</Text>
+                </nav>*/}
+                <div></div>
+                <Text size='s' tag='bdi' className={styles.copyright}>footer_powered_by</Text>
             </div>
         </div>
     </footer>

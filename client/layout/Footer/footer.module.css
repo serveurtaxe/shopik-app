@@ -87,7 +87,7 @@
 
     /* Beats Logo_logo img sizing regardless of stylesheet order */
     .logo img {
-        height: 46px;
+        /*   height: 46px; */
         width: auto;
         max-width: 170px;
         object-fit: contain;
