@@ -41,6 +41,7 @@ export default function ComaxProducts({ }) {
     return <DataManager
         apiRoute='comax_product'
         actions={[importProducts, importBuyingPrices, syncProducts, syncStock, 'export', 'refresh']}
+        rowActions={['active']}
         defaultSort={{ lastImportedAt: -1 }}
         cols={[
             { key: 'barcode' },
@@ -54,6 +55,7 @@ export default function ComaxProducts({ }) {
             { key: 'subGroup' },
             { key: 'supplier' },
             { key: 'manufacturer' },
+            { key: 'active', type: 'boolean' },
             { key: 'showInWeb', type: 'boolean' },
             { key: 'archived', type: 'boolean' },
             { key: 'syncedAt', type: 'date' },
