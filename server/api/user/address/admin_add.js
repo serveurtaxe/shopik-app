@@ -6,7 +6,7 @@ export default async function admin_add(payload, { DL, external, utils, _admin }
     const user = await DL.User.readById(userId)
     if (!user) throw { status: 404, message: 'user not found' }
 
-    const geocoded = await addAddress({ DL, external, user, address })
+    const geocoded = await addAddress({ DL, external, user, address, allowNoElevator: true })
 
     const updatedUser = await DL.User.updateOne(
         { id: user.id },

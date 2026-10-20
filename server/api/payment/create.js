@@ -1,5 +1,6 @@
 import { releaseWindowReservation } from '#server/utils/data/windowGroups.js'
 import { findByLocation } from '#server/external/supplyArea.js'
+import { isElevatorRequired } from '#common/functions/address.js'
 
 export default async function create(payload, info) {
     const { DL, external, utils, _user } = info
@@ -115,6 +116,12 @@ export default async function create(payload, info) {
     if (!isPickup) {
         const deliveryAddr = updates.address || order.address
         if (deliveryAddr) {
+            if (isElevatorRequired(deliveryAddr)) throw {
+                status: 400,
+                message: 'לא ניתן להזמין לכתובת בקומה 5 ומעלה ללא מעלית',
+                code: 'ELEVATOR_REQUIRED',
+                missingFields: ['address']
+            }
             const area = await findByLocation(DL, deliveryAddr.location)
             if (!area) throw {
                 status: 400,

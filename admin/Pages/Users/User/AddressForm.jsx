@@ -46,6 +46,7 @@ export default function AddressForm({ userId, initialData, onDone }) {
             <Input name='floor' defaultValue={initialData?.floor} />
             <Input name='entrance' defaultValue={initialData?.entrance} />
         </Flex>
+        <Input name='hasElevator' type='checkbox' defaultValue={initialData?.hasElevator ?? true} />
         <Input name='comment' type='textarea' rows={3} defaultValue={initialData?.comment} />
     </Form>
 }

@@ -80,11 +80,20 @@ export default Input
 
 export { default as isValidIsraeliId } from 'common/functions/isValidIsraeliId'
 
+function CheckboxInput(props) {
+    return <Checkbox {...props} label='' />
+}
+
+function SwitchInput(props) {
+    return <Checkbox {...props} label='' switchMode />
+}
+
 function getInputTag({ type }) {
     switch (type) {
         case 'checkbox':
+            return CheckboxInput
         case 'switch':
-            return props => <Checkbox {...props} label='' switchMode={type == 'switch'} />
+            return SwitchInput
         case 'select':
             return Select
         case 'textarea':

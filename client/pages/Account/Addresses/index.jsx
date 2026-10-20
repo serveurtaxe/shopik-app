@@ -11,11 +11,16 @@ import Address from './Address'
 import Title from '#common/components/Title/index.jsx'
 import { useOrder } from 'features/Order/OrderProvider'
 import AddressAutocomplete from 'common/components/AddressAutocomplete'
+import { isElevatorRequired } from '#common/functions/address.js'
+import { useText } from 'common/texts/TextProvider'
+import Checkout from 'pages/Checkout'
+import Checkbox from '#common/components/Checkbox/index.jsx'
 
 export function AddressForm({ initialData, onDone, cityRef }) {
     const [formState, setFormState] = useState()
     const { onLogin } = useUser()
     const { setOrder } = useOrder()
+    const { TR } = useText() || {}
     const [autocomplete, setAutocomplete] = useState({
         city: initialData?.city || '',
         street: initialData?.street || '',
@@ -24,6 +29,10 @@ export function AddressForm({ initialData, onDone, cityRef }) {
     })
 
     function handleSubmit(data) {
+        if (isElevatorRequired(data)) {
+            setFormState({ error: TR?.('address_elevator_required'), loading: false })
+            return
+        }
         setFormState({ loading: true })
 
         const isEdit = !!initialData?.addressId
@@ -59,6 +68,9 @@ export function AddressForm({ initialData, onDone, cityRef }) {
                 <Input name='floor' defaultValue={initialData?.floor} />
                 <Input name='entrance' defaultValue={initialData?.entrance} />
             </Flex>
+            <Checkbox name='hasElevator' defaultChecked={initialData?.hasElevator ?? true} className={styles.hasElevator} >
+                hasElevator
+            </Checkbox>
             <Input name='comment' placeholder={'address.comment'} type='textarea' rows={3} defaultValue={initialData?.notes} />
         </Form>
     )
