@@ -128,93 +128,102 @@ function Level2Menu({ items, open, basePath, onClose }) {
 
     const currentActiveItem = activeItem || hoveredItem
 
+    const resolvedItems = items.map((item, index) => {
+        const itemPath = resolvePath(item, basePath)
+        return {
+            item,
+            itemPath,
+            key: `${itemPath}-${index}`,
+            hasChildren: Boolean(item.children && item.children.length > 0),
+        }
+    })
+
+    const activeEntry = resolvedItems.find(
+        entry => entry.hasChildren && entry.itemPath === currentActiveItem
+    )
+
     return (
         <Flex
-            tag='ul'
+            tag='div'
             col
             direction='column'
-            gap={4}
             className={classNames(
                 styles.level2Menu,
-                [styles.level3visible, currentActiveItem],
+                [styles.level3visible, activeEntry],
                 [styles.open, open]
             )}
             onMouseLeave={() => setHoveredItem(null)}
         >
-            {items.map((item, index) => {
-                const hasChildren = Boolean(
-                    item.children && item.children.length > 0
-                )
-                const itemPath = resolvePath(item, basePath)
-                const itemKey = `${itemPath}-${index}`
+            <Flex tag='ul' col gap={4} className={styles.level2Scroll}>
+                {resolvedItems.map(({ item, itemPath, key, hasChildren }) => {
+                    const isItemActive = currentActiveItem === itemPath
 
-                const isItemActive = currentActiveItem === itemPath
-
-                const handleItemClick = (e) => {
-                    if (hasChildren) {
-                        e.preventDefault()
-                        setActiveItem(isItemActive ? null : itemPath)
-                    } else {
-                        onClose?.()
+                    const handleItemClick = (e) => {
+                        if (hasChildren) {
+                            e.preventDefault()
+                            setActiveItem(isItemActive ? null : itemPath)
+                        } else {
+                            onClose?.()
+                        }
                     }
-                }
 
-                return (
-                    <li
-                        key={itemKey}
-                        className={styles.level2ListItem}
-                        onMouseEnter={() => {
-                            if (hasChildren) {
-                                setHoveredItem(itemPath)
-                            }
-                        }}
-                    >
-                        <Flex
-                            className={classNames(
-                                styles.level2Item,
-                                [styles.active, isItemActive]
-                            )}
-                            tag={hasChildren ? 'button' : NavLink}
-                            to={hasChildren ? undefined : itemPath}
-                            type={hasChildren ? 'button' : undefined}
-                            onClick={handleItemClick}
-                            end={hasChildren ? undefined : true}
-                            alignItems='center'
-                            gap={12}
+                    return (
+                        <li
+                            key={key}
+                            className={styles.level2ListItem}
+                            onMouseEnter={() => {
+                                if (hasChildren) {
+                                    setHoveredItem(itemPath)
+                                }
+                            }}
                         >
-                            <div className={styles.iconWrap}>
-                                <Icon
-                                    name={item.icon}
-                                    fallback
-                                />
-                            </div>
+                            <Flex
+                                className={classNames(
+                                    styles.level2Item,
+                                    [styles.active, isItemActive]
+                                )}
+                                tag={hasChildren ? 'button' : NavLink}
+                                to={hasChildren ? undefined : itemPath}
+                                type={hasChildren ? 'button' : undefined}
+                                onClick={handleItemClick}
+                                end={hasChildren ? undefined : true}
+                                alignItems='center'
+                                gap={12}
+                            >
+                                <div className={styles.iconWrap}>
+                                    <Icon
+                                        name={item.icon}
+                                        fallback
+                                    />
+                                </div>
 
-                            <Text size='l'>
-                                {item.name}
-                            </Text>
+                                <Text size='l'>
+                                    {item.name}
+                                </Text>
 
-                            {hasChildren && (
-                                <Icon name='left' />
-                            )}
-                        </Flex>
+                                {hasChildren && (
+                                    <Icon name='left' />
+                                )}
+                            </Flex>
+                        </li>
+                    )
+                })}
+            </Flex>
 
-                        {hasChildren && open && (
-                            <Level3Menu
-                                key={`level-3-${itemPath}`}
-                                items={item.children}
-                                visible={isItemActive}
-                                parentName={item.name}
-                                basePath={itemPath}
-                                onClose={onClose}
-                                onBack={() => {
-                                    setActiveItem(null)
-                                    setHoveredItem(null)
-                                }}
-                            />
-                        )}
-                    </li>
-                )
-            })}
+            {activeEntry && (
+                <Level3Menu
+                    key={`level-3-${activeEntry.itemPath}`}
+                    items={activeEntry.item.children}
+                    visible
+                    parentName={activeEntry.item.name}
+                    basePath={activeEntry.itemPath}
+                    onClose={onClose}
+                    onBack={() => {
+                        setActiveItem(null)
+                        setHoveredItem(null)
+                    }}
+                />
+            )}
         </Flex>
     )
 }
