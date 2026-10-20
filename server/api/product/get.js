@@ -1,6 +1,7 @@
 import { withDomainPrice } from '#server/utils/data/withDomainPrice.js'
+import { ADMIN_TOKEN_COOKIE } from '#common/constants.js'
 
-export default async function get(payload, { DL, _user, req, utils, platform }) {
+export default async function get(payload, { DL, _user, _admin, req, utils, platform }) {
     const { filter = {}, path, id, barcode, select, onSale, domainId } = payload
     // Admin traffic keeps the full multi-domain `prices` array; the
     // storefront gets a resolved flat `price` only (see withDomainPrice).
@@ -12,6 +13,17 @@ export default async function get(payload, { DL, _user, req, utils, platform }) 
     // Admin callers send no domainId and stay unfiltered.
     const domainPriceFilter = domainId ? { 'prices.domainId': domainId } : {}
     const hasDomainPrice = (p) => !domainId || !Array.isArray(p?.prices) || p.prices.some(e => e?.domainId === domainId)
+    // Hidden products are replacement candidates for the admin picker flow only.
+    // Public routes skip admin auth in the router, so resolve the admin session
+    // here (token verified by getAdmin) when the admin cookie is present.
+    let admin = _admin
+    if (!admin && req?.cookies?.[ADMIN_TOKEN_COOKIE]) {
+        try { admin = await utils.auth.getAdmin(req, { DL, utils }) } catch { }
+    }
+    const isAdminViewer = !!admin && !admin.isApiKey
+    const statusFilter = isAdminViewer
+        ? { $in: [DL.Product.constants.STATUS.ACTIVE, DL.Product.constants.STATUS.HIDDEN] }
+        : DL.Product.constants.STATUS.ACTIVE
 
     let products = []
     let categoryName
@@ -21,7 +33,7 @@ export default async function get(payload, { DL, _user, req, utils, platform }) 
         const sel = wantAnnotate ? { ...DL.Product.defaultSelectOne, storeIds: 1 } : DL.Product.defaultSelectOne
         const product = await DL.Product.readOne({
             barcode,
-            status: DL.Product.constants.STATUS.ACTIVE,
+            status: statusFilter,
             ...domainPriceFilter
         }, sel)
         products = product && hasDomainPrice(product) ? [product] : []
@@ -30,7 +42,7 @@ export default async function get(payload, { DL, _user, req, utils, platform }) 
         const sel = wantAnnotate ? { ...DL.Product.defaultSelectOne, storeIds: 1 } : DL.Product.defaultSelectOne
         const product = await DL.Product.readOne({
             id,
-            status: DL.Product.constants.STATUS.ACTIVE,
+            status: statusFilter,
             ...domainPriceFilter
         }, sel)
         products = product && hasDomainPrice(product) ? [product] : []
@@ -52,7 +64,7 @@ export default async function get(payload, { DL, _user, req, utils, platform }) 
         // Public endpoint: ignore client-supplied `select` (arbitrary field
         // projection could expose picking/storeIds/sales internals).
         const selectForStock = wantAnnotate ? { ...DL.Product.defaultSelect, storeIds: 1 } : DL.Product.defaultSelect
-        effectiveFilter.status = DL.Product.constants.STATUS.ACTIVE
+        effectiveFilter.status = statusFilter
         Object.assign(effectiveFilter, domainPriceFilter)
         if (onSale) {
             // Better than `saleIds.0 exists`: verify against currently ACTIVE sales
