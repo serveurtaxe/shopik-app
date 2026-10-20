@@ -1,6 +1,6 @@
 import Input from '#common/components/Input/index.jsx'
 import Icon from '#common/components/Icon/index.jsx'
-import Button from '#common/components/Button'
+// import Button from '#common/components/Button'
 import Loader from '#common/components/Loader'
 import Flex from '#common/components/Flex'
 import Text from '#common/components/Text'
@@ -95,6 +95,7 @@ export default function Search({ }) {
                 onKeyDown={onKeyDown}
                 onFocus={() => setOpen(true)}
             />
+            {/* hidden for now
             <Button
                 mode='text'
                 icon='filter'
@@ -102,6 +103,7 @@ export default function Search({ }) {
                 aria-label={TR?.('aria_filter')}
             //tooltip={TR?.('aria_filter')}
             />
+            */}
         </div>
         {showResults && <div className={styles.results}>
             {loading ? <Flex center className={styles.state}><Loader /></Flex> : (
