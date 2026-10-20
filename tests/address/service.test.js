@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { addAddress, editAddress } from '../../server/utils/data/userAddress.js'
+import { isElevatorRequired } from '../../common/functions/address.js'
 
 const location = { type: 'Point', coordinates: [34.78, 32.08] }
 
@@ -97,5 +98,62 @@ describe('address service activation', () => {
 
         assert.equal(geocoded.hasService, true)
         assert.equal(geocoded.active, false)
+    })
+})
+
+describe('elevator requirement', () => {
+    it('requires an elevator above the fourth floor when hasElevator is false', () => {
+        assert.equal(isElevatorRequired({ floor: '5', hasElevator: false }), true)
+        assert.equal(isElevatorRequired({ floor: '4', hasElevator: false }), false)
+        assert.equal(isElevatorRequired({ floor: '5', hasElevator: true }), false)
+        assert.equal(isElevatorRequired({ floor: '', hasElevator: false }), false)
+    })
+
+    it('defaults hasElevator to true when not provided', async () => {
+        const geocoded = await addAddress({
+            DL: makeDL(true),
+            external,
+            user: { addresses: [] },
+            address
+        })
+
+        assert.equal(geocoded.hasElevator, true)
+    })
+
+    it('rejects a no-elevator address above the fourth floor', async () => {
+        await assert.rejects(
+            () => addAddress({
+                DL: makeDL(true),
+                external,
+                user: { addresses: [] },
+                address: { ...address, floor: '5', hasElevator: false }
+            }),
+            err => err.code === 'ELEVATOR_REQUIRED'
+        )
+    })
+
+    it('allows admins to save a no-elevator address above the fourth floor', async () => {
+        const geocoded = await addAddress({
+            DL: makeDL(true),
+            external,
+            user: { addresses: [] },
+            address: { ...address, floor: '5', hasElevator: false },
+            allowNoElevator: true
+        })
+
+        assert.equal(geocoded.hasElevator, false)
+    })
+
+    it('rejects editing an address into a no-elevator high floor', async () => {
+        await assert.rejects(
+            () => editAddress({
+                DL: makeDL(true),
+                external,
+                user: { addresses: [{ addressId: 'a', active: true }] },
+                addressId: 'a',
+                address: { ...address, floor: '6', hasElevator: false }
+            }),
+            err => err.code === 'ELEVATOR_REQUIRED'
+        )
     })
 })

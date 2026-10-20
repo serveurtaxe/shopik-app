@@ -17,6 +17,7 @@ import { useMemo, useRef } from 'react'
 import { extractLimits, getMinSumForMethod, getRemainingToMin } from '#common/functions/limits.js'
 import useMediaQuery from 'common/functions/useMediaQuery'
 import render from '#common/functions/render.js'
+import { isElevatorRequired } from '#common/functions/address.js'
 
 export default function Checkout() {
     const { order = {}, setOrder } = useOrder()
@@ -37,7 +38,10 @@ export default function Checkout() {
     const minSumRemaining = getRemainingToMin({ sum: order?.sum ?? 0, deliveryMethod: order?.deliveryMethod, limits })
     const isBelowMinSum = minSumThreshold > 0 && minSumRemaining > 0
     const serviceAddress = user?.addresses?.find(a => a.active) || user?.addresses?.[0]
-    const hasNoService = (order?.deliveryMethod || 'delivery') !== 'pickup' && serviceAddress?.hasService === false
+    const isDelivery = (order?.deliveryMethod || 'delivery') !== 'pickup'
+    const hasNoService = isDelivery && serviceAddress?.hasService === false
+    const deliveryAddress = order?.address?.city ? order.address : serviceAddress
+    const hasElevatorIssue = isDelivery && isElevatorRequired(deliveryAddress)
 
     const cartTitle = `${TR('my_cart_title')} (${totalItemsCount} ${TR('items_suffix')})`
     // Viewport flag for content decisions only; layout direction stays
@@ -59,7 +63,7 @@ export default function Checkout() {
         if (isPickup) {
             const hasPickup = order?.storeId || (order?.address && isNonEmpty(order.address.city))
             if (!hasPickup && !user?.pickupStoreId) missing.push('address')
-        } else if (hasNoService) {
+        } else if (hasNoService || hasElevatorIssue) {
             missing.push('address')
         } else {
             const addr = order?.address
@@ -144,8 +148,9 @@ export default function Checkout() {
     async function handlePayment() {
         if (paying) return
         setPayError()
-        if (hasNoService) {
+        if (hasNoService || hasElevatorIssue) {
             setMissingFields(['address'])
+            if (hasElevatorIssue) setPayError({ message: TR?.('address_elevator_required') })
             return
         }
         if (isBelowMinSum) {
@@ -270,7 +275,7 @@ export default function Checkout() {
 
                 {/* Sidebar Area (End Side in RTL) */}
                 <aside className={styles.sidebar}>
-                    <OrderSummary onPayment={handlePayment} paying={paying} showPayBtn={!paymentUrl} missingFields={missingFields} hasNoService={hasNoService} hideSummary={isMobile && (paying || paymentUrl)} />
+                    <OrderSummary onPayment={handlePayment} paying={paying} showPayBtn={!paymentUrl} missingFields={missingFields} hasNoService={hasNoService} hasElevatorIssue={hasElevatorIssue} hideSummary={isMobile && (paying || paymentUrl)} />
                 </aside>
             </div>
         </div>

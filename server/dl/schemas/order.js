@@ -93,6 +93,7 @@ const windowSchema = {
     date: { type: String, filter: true },
     start: Number,
     end: Number,
+    reservedGroupId: String,
     reservedAt: Date,
     startTimestamp: Date,
     endTimestamp: Date,
@@ -230,6 +231,10 @@ const orderSchema = {
         apartment: Number,
         entrance: String,
         floor: String,
+        hasElevator: {
+            type: Boolean,
+            default: true
+        },
         location: {
             type: { type: String, enum: ['Point'] },
             coordinates: { type: [Number], default: undefined }

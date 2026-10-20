@@ -1,26 +1,11 @@
-import { editAddress } from '#server/utils/data/userAddress.js'
+import { editAddress, isSameAddressLocation } from '#server/utils/data/userAddress.js'
 import { clearOrderAddress, updateOrderAddress } from '#server/api/order/address/update.js'
-
-const sameLocationFields = [
-    'city',
-    'street',
-    'building',
-    'apartment',
-    'residenceType'
-]
-const isSameLocation = (address1, address2) => {
-    const sameFields = sameLocationFields.every(f =>
-        address1[f] === address2[f]
-    )
-    const sameLocation = JSON.stringify(address1?.location?.coordinates) === JSON.stringify(address2.location?.coordinates)
-    return sameFields && sameLocation
-}
 
 export default async function edit(payload, { DL, _user, external, utils }) {
     const { addressId, ...address } = payload
     const { geocoded, existingAddr } = await editAddress({ DL, external, user: _user, addressId, address })
 
-    const sameLocation = isSameLocation(geocoded, existingAddr)
+    const sameLocation = isSameAddressLocation(geocoded, existingAddr)
 
     const user = await DL.User.updateOne(
         { id: _user.id, 'addresses.addressId': addressId },

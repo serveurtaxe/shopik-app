@@ -35,6 +35,10 @@ const addressSchema = {
         min: [1, 'building must be bigger than 0']
     },
     floor: String,
+    hasElevator: {
+        type: Boolean,
+        default: true
+    },
     apartment: Number,
     entrance: {
         type: String,

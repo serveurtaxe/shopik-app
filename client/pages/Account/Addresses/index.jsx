@@ -1,3 +1,9 @@
+import AddressAutocomplete from 'common/components/AddressAutocomplete'
+import { isElevatorRequired } from '#common/functions/address'
+import Checkbox from '#common/components/Checkbox/index'
+import { useOrder } from 'features/Order/OrderProvider'
+import { useText } from 'common/texts/TextProvider'
+import Title from '#common/components/Title/index'
 import Button from 'common/components/Button'
 import apiReq from 'common/functions/apiReq'
 import styles from './addresses.module.css'
@@ -8,14 +14,12 @@ import Form from 'common/components/Form'
 import { useUser } from 'features/User'
 import { useState } from 'react'
 import Address from './Address'
-import Title from '#common/components/Title/index.jsx'
-import { useOrder } from 'features/Order/OrderProvider'
-import AddressAutocomplete from 'common/components/AddressAutocomplete'
 
 export function AddressForm({ initialData, onDone, cityRef }) {
     const [formState, setFormState] = useState()
     const { onLogin } = useUser()
     const { setOrder } = useOrder()
+    const { TR } = useText() || {}
     const [autocomplete, setAutocomplete] = useState({
         city: initialData?.city || '',
         street: initialData?.street || '',
@@ -24,6 +28,10 @@ export function AddressForm({ initialData, onDone, cityRef }) {
     })
 
     function handleSubmit(data) {
+        if (isElevatorRequired(data)) {
+            setFormState({ error: TR?.('address_elevator_required'), loading: false })
+            return
+        }
         setFormState({ loading: true })
 
         const isEdit = !!initialData?.addressId
@@ -59,6 +67,9 @@ export function AddressForm({ initialData, onDone, cityRef }) {
                 <Input name='floor' defaultValue={initialData?.floor} />
                 <Input name='entrance' defaultValue={initialData?.entrance} />
             </Flex>
+            <Checkbox name='hasElevator' defaultChecked={initialData?.hasElevator ?? true} className={styles.hasElevator} >
+                hasElevator
+            </Checkbox>
             <Input name='comment' placeholder={'address.comment'} type='textarea' rows={3} defaultValue={initialData?.notes} />
         </Form>
     )

@@ -17,7 +17,7 @@ export default function WindowOptions({ onChangeStore, onChangeAddress, hideAddr
     const { order, setOrder } = useOrder()
     const { addresses } = useUser()
     const { pickupStores } = useAppData()
-    const { data, loading, callReq } = useApi('order/window/options')
+    const { data, loading, callReq, setData } = useApi('order/window/options')
     // Refetch windows when the order's store changes (e.g. after
     // delivery_method switches between pickup/delivery). The initial
     // useApi fetch runs on mount; this covers the race where options
@@ -42,11 +42,12 @@ export default function WindowOptions({ onChangeStore, onChangeAddress, hideAddr
     const selectedStore = isPickup ? pickupStores?.find(s => s.id === order.storeId) : null
 
     const onChoose = async (window) => {
-        if (window.chosen || window.disabled || windowLoading) return
+        if (window.id === activeWindow?.id || window.disabled || windowLoading) return
         try {
             setWindowLoading(window.id)
             const updatedOrder = await apiReq('order/window/choose', { windowId: window.id })
             setOrder(updatedOrder)
+            apiReq('order/window/options').then(setData).catch(() => {})
         } finally {
             setWindowLoading(null)
         }

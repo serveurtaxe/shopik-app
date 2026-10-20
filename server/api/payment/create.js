@@ -1,5 +1,6 @@
 import { releaseWindowReservation } from '#server/utils/data/windowGroups.js'
 import { findByLocation } from '#server/external/supplyArea.js'
+import { isElevatorRequired } from '#common/functions/address.js'
 
 export default async function create(payload, info) {
     const { DL, external, utils, _user } = info
@@ -81,27 +82,22 @@ export default async function create(payload, info) {
     } else {
         const addr = order.address
         const hasDeliveryAddress = addr && isNonEmpty(addr.city) && isNonEmpty(addr.street) && addr.building != null && String(addr.building).trim() !== ''
+        let deliveryAddr = hasDeliveryAddress ? addr : null
         if (!hasDeliveryAddress) {
             const activeAddr = _user.addresses?.find((a) => a.active) || _user.addresses?.[0]
             const hasCandidate = activeAddr && isNonEmpty(activeAddr.city) && isNonEmpty(activeAddr.street) && activeAddr.building != null && String(activeAddr.building).trim() !== ''
             if (hasCandidate) {
                 updates.address = activeAddr
-                if (!order.storeId && activeAddr.location?.coordinates?.length) {
-                    try {
-                        const store = await DL.Store.Model.findOne({
-                            'address.location': {
-                                $nearSphere: {
-                                    $geometry: activeAddr.location,
-                                    $maxDistance: 10 * 1000
-                                }
-                            }
-                        }, { _id: 0, id: 1 }).lean()
-                        if (store?.id) updates.storeId = store.id
-                    } catch { }
-                }
+                deliveryAddr = activeAddr
             } else {
                 missingFields.push('address')
             }
+        }
+        // Area-assigned store is authoritative; recompute every time so a
+        // stale/wrong storeId is corrected before payment.
+        if (deliveryAddr) {
+            const storeId = await utils.data.getStoreForAddress({ DL, address: deliveryAddr })
+            if (storeId !== (order.storeId ?? null)) updates.storeId = storeId
         }
     }
 
@@ -111,8 +107,8 @@ export default async function create(payload, info) {
         if (!Number.isNaN(lead) && lead < Date.now()) {
             const expiredWindowId = order.window.id
             const expiredGroupId = order.window.reservedGroupId
-            try { await releaseWindowReservation(DL, expiredWindowId, expiredGroupId) } catch {}
-            try { await DL.Order.updateOne({ id: order.id }, { $unset: { window: 1 } }) } catch {}
+            try { await releaseWindowReservation(DL, expiredWindowId, expiredGroupId) } catch { }
+            try { await DL.Order.updateOne({ id: order.id }, { $unset: { window: 1 } }) } catch { }
             order.window = undefined
         }
     }
@@ -120,6 +116,12 @@ export default async function create(payload, info) {
     if (!isPickup) {
         const deliveryAddr = updates.address || order.address
         if (deliveryAddr) {
+            if (isElevatorRequired(deliveryAddr)) throw {
+                status: 400,
+                message: 'address_elevator_required',
+                code: 'ELEVATOR_REQUIRED',
+                missingFields: ['address']
+            }
             const area = await findByLocation(DL, deliveryAddr.location)
             if (!area) throw {
                 status: 400,

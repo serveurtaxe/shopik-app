@@ -1,4 +1,4 @@
-import { buildWazeUrl, DeliveryMethodTag, formatDepartureTime, formatWindow, isShippingStatus, RemainingTime } from '../orderUtils'
+import { buildWazeUrl, customerNotes, DeliveryMethodTag, formatDepartureTime, formatFullAddress, formatWindow, isShippingStatus, RemainingTime } from '../orderUtils'
 import classNames from 'common/functions/classNames'
 import TR from 'common/texts/TR.js'
 import Button from 'common/components/Button'
@@ -105,6 +105,7 @@ export default function OpsOrder({ }) {
 
 function OrderPreview({ order = {}, claimOrder, isMine, cantPick, isShipMine, cantShip, isSuperAdmin, setStep }) {
     const windowTime = formatWindow(order.window)
+    const notes = customerNotes(order)
 
     if (order.status === 'shipped') {
         return <PreviewShell
@@ -118,12 +119,14 @@ function OrderPreview({ order = {}, claimOrder, isMine, cantPick, isShipMine, ca
                 <PriviewRow
                     icon='location'
                     label='customer_address'
-                    value={render({ type: 'address', value: order.address })}
+                    value={formatFullAddress(order.address)}
                     actionIcon={(order.address?.location?.coordinates?.length || order.address?.street || order.address?.city) ? 'waze' : null}
                     actionTooltip='ops_navigate'
                     onAction={() => window.open(buildWazeUrl(order.address), '_blank', 'noopener')}
                 />
+                <ElevatorRow order={order} />
                 <PriviewRow icon='time' label='order_window' value={windowTime.textLong} />
+                {notes && <PriviewRow icon='note' label='ops_customer_notes' value={notes} />}
                 {order.shipperComment && <PriviewRow icon='note' label='ops_shipper_notes' value={order.shipperComment} />}
                 {order.phone && <PriviewRow
                     icon='phone'
@@ -152,10 +155,27 @@ function OrderPreview({ order = {}, claimOrder, isMine, cantPick, isShipMine, ca
             bannerTime={formatDepartureTime(order.window)}
             bannerSubtitleKey='ops_departure_remaining'
             rows={<>
-                <PriviewRow icon='user' label='customer_name' value={order.phone || '0500000000'} />
-                <PriviewRow icon='location' label='customer_address' value={render({ type: 'address', value: order.address })} />
+                <PriviewRow icon='user' label='customer_name' value={render({ type: 'name', value: order.name })} />
+                <PriviewRow
+                    icon='location'
+                    label='customer_address'
+                    value={formatFullAddress(order.address)}
+                    actionIcon={(order.address?.location?.coordinates?.length || order.address?.street || order.address?.city) ? 'waze' : null}
+                    actionTooltip='ops_navigate'
+                    onAction={() => window.open(buildWazeUrl(order.address), '_blank', 'noopener')}
+                />
+                <ElevatorRow order={order} />
                 <PriviewRow icon='time' label='order_window' value={windowTime.textLong} />
+                {notes && <PriviewRow icon='note' label='ops_customer_notes' value={notes} />}
                 {order.shipperComment && <PriviewRow icon='note' label='ops_shipper_notes' value={order.shipperComment} />}
+                {order.phone && <PriviewRow
+                    icon='phone'
+                    label='ops_customer_phone'
+                    value={order.phone}
+                    actionIcon='phoneOutgoing'
+                    actionTooltip='ops_call'
+                    onAction={() => { window.location.href = `tel:${String(order.phone).replace(/[^+\d]/g, '')}` }}
+                />}
             </>}
             footer={<PreviewFooter
                 primaryKey='ops_take_order'
@@ -176,6 +196,7 @@ function OrderPreview({ order = {}, claimOrder, isMine, cantPick, isShipMine, ca
         rows={<>
             <PriviewRow icon='user' label='customer_name' value={order.phone || '0500000000'} />
             <PriviewRow icon='location' label='customer_address' value={render({ type: 'address', value: order.address })} />
+            <ElevatorRow order={order} />
             <PriviewRow icon='time' label='order_window' value={windowTime.textLong} />
             {/* <PriviewRow icon='replace' label='replace_and_missing' value={order.window?.replace} />
             <PriviewRow icon='note' label='pick_notes' value={order.comments} /> */}
@@ -254,6 +275,16 @@ function OrderView({ order = {}, setStep }) {
             <Button mode='text-brand' onClick={() => setStep(STEPS.PREVIEW)}>back</Button>
         </Flex>
     </Flex>
+}
+
+function ElevatorRow({ order }) {
+    if (order?.deliveryMethod === 'pickup') return null
+    const hasElevator = order?.address?.hasElevator !== false
+    return <PriviewRow
+        icon='building'
+        label='address.hasElevator'
+        value={TR(hasElevator ? 'elevator_yes' : 'elevator_no')}
+    />
 }
 
 function PriviewRow({ icon, label, value, actionIcon, actionTooltip, onAction }) {
@@ -358,8 +389,13 @@ function OrderPick({ order = {}, setStep, onPicked }) {
                 />
             ))}
         </Flex>
-        <Flex center gap={20} className={styles.footer}>
+        <Flex center gap={10} col className={styles.footer}>
             <Button disabled={!allHandled} loading={completing} onClick={handleFinishPick} className={styles.finishBtn}>finish_pick</Button>
+            {toPickItems.length === 0 && order.phone && <Button
+                mode='text-brand'
+                icon='phoneOutgoing'
+                onClick={() => { window.location.href = `tel:${String(order.phone).replace(/[^+\d]/g, '')}` }}
+            >ops_call_customer</Button>}
         </Flex>
     </Flex>
 }

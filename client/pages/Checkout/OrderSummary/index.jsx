@@ -27,7 +27,7 @@ import {
     LuUserRound
 } from 'react-icons/lu'
 
-export default function OrderSummary({ onPayment, paying, showPayBtn = true, missingFields = [], hasNoService = false, hideSummary = false }) {
+export default function OrderSummary({ onPayment, paying, showPayBtn = true, missingFields = [], hasNoService = false, hasElevatorIssue = false, hideSummary = false }) {
     const { order = {}, setOrder } = useOrder()
     const user = useUser()
     const { addresses = [] } = user || {}
@@ -46,11 +46,12 @@ export default function OrderSummary({ onPayment, paying, showPayBtn = true, mis
     const cityRef = useRef(null)
     const windowRef = useRef(null)
 
-    // A no-service address is not a missing field, but it still needs the
-    // address section open so the shopper can edit it.
+    // An invalid address (no service / no elevator for a high floor) is not a
+    // missing field, but it still needs the address section open so the
+    // shopper can edit it.
     useEffect(() => {
-        if (hasNoService) setAddressOpen(true)
-    }, [hasNoService])
+        if (hasNoService || hasElevatorIssue) setAddressOpen(true)
+    }, [hasNoService, hasElevatorIssue])
 
     // Auto-open collapses for missing fields + focus first missing via refs
     useEffect(() => {
@@ -226,6 +227,9 @@ export default function OrderSummary({ onPayment, paying, showPayBtn = true, mis
                         }
                     >
                         <div className={styles.collapseContent}>
+                            {hasElevatorIssue && (
+                                <Text size='s' mode='error'>{TR?.('address_elevator_required')}</Text>
+                            )}
                             {addresses.length > 0 ? (
                                 <Addresses hideHeader blinkNoService={addressOpen} action={{ onClick: () => setAddressOpen(false) }} />
                             ) : (
