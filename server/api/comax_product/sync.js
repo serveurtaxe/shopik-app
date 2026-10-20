@@ -1,5 +1,6 @@
 import buildCategories from './build_categories.js'
 import { buildCategoryPathIds, groupId, subGroupId } from './categoryIds.js'
+import { buildSyncFilter, hideInactiveProducts } from './syncRules.js'
 import enqueueChangedImages from '#server/services/image/enqueue.js'
 import log from '#server/utils/log.js'
 
@@ -89,11 +90,7 @@ export default async function syncComax(payload, { DL }) {
     // A single read({ limit: 0 }) + $in:[all barcodes] + mapped + bulkOps array
     // held 4-5 full copies at once and OOMed 256MB containers.
     const BATCH = Number(process.env.COMAX_SYNC_BATCH || 1000)
-    const filter = {
-        superDepartmentCode: { $exists: true, $nin: ['12', null] },
-        departmentCode: { $exists: true },
-        groupCode: { $exists: true }
-    }
+    const filter = buildSyncFilter()
     const select = {
         _id: 0,
         comaxId: 1,
@@ -122,9 +119,14 @@ export default async function syncComax(payload, { DL }) {
     }
 
     const total = await DL.ComaxProduct.count(filter)
+    const hiddenInactive = await hideInactiveProducts({ DL })
+    if (hiddenInactive)
+        console.log(`[Comax Sync] Hidden ${hiddenInactive} product(s) for inactive Comax items`)
+
     if (!total) {
+        if (hiddenInactive) await buildCategories(payload, { DL })
         console.log('[Comax Sync] No products to sync')
-        return { synced: 0, updated: 0, created: 0 }
+        return { synced: 0, updated: 0, created: 0, hiddenInactive }
     }
 
     const defaultDomain = await DL.Domain.readOne({ isDefault: true, active: true }, { _id: 0, id: 1 })
@@ -190,7 +192,7 @@ export default async function syncComax(payload, { DL }) {
         console.log(`[Comax Sync] batch ${Math.floor(skip / BATCH) + 1}/${Math.ceil(total / BATCH)}: ${synced}/${total} (heap ${Math.round(m.heapUsed / 1048576)}MB)`)
     }
 
-    console.log(`[Comax Sync] Created ${created}, updated ${updated}, hidden (no image): ${hiddenNoImage}, archived (no price): ${archivedNoPrice}`)
+    console.log(`[Comax Sync] Created ${created}, updated ${updated}, hidden (no image): ${hiddenNoImage}, archived (no price): ${archivedNoPrice}, hidden (inactive): ${hiddenInactive}`)
 
     if (!payload?.skipImageEnqueue) {
         try {
@@ -210,7 +212,8 @@ export default async function syncComax(payload, { DL }) {
         created,
         updated,
         hiddenNoImage,
-        archivedNoPrice
+        archivedNoPrice,
+        hiddenInactive
     }
 }
 

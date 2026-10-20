@@ -6,7 +6,7 @@ export default async function enqueueChangedImages(DL) {
     // Paged: the picUrl scan + $in:[all barcodes] product read held two full
     // catalog copies at once and OOMed 256MB containers when run after sync.
     const BATCH = Number(process.env.COMAX_SYNC_BATCH || 1000)
-    const filter = { picUrl: { $exists: true, $nin: [null, ''] } }
+    const filter = { active: { $ne: false }, picUrl: { $exists: true, $nin: [null, ''] } }
     const total = await DL.ComaxProduct.Model.countDocuments(filter)
     if (!total) return { scanned: 0, enqueued: 0 }
 
