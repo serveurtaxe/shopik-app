@@ -1,6 +1,7 @@
 import classNames from 'common/functions/classNames'
 import { useEffect, useState } from 'react'
 import styles from './checkbox.module.css'
+import Text from '../Text'
 
 export default function Checkbox({ className = '', name, label, switchMode, tagMode, children, defaultValue, defaultChecked = defaultValue, checked, onChange, }) {
     const
@@ -42,6 +43,6 @@ export default function Checkbox({ className = '', name, label, switchMode, tagM
             <span className={styles.checkMark}>✓</span>
         </span>
 
-        {children || label}
+        <Text size='none'>{children || label}</Text>
     </label>
 }

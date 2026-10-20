@@ -231,6 +231,10 @@ const orderSchema = {
         apartment: Number,
         entrance: String,
         floor: String,
+        hasElevator: {
+            type: Boolean,
+            default: true
+        },
         location: {
             type: { type: String, enum: ['Point'] },
             coordinates: { type: [Number], default: undefined }

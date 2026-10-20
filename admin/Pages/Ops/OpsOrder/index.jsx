@@ -124,6 +124,7 @@ function OrderPreview({ order = {}, claimOrder, isMine, cantPick, isShipMine, ca
                     actionTooltip='ops_navigate'
                     onAction={() => window.open(buildWazeUrl(order.address), '_blank', 'noopener')}
                 />
+                <ElevatorRow order={order} />
                 <PriviewRow icon='time' label='order_window' value={windowTime.textLong} />
                 {notes && <PriviewRow icon='note' label='ops_customer_notes' value={notes} />}
                 {order.shipperComment && <PriviewRow icon='note' label='ops_shipper_notes' value={order.shipperComment} />}
@@ -163,6 +164,7 @@ function OrderPreview({ order = {}, claimOrder, isMine, cantPick, isShipMine, ca
                     actionTooltip='ops_navigate'
                     onAction={() => window.open(buildWazeUrl(order.address), '_blank', 'noopener')}
                 />
+                <ElevatorRow order={order} />
                 <PriviewRow icon='time' label='order_window' value={windowTime.textLong} />
                 {notes && <PriviewRow icon='note' label='ops_customer_notes' value={notes} />}
                 {order.shipperComment && <PriviewRow icon='note' label='ops_shipper_notes' value={order.shipperComment} />}
@@ -194,6 +196,7 @@ function OrderPreview({ order = {}, claimOrder, isMine, cantPick, isShipMine, ca
         rows={<>
             <PriviewRow icon='user' label='customer_name' value={order.phone || '0500000000'} />
             <PriviewRow icon='location' label='customer_address' value={render({ type: 'address', value: order.address })} />
+            <ElevatorRow order={order} />
             <PriviewRow icon='time' label='order_window' value={windowTime.textLong} />
             {/* <PriviewRow icon='replace' label='replace_and_missing' value={order.window?.replace} />
             <PriviewRow icon='note' label='pick_notes' value={order.comments} /> */}
@@ -272,6 +275,16 @@ function OrderView({ order = {}, setStep }) {
             <Button mode='text-brand' onClick={() => setStep(STEPS.PREVIEW)}>back</Button>
         </Flex>
     </Flex>
+}
+
+function ElevatorRow({ order }) {
+    if (order?.deliveryMethod === 'pickup') return null
+    const hasElevator = order?.address?.hasElevator !== false
+    return <PriviewRow
+        icon='building'
+        label='address.hasElevator'
+        value={TR(hasElevator ? 'elevator_yes' : 'elevator_no')}
+    />
 }
 
 function PriviewRow({ icon, label, value, actionIcon, actionTooltip, onAction }) {

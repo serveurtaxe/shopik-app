@@ -27,6 +27,9 @@ export default function OrderDetailsCard({ order }) {
         </InfoRow>}
         {order.address && <InfoRow icon='location' label='customer_address'>
             <Text size='m'>{formatFullAddress(order.address)}</Text>
+            {order.deliveryMethod !== 'pickup' && <Text size='m' mode='sub'>
+                {TR('address.hasElevator')}: {TR(order.address.hasElevator === false ? 'elevator_no' : 'elevator_yes')}
+            </Text>}
             {order.address.comment && <Text size='m' mode='sub'>{order.address.comment}</Text>}
         </InfoRow>}
         <InfoRow icon='time' label='order_window'>

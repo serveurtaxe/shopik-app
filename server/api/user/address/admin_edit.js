@@ -6,7 +6,7 @@ export default async function admin_edit(payload, { DL, external, utils, _admin 
     const user = await DL.User.readById(userId)
     if (!user) throw { status: 404, message: 'user not found' }
 
-    const { geocoded, existingAddr } = await editAddress({ DL, external, user, addressId, address })
+    const { geocoded, existingAddr } = await editAddress({ DL, external, user, addressId, address, allowNoElevator: true })
     const sameLocation = isSameAddressLocation(geocoded, existingAddr)
 
     const updatedUser = await DL.User.updateOne(
