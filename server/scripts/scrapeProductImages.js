@@ -3,7 +3,7 @@
  * Provider priority: Rami Levy → Yochananof → Super-Pharm → Self-Point
  * (allcomplete/mehadrin/tivtaam) → Osem-Nestle (see
  * server/services/image/scrape/providers.js). Only the main image, only
- * sources with width>=600 or height>=600 (verified with sharp, no upscales).
+ * sources with width>=500 or height>=500 (verified with sharp, no upscales).
  * Verified bytes are cached on disk by barcode (data/scrape-cache, gitignored)
  * so follow-up runs never re-scrape: a disk hit short-circuits providers.
  *
@@ -13,9 +13,14 @@
  * (--force overrides). First image on an imageless HIDDEN product flips it
  * to ACTIVE (same rule as the GS1 process worker; Comax sync re-evaluates
  * status regardless).
+ * --comax: different selection — replaces products whose current main image
+ * is a Comax upload (sourceUrl matches www.comax.co.il/Max2000Upload) with a
+ * scraped image when a >=500px candidate exists. Implies --force; the Comax
+ * image is only overwritten on a hit, so misses keep their existing image.
  *
  * Usage: node server/scripts/runScrapeProductImages.js --barcode 7290000066318 [--dry-run] [--force] [--providers rami-levy,super-pharm]
  *        node server/scripts/runScrapeProductImages.js --imageless [--limit N] [--dry-run] [--force] [--concurrency N] [--providers rami-levy,super-pharm] [--delay-ms 1200] [--retry-failed]
+ *        node server/scripts/runScrapeProductImages.js --comax [--limit N] [--dry-run] [--concurrency N] [--providers ...] [--delay-ms 1200] [--retry-failed]
  *        node server/scripts/runScrapeProductImages.js --folder "C:\path\to\imgs" [--limit N] [--dry-run] [--concurrency N]
  *                                                     folder mode: local files <barcode>.{jpg,jpeg,webp,png} are the only
  *                                                     source; min-size gate + provenance via seedFromFolder; a final
@@ -26,7 +31,7 @@ import { PROVIDER_ORDER, seedFromFolder } from '#server/services/image/scrape/pr
 
 export default async function scrapeProductImages(
     { DL } = {},
-    { barcode = '', imageless = false, limit = 0, force = false, dryRun = false, concurrency = 3, providers = '', delayMs = 0, retryFailed = false, nameMatch = '', folder = '' } = {}
+    { barcode = '', imageless = false, comax = false, limit = 0, force = false, dryRun = false, concurrency = 3, providers = '', delayMs = 0, retryFailed = false, nameMatch = '', folder = '' } = {}
 ) {
     if (!DL) throw new Error('DL required')
     let barcodes = []
@@ -61,6 +66,28 @@ export default async function scrapeProductImages(
         folderReport = { rejected, processed: barcodes.slice() }
     } else if (barcode) {
         barcodes = [String(barcode)]
+    } else if (comax) {
+        // Replace Comax uploads with a scraped main. Implies force (a Comax
+        // image normally counts as "has-images"); the existing image stays
+        // untouched unless a >=MIN_SIDE candidate is actually found.
+        // Misses are parked like imageless runs, so sweeps progress; pass
+        // --retry-failed to re-probe them.
+        // Active products only: inactive ones aren't shoppable and their
+        // images aren't worth bandwidth.
+        force = true
+        const docs = await DL.Product.Model.find(
+            {
+                $and: [
+                    { 'images.product.sourceUrl': /www\.comax\.co\.il\/Max2000Upload/ },
+                    { status: 'active' },
+                    { barcode: { $regex: '^[0-9]{8,14}$' } },
+                    ...(retryFailed ? [] : [{ scrapeTriedAt: { $exists: false } }]),
+                    ...(nameMatch ? [{ name: { $regex: nameMatch } }] : [])
+                ]
+            },
+            { _id: 0, barcode: 1 }
+        ).limit(Number(limit) || 0).lean()
+        barcodes = [...new Set((docs || []).map(p => p?.barcode).filter(Boolean))]
     } else if (imageless) {
         // Raw Model: processFilter strips $and/$size/non-whitelisted fields,
         // so DL.Product.read can't express this (same bypass as order/ops/list).
@@ -83,7 +110,7 @@ export default async function scrapeProductImages(
         ).limit(Number(limit) || 0).lean()
         barcodes = [...new Set((docs || []).map(p => p?.barcode).filter(Boolean))]
     } else {
-        throw new Error('pass --barcode <bc>, --folder <dir>, or --imageless [--limit N]')
+        throw new Error('pass --barcode <bc>, --folder <dir>, --comax, or --imageless [--limit N]')
     }
 
     console.log(`[scrape] ${barcodes.length} barcodes${dryRun ? ' (DRY RUN)' : ''}${force ? ' (force)' : ''}`)
