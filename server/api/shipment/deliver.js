@@ -43,6 +43,14 @@ export default async function deliver(payload, { DL, _admin, external, utils }) 
 
     try { await DL.Owner.updateOne({ orderId, type: 'shipping', status: 'active' }, { status: 'done', end: at }) } catch {}
 
+    await utils.data.orderSms.sendOrderStageSms({
+        DL,
+        external,
+        order,
+        stage: 'done',
+        adminId: _admin.id
+    })
+
     if (shipment) {
         await DL.Shipment.Model.updateOne({ id: shipment.id }, { $push: { proof: { orderId, url, at } } })
         // ship_history deliver

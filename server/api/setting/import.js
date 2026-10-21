@@ -9,7 +9,7 @@ function normalizeEntry(raw, targetDomainId, defaultDomainId) {
     const domainId = targetDomainId
         || (typeof raw.domainId === 'string' && raw.domainId ? raw.domainId : defaultDomainId)
     if (!key) return null
-    return {
+    const entry = {
         key,
         value: raw.value,
         category: typeof raw.category === 'string' && raw.category ? raw.category.toLowerCase() : 'general',
@@ -19,6 +19,8 @@ function normalizeEntry(raw, targetDomainId, defaultDomainId) {
         renderType: raw.renderType || 'string',
         public: !!raw.public
     }
+    if (typeof raw.hidden === 'boolean') entry.hidden = raw.hidden
+    return entry
 }
 
 export default async function imp(payload, { DL, _admin }) {

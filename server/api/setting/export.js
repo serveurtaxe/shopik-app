@@ -28,7 +28,8 @@ export default async function exp(payload, { DL }) {
             subCategory: s.subCategory,
             formType: s.formType,
             renderType: s.renderType,
-            public: s.public
+            public: s.public,
+            hidden: !!s.hidden
         }))
     }
 }

@@ -379,7 +379,13 @@ const orderSchema = {
     notifications: {
         userOnTheWay: { type: Number, default: 0 },
         userArrived: { type: Number, default: 0 },
-        notifyUserSms: { type: Number, default: 0 }
+        notifyUserSms: { type: Number, default: 0 },
+        orderSmsSent: {
+            paid: Date,
+            picking: Date,
+            shipped: Date,
+            done: Date
+        }
     },
     deliveryDetails: {
         clientETA: Date,

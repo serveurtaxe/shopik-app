@@ -1,4 +1,3 @@
-import { OPS_SHIPPING_SMS_TEXT } from '#common/constants.js'
 import { balancedRoute } from '#common/functions/routeSort.js'
 
 export default async function start(payload, { DL, _admin, external, utils }) {
@@ -68,10 +67,13 @@ export default async function start(payload, { DL, _admin, external, utils }) {
     for (const oid of successIds) {
         const o = await DL.Order.readById(oid)
         if (!o) continue
-        try {
-            await external.sms.send([o.phone], OPS_SHIPPING_SMS_TEXT)
-            await DL.Order.Model.updateOne({ id: oid }, { $push: { messages: { phone: o.phone, type: 'sms', message: OPS_SHIPPING_SMS_TEXT, date: new Date(), source: 'shipment:start', adminId: _admin.id } }, $inc: { 'notifications.notifyUserSms': 1 } })
-        } catch {}
+        await utils.data.orderSms.sendOrderStageSms({
+            DL,
+            external,
+            order: o,
+            stage: 'shipped',
+            adminId: _admin.id
+        })
         try {
             const { record, adminActor } = utils.data.timeline
             await record({ DL, order: o, eventType: DL.Timeline.constants.EVENT_TYPES.ORDER_STATUS_UPDATE, actor: adminActor(_admin), changes: { oldData: { status: 'packed' }, newData: { status: 'shipped', shipmentId: shipment.id } }, context: { step: 'ship_start', shipmentId: shipment.id }, metadata: { source: 'shipment/start' } })

@@ -46,6 +46,5 @@ export const OPS_PROXIMITY_RADIUS_M = 150
 export const OPS_STORE_AUTO_SELECT_M = 100
 export const OPS_LOCATION_THROTTLE_MS = 30 * 1000
 export const OPS_LOCATION_MIN_MOVE_M = 100
-export const OPS_SHIPPING_SMS_TEXT = 'Your order is on the way!'
 export const OPS_PICK_HISTORY_ENABLED = true
 export const OPS_SHIP_HISTORY_ENABLED = true
