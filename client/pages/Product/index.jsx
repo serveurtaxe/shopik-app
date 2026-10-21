@@ -32,6 +32,7 @@ import { selectKashrutStamps, getSupervisionLabel } from 'common/components/Kash
 import { FoodSymbolStamps } from 'common/components/Nutrition'
 import { selectDietIcons, selectFoodSymbols } from 'common/components/Nutrition/constants.js'
 import { getProductState } from '#common/functions/productState.js'
+import { getProductImageUrls } from 'common/functions/productImageUrl.js'
 
 const PASSOVER_TEXT = {
     kosher: 'passover_kosher',
@@ -218,13 +219,9 @@ export default function Product() {
     useEffect(() => { if (mergedSales && Object.keys(mergedSales).length) setSalesCache(mergedSales) }, [mergedSales])
     useEffect(() => { setSelectedImageIndex(0); setWishlisted(false); setActiveSpecKey(null) }, [productId, product?.id])
 
-    const productImages = (product?.images?.product || []).filter(img => img?.sizes)
-    const images = productImages.length
-        ? productImages.map(img => img.sizes.xl || img.sizes.l || img.sizes.m)
-        : []
-    const thumbImages = productImages.length
-        ? productImages.map(img => img.sizes.m || img.sizes.s || img.sizes.l || img.sizes.xl)
-        : []
+    const productImages = product?.images?.product || []
+    const images = getProductImageUrls(product?.id, productImages, 'xl')
+    const thumbImages = getProductImageUrls(product?.id, productImages, 'm')
     const mainImage = images[selectedImageIndex] || images[0] || ''
     const has360 = (product?.images?.threeSixty || []).length > 0
     const sections = useMemo(() => buildSections(product || {}), [product])
