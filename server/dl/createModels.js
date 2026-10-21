@@ -463,6 +463,9 @@ export default async function createModels(redis) {
 
                         if (currentHashCount != currentDocsCount) {
                             try {
+                                // Rebuild from scratch: add-only merging kept
+                                // deleted/renamed docs in the hash forever.
+                                await redis.del(model.cacheName)
                                 const docs = await model.find({}, { _id: 0 }).lean()
                                 await model.cache.add(docs)
                             } catch (e) {
