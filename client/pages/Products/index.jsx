@@ -19,11 +19,11 @@ export default function Products() {
 }
 
 
-Products.init = async function (path) {
+Products.init = async function (path, ctx) {
     const pagePath = `/${String(path).replace(/^\//, '')}`
     const [res, display] = await Promise.all([
-        apiReq('product/get', { path, limit: PRODUCT_LIST_LIMIT }),
-        apiReq('display_block/get', { path: pagePath }).catch(() => ({ blocks: [] }))
+        apiReq('product/get', { path, limit: PRODUCT_LIST_LIMIT }, ctx),
+        apiReq('display_block/get', { path: pagePath }, ctx).catch(() => ({ blocks: [] }))
     ])
     const blocks = display.blocks || []
     // a category path that doesn't resolve to a category -> 404 (server falls

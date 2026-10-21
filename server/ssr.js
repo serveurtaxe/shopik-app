@@ -118,8 +118,14 @@ export default async function (app, bootData) {
     app.get('*splat', async (req, res) => {
         try {
             const data = await utils.data.getClientData(req, bootData)
+            // Forward the original request identity to SSR data init calls:
+            // they hit the internal API without the browser's cookie jar.
+            const ctx = {
+                cookie: req.headers.cookie,
+                platform: utils.getPlatform(req)
+            }
             const { template, renderFn } = await getClientContext(req)
-            const { html = '', head = '', status = 200 } = await renderFn({ url: req.originalUrl, data })
+            const { html = '', head = '', status = 200 } = await renderFn({ url: req.originalUrl, data, ctx })
 
             // Personalized HTML (user/order embedded in window.__SD__) must
             // never sit in shared caches: no-cache alone still allows storage.

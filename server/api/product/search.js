@@ -68,5 +68,5 @@ export default async function search(payload, { DL, req, _user, _admin, utils, p
 }
 
 search.config = {
-    auth: 'none'
+    auth: 'lax'
 }

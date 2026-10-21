@@ -6,11 +6,11 @@ import { getSettingFileUrl } from '#common/functions/settingFileUrl.js'
 import pages from './pages'
 import App from './App'
 
-export async function render({ url, data }) {
+export async function render({ url, data, ctx }) {
   const pathname = url.split('?')[0]
   const page = pages.find(p => matchPath(p.path, pathname))
   let notFound = !page
-  data.initData = notFound ? { notFound: true } : await page.element.init?.(url)
+  data.initData = notFound ? { notFound: true } : await page.element.init?.(url, ctx)
   if (data.initData?.notFound) notFound = true
   data.url = url
 

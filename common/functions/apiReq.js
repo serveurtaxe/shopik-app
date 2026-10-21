@@ -1,12 +1,20 @@
 const isClient = typeof window !== 'undefined'
 
-export default async function apiReq(path, data = {}, fields) {
+export default async function apiReq(path, data = {}, ctx) {
     let body = data
 
     const headers = {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
         'app-version': APP_VERSION
+    }
+
+    // SSR calls run in a separate internal request that has no browser cookie
+    // jar. Forward the original request identity when the server passes it so
+    // auth ('lax') routes can resolve the current user.
+    if (!isClient && ctx) {
+        if (ctx.cookie) headers.cookie = ctx.cookie
+        if (ctx.platform) headers.platform = ctx.platform
     }
 
     if (data.files) {

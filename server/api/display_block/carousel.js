@@ -74,6 +74,6 @@ function carouselMeta(block) {
 }
 
 carousel.config = {
-    auth: 'none',
+    auth: 'lax',
     required: ['id', 'domainId']
 }

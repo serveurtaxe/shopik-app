@@ -114,12 +114,12 @@ export default function Search() {
     </Flex>
 }
 
-Search.init = async function (url) {
+Search.init = async function (url, ctx) {
     const q = new URL(url, 'http://localhost').searchParams.get('q')?.trim() || ''
     let results = []
     let sales = {}
     if (q.length >= 2) {
-        const res = await apiReq('product/search', { value: q, limit: LIMIT }).catch(() => [])
+        const res = await apiReq('product/search', { value: q, limit: LIMIT }, ctx).catch(() => [])
         const unwrapped = unwrapSearchRes(res)
         results = unwrapped.products
         sales = unwrapped.sales
