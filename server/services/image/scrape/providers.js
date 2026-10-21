@@ -5,10 +5,9 @@ import { fileURLToPath } from 'url'
 import download from '../download.js'
 import log from '#server/utils/log.js'
 
-export const MIN_SIDE = 600
-// Folder mode accepts 500x500 packshots (pre-approved local source); CDN
-// candidates keep the stricter MIN_SIDE gate.
-const FOLDER_MIN_SIDE = 500
+// 500px on either side (either width>=500 or height>=500 passes).
+export const MIN_SIDE = 500
+const FOLDER_MIN_SIDE = MIN_SIDE
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36'
 
 // Priority order: Rami Levy first, others are fallback.
