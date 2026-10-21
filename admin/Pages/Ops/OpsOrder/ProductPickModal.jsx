@@ -8,6 +8,7 @@ import Button from 'common/components/Button'
 import Image from 'common/components/Image'
 import styles from './productPickModal.module.css'
 import { isWeightProduct, formatAmount, getUnitLabel, getUnitInfoText } from 'common/components/Product'
+import { getProductImageUrls } from 'common/functions/productImageUrl.js'
 
 export default function ProductPickModal({ product = {}, orderId, onClose, onPicked }) {
     const weight = isWeightProduct(product)
@@ -68,12 +69,11 @@ function ProductDetails({ product = {}, orderId, onClose, onPicked, onScan, onRe
     const [error, setError] = useState('')
     const [imgIdx, setImgIdx] = useState(0)
 
-    const productImages = (product?.images?.product || []).filter(img => img?.sizes)
+    const productImages = product?.images?.product || []
     const threeSixty = product?.images?.threeSixty || []
     const has360 = threeSixty.length > 0 || productImages.length > 1
-    const displayImages = productImages.length ? productImages : []
-    const currentImg = displayImages[imgIdx]
-    const mainSrc = currentImg?.sizes?.l || currentImg?.sizes?.xl || currentImg?.sizes?.m || ''
+    const displayImages = getProductImageUrls(product?.id, productImages, 'l')
+    const mainSrc = displayImages[imgIdx] || ''
     const dots = displayImages.length > 1 ? displayImages : (has360 ? Array.from({ length: 5 }) : [])
 
     const price = product.price ?? product.prices?.[0]?.price ?? 36
