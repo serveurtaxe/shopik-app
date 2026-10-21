@@ -1,4 +1,4 @@
-export default async function claim(payload, { DL, _admin, utils }) {
+export default async function claim(payload, { DL, _admin, external, utils }) {
     const { id } = payload
     if (!id) throw { status: 400, message: 'order id required' }
 
@@ -22,6 +22,14 @@ export default async function claim(payload, { DL, _admin, utils }) {
         await DL.Order.Model.updateOne({ id }, { $set: { status: 'paid', picker: null, pickStart: null } }).lean()
         throw { status: 403, message: 'order store mismatch' }
     }
+
+    await utils.data.orderSms.sendOrderStageSms({
+        DL,
+        external,
+        order,
+        stage: 'picking',
+        adminId: _admin.id
+    })
 
     // history: owner
     try {

@@ -210,6 +210,12 @@ export default async function callback(payload, info) {
         try {
             await recordPaidOrder(DL, order, Number(authorizedAmount))
         } catch { }
+        await utils.data.orderSms.sendOrderStageSms({
+            DL,
+            external,
+            order,
+            stage: 'paid'
+        })
     }
 
     try {

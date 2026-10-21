@@ -21,6 +21,7 @@ import Windows from 'Pages/Windows'
 import Ops from 'Pages/Ops'
 import OpsOrder from 'Pages/Ops/OpsOrder'
 import ApiKeys from 'Pages/ApiKeys'
+import SmsTemplates from 'Pages/SmsTemplates'
 import DevTools from 'Pages/DevTools'
 
 const pages = [
@@ -37,6 +38,7 @@ const pages = [
 
     { key: 'admins', name: 'Admins', path: '/admins', section: 'management', icon: 'persons', component: Admins, permission: 'admin:read' },
     { key: 'domains', name: 'Domains', path: '/domains', section: 'management', icon: 'domains', component: Domains, permission: 'domain:read' },
+    { key: 'sms-templates', name: 'SMS Templates', path: '/sms-templates', section: 'management', icon: 'message', component: SmsTemplates, permission: 'setting:read' },
     { key: 'stores', name: 'Stores', path: '/stores', section: 'management', icon: 'stores', component: Stores, permission: 'store:read' },
     { key: 'supply-areas', name: 'Supply Areas', path: '/supply-areas', section: 'management', icon: 'map', component: SupplyAreas, permission: 'supply_area:read' },
     { key: 'windows', name: 'Windows', path: '/windows', section: 'management', icon: 'calendar', component: Windows, permission: 'order_window_template:read' },

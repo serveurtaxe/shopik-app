@@ -75,6 +75,11 @@ const settingSchema = {
         type: Boolean,
         default: false,
         filter: true
+    },
+    hidden: {
+        type: Boolean,
+        default: false,
+        filter: true
     }
 }
 const index = [

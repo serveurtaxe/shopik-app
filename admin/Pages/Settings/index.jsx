@@ -305,7 +305,7 @@ export default function Settings() {
     // Work one domain at a time — export/import/add scope to selectedDomain
     const domainSettings = useMemo(() => {
         if (!selectedDomain) return []
-        return settings.filter((s) => s.domainId === selectedDomain)
+        return settings.filter((s) => s.domainId === selectedDomain && !s.hidden)
     }, [settings, selectedDomain])
 
     // Extract unique categories & their item counts
