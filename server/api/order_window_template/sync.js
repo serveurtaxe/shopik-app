@@ -86,10 +86,10 @@ export default async function sync(payload, { DL }) {
     const specialMap = buildSpecialMap(specialDays)
 
     // 2. Bulk fetch all existing order windows for all stores within the date range
-    const existingWindows = await DL.OrderWindow.read({
+    const existingWindows = await DL.OrderWindow.Model.find({
         storeId: { $in: validStoreIds },
         date: { $gte: startDateStr, $lte: endDateStr }
-    }, { _id: 0 }, { limit: 0 })
+    }, { _id: 0 }).lean()
 
     // Index existing windows by composite key: `storeId_date_start`
     const existingMap = new Map()

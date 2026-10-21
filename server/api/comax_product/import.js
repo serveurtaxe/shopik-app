@@ -30,6 +30,8 @@ export default async function importComaxProducts(payload, { DL, external }) {
             docs: batch,
             getUpsert: p => p.price > 0 && !p.archived,
             getFilter: p => ({ barcode: p.barcode }),
+        }).catch(e => {
+            console.error(`[Comax Import] batch ${Math.floor(i / BATCH) + 1}/${Math.ceil(total / BATCH)} failed:`, e?.message || e)
         })
 
         count += batch.length
