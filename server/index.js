@@ -19,6 +19,7 @@ import { isComaxDeliveryEnabled } from '#server/external/comax/utils.js'
 import log from '#server/utils/log.js'
 import compression from 'compression'
 import setupSecurity from './middleware/security.js'
+import setupWwwRedirect from './middleware/redirectWww.js'
 import { getHeapStatistics } from 'node:v8'
 
 console.log(`\n⚡ Starting server...\n`)
@@ -30,6 +31,7 @@ const
     app = express()
 
 await setupSecurity(app, bootData)
+await setupWwwRedirect(app, bootData.DL, bootData.utils.log.warn.bind(bootData.utils.log))
 
 // Domain invariant: exactly one isDefault domain. Storefront requests without a
 // resolvable Origin depend on it — zero means they 500, more than one is ambiguous.
