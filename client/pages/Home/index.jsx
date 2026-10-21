@@ -11,8 +11,8 @@ export default function Home() {
     </div>
 }
 
-Home.init = async function init({ } = {}) {
-    const data = await apiReq('display_block/get', { path: '/' }).catch(() => ({ blocks: [] }))
+Home.init = async function init(url, ctx) {
+    const data = await apiReq('display_block/get', { path: '/' }, ctx).catch(() => ({ blocks: [] }))
     return {
         title: TR('page_home_title'),
         data

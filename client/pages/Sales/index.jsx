@@ -22,10 +22,10 @@ export default function Sales() {
     </>
 }
 
-Sales.init = async function () {
+Sales.init = async function (url, ctx) {
     const [res, display] = await Promise.all([
-        apiReq('product/get', { onSale: true, limit: PRODUCT_LIST_LIMIT }),
-        apiReq('display_block/get', { path: '/sales' }).catch(() => ({ blocks: [] }))
+        apiReq('product/get', { onSale: true, limit: PRODUCT_LIST_LIMIT }, ctx),
+        apiReq('display_block/get', { path: '/sales' }, ctx).catch(() => ({ blocks: [] }))
     ])
     return {
         title: TR('sales'),

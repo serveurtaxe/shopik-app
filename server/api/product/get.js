@@ -113,5 +113,5 @@ export default async function get(payload, { DL, _user, _admin, req, utils, plat
 }
 
 get.config = {
-    auth: 'none'
+    auth: 'lax'
 }

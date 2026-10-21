@@ -119,6 +119,6 @@ function deriveView(response, mode, storeId, previewLimit, display, priceFor = (
 }
 
 get.config = {
-    auth: 'none',
+    auth: 'lax',
     required: ['path', 'domainId']
 }

@@ -20,10 +20,10 @@ export default function Carousel() {
     />
 }
 
-Carousel.init = async function (path) {
+Carousel.init = async function (path, ctx) {
     const id = decodeURIComponent(path).split('/').filter(Boolean).pop()
     try {
-        const res = await apiReq('display_block/carousel', { id, limit: PRODUCT_LIST_LIMIT })
+        const res = await apiReq('display_block/carousel', { id, limit: PRODUCT_LIST_LIMIT }, ctx)
         return {
             title: res.block?.title || TR('display_fallback_title'),
             description: res.block?.title,

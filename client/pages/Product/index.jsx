@@ -430,10 +430,9 @@ export default function Product() {
         </Flex>
     )
 }
-
-Product.init = async function (path) {
+Product.init = async function (path, ctx) {
     const productId = path.split('/').pop()
-    const res = await apiReq('product/get', { id: productId })
+    const res = await apiReq('product/get', { id: productId }, ctx)
     const product = res.products?.[0]
 
     if (!product) {
@@ -448,7 +447,7 @@ Product.init = async function (path) {
             const rel = await apiReq('product/get', {
                 filter: { 'category.pathIds': catId },
                 limit: 11
-            })
+            }, ctx)
             related = (rel.products || []).filter(p => p.id !== product.id).slice(0, 10)
             relatedSales = rel.sales || {}
         }
