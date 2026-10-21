@@ -109,8 +109,8 @@ export default function Cart({ }) {
         <Flex className={styles.header} alignItems='center' justifyContent='space-between'>
             <Text size='xxl' bold>cart_title</Text>
             <Flex className={styles.actions} center gap={15}>
-                <Button icon='coupon' mode='vertical'>coupons</Button>
-                <Button icon='listPlus' mode='vertical'>save_list</Button>
+                {/* <Button icon='coupon' mode='vertical'>coupons</Button>
+                <Button icon='listPlus' mode='vertical'>save_list</Button> */}
                 <ConfirmButton
                     icon='trash' mode='vertical'
                     disabled={emptyCart}
