@@ -47,6 +47,8 @@ docs1
 
 ai/
 
+reports/
+
 old.*
 # Local scrape image cache (barcode-keyed verification bytes, see
 # server/services/image/scrape/providers.js). Never commit.

@@ -1,9 +1,15 @@
 import { parseXml } from './parser.js'
 import { buildDeliveryDocumentSoap } from './deliveryMapper.js'
 import { resolveDeliveryConfig } from './resolveDeliveryConfig.js'
+import { findDeliveryDocByReference, docMatchesOrder } from './deliveryFetch.js'
+import { formatComaxDate } from './utils.js'
 
 const DELIVERY_URL = 'https://ws.comax.co.il/Comax_WebServices/DeliveryDocuments.asmx'
 const SOAP_ACTION = '"http://ws.comax.co.il/Comax_WebServices/Write_DeliveryDocument"'
+
+// How far back to look for a doc that already carries our reference.
+const LOOKBACK_DAYS = Number(process.env.COMAX_DELIVERY_LOOKBACK_DAYS || 30)
+const DOUBLE_REFERENCE_RE = /double\s*reference/i
 
 function extractResult(parsed) {
     const env = parsed?.['soap:Envelope']?.['soap:Body'] ?? parsed
@@ -19,10 +25,68 @@ function isTruthy(v) {
 }
 
 /**
+ * Did Comax refuse the write because the reference is already taken?
+ * (Comax's ErrorTypes enum: DoubleReference.)
+ */
+export function isDoubleReferenceError(details) {
+    const message = [details?.ErrorMessage, details?.ErrorMessage_Details].filter(Boolean).join(' | ')
+    return DOUBLE_REFERENCE_RE.test(message)
+}
+
+/**
+ * "Double reference" means a doc with this reference already exists in Comax —
+ * the write may have succeeded earlier with a lost response. Find that doc and
+ * hand it back so the caller can continue with it.
+ *
+ * Only OUR customer's docs are searched (the reference alone is not unique in
+ * the Comax company), and the doc must match the order: same reference, same
+ * store and the same items we sent. Returns null when there is no such doc.
+ */
+async function adoptExistingDeliveryDoc({ DL, order, cfg, lines, idByBarcode }) {
+    const reference = String(order?.number || '')
+    if (!reference) return null
+    // The doc can only be newer than the order; look from today first (the
+    // common case: an earlier attempt minutes ago), then widen the window.
+    const today = formatComaxDate(new Date())
+    const earliest = new Date(Date.now() - LOOKBACK_DAYS * 86400000)
+    const created = order?.createdAt ? new Date(order.createdAt) : null
+    const lower = created && created > earliest ? new Date(created.getTime() - 86400000) : earliest
+    const fromDates = [today]
+    const wide = formatComaxDate(lower)
+    if (wide !== today) fromDates.push(wide)
+
+    for (const fromDate of fromDates) {
+        try {
+            const doc = await findDeliveryDocByReference({ DL, customerId: cfg.customerId, reference, fromDate })
+            if (!doc) continue
+            if (!docMatchesOrder(doc, {
+                reference,
+                storeId: cfg.comaxStoreId,
+                expectedLines: lines,
+                aliasByBarcode: idByBarcode
+            })) return null
+            return {
+                docNumber: doc.docNumber,
+                totalSum: doc.totalSum,
+                linesCount: String(doc.lines.length),
+                dateDoc: doc.dateDoc
+            }
+        } catch {
+            // Never mask the original Comax error with a lookup failure.
+        }
+    }
+    return null
+}
+
+/**
  * Create the Comax delivery document for a packed Shopik order.
  * Prices come from the Comax price list (PriceFromPriceList=true).
  * Fail-open: throws on error, caller decides.
- * Returns { docNumber, totalSum, linesCount }.
+ *
+ * "Double reference" (the reference is already taken in Comax) is recovered
+ * from: the existing doc is fetched and returned as if the write succeeded.
+ *
+ * Returns { docNumber, totalSum, linesCount } (+ dateDoc when adopted).
  */
 export async function writeDeliveryDocument({ DL, order, timeoutMs = 60000, opts = {} }) {
     const cfg = await resolveDeliveryConfig(DL, order.storeId)
@@ -94,6 +158,18 @@ export async function writeDeliveryDocument({ DL, order, timeoutMs = 60000, opts
         const docNumber = details?.DocNumber != null ? String(details.DocNumber) : ''
         const errMsg = details?.ErrorMessage || details?.ErrorMessage_Details || ''
         if (!isTruthy(ok) || !docNumber || docNumber === '0') {
+            if (isDoubleReferenceError(details)) {
+                const adopted = await adoptExistingDeliveryDoc({ DL, order, cfg, lines, idByBarcode })
+                if (adopted) {
+                    await log.success({
+                        orderId: order.id,
+                        ...adopted,
+                        adopted: 'double_reference',
+                        comaxError: errMsg
+                    }).catch(() => {})
+                    return adopted
+                }
+            }
             throw new Error(`Comax delivery doc failed${errMsg ? `: ${errMsg}` : ': empty DocNumber'}`)
         }
         const out = {
