@@ -65,7 +65,7 @@ export default async function scrapeProductImages(
         // Snapshot before the workers consume the array (nextJob splices).
         folderReport = { rejected, processed: barcodes.slice() }
     } else if (barcode) {
-        barcodes = [String(barcode)]
+        barcodes = String(barcode).split(/[,\s]+/).map(s => s.trim()).filter(Boolean)
     } else if (comax) {
         // Replace Comax uploads with a scraped main. Implies force (a Comax
         // image normally counts as "has-images"); the existing image stays

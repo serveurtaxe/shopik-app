@@ -285,13 +285,27 @@ const builders = { 'rami-levy': ramiLevy, yochananof, 'super-pharm': superPharm,
 // Disk cache is checked first: once found for a barcode we never search
 // again. Verified bytes are written to disk and handed along so the caller
 // doesn't download a second time.
+// A "totally white" packshot: no pixel darker than ~240 in any channel.
+// Some sources (notably Self-Point) serve blank placeholders; they must not
+// win over a real photo, and a cached blank must not short-circuit a retry.
+// Note: grayscale blanks yield a single channel, so check every channel
+// rather than assuming RGB.
+async function isBlank(buffer) {
+    try {
+        const { channels } = await sharp(buffer).stats()
+        return channels.length > 0 && channels.every(c => c.min >= 240)
+    } catch {
+        return false
+    }
+}
+
 // One retry on 429/503 (CDN throttle) after a short backoff — a throttle
 // is "unknown", not a miss.
 // Returns the first candidate with width>=MIN_SIDE or height>=MIN_SIDE.
 export async function findCandidate(barcode, { name = '', order = PROVIDER_ORDER } = {}) {
     const tried = []
     const cached = await cacheRead(barcode)
-    if (cached?.buffer?.length) {
+    if (cached?.buffer?.length && !(await isBlank(cached.buffer))) {
         log.info(`[Scrape] ${barcode} ← disk cache (${cached.site} ${cached.width}x${cached.height})`)
         return { candidate: { ...cached, fromDisk: true }, tried }
     }
@@ -316,7 +330,8 @@ export async function findCandidate(barcode, { name = '', order = PROVIDER_ORDER
                     break
                 }
             }
-            const pass = (meta?.width || 0) >= MIN_SIDE || (meta?.height || 0) >= MIN_SIDE
+            const pass = ((meta?.width || 0) >= MIN_SIDE || (meta?.height || 0) >= MIN_SIDE) &&
+                !(buffer && await isBlank(buffer))
             tried.push({ ...cand, width: meta?.width || 0, height: meta?.height || 0, pass, error })
             if (pass) {
                 log.success(`[Scrape] ${barcode} ← ${cand.site} ${meta.width}x${meta.height} ${cand.sourceUrl}`)
@@ -327,7 +342,7 @@ export async function findCandidate(barcode, { name = '', order = PROVIDER_ORDER
                 await cacheWrite(barcode, candidate)
                 return { candidate, tried }
             }
-            log.info(`[Scrape] ${barcode} ✗ ${cand.site} ${meta ? `${meta.width}x${meta.height}` : error}`)
+            log.info(`[Scrape] ${barcode} ✗ ${cand.site} ${meta ? `${meta.width}x${meta.height}${buffer && await isBlank(buffer) ? ' blank' : ''}` : error}`)
         }
     }
     return { candidate: null, tried }
