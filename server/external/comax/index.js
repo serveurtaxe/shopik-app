@@ -1,11 +1,20 @@
 import { buildComaxParams, buildComaxPromotionParams } from './utils.js'
-import { fetchComax, fetchComaxBalance, fetchComaxPromotions } from './client.js'
-import { parseXml, normalizeArray, parseXmlFile } from './parser.js'
+import { fetchComax, fetchComaxBalance, fetchComaxPromotions, fetchComaxStream } from './client.js'
+import { parseXml, normalizeArray, parseXmlFile, splitItemBlocks, parseItemBlock } from './parser.js'
 import { mapItem, mapPromotion, mapBalance } from './mapper.js'
 import { writeDeliveryDocument } from './deliveryDocs.js'
 import { getDeliveryDocument } from './deliveryFetch.js'
 import { fetchAndStoreDeliveryDoc } from './deliverySync.js'
 import { resolveDeliveryConfig } from './resolveDeliveryConfig.js'
+
+// Super-department 12 is excluded from the catalog.
+// includeZeroPrice (buying-price import): zero-price items must survive so a
+// removed price can clear the stored value instead of silently keeping it.
+function keepProduct(product, includeZeroPrice) {
+    if (product.superDepartmentCode == 12) return false
+    if (!includeZeroPrice && !(product.price > 0)) return false
+    return true
+}
 
 async function getProducts({ DL, includeZeroPrice, skipLog, silent, timeoutMs, ...options }) {
     // 1. Build query params
@@ -26,18 +35,64 @@ async function getProducts({ DL, includeZeroPrice, skipLog, silent, timeoutMs, .
     }
 
     // 5. Map to clean objects
-    // includeZeroPrice (buying-price import): zero-price items must survive so a
-    // removed price can clear the stored value instead of silently keeping it.
-    const products = items.map(mapItem).filter(p => p.superDepartmentCode != 12 && (includeZeroPrice || p.price > 0))
+    const products = items.map(mapItem).filter(p => keepProduct(p, includeZeroPrice))
 
     if (!silent) console.log(`[Comax] Fetched ${products.length} products`)
 
     return products
 }
 
+/**
+ * Stream the catalog — one item in memory at a time.
+ *
+ * `getProducts` holds the entire response as a string, then as a parsed
+ * object tree, then as a mapped array. A mass price update makes the Comax
+ * delta the whole catalog (hundreds of MB) and that exhausted the container
+ * memory limit. This parses one `<ClsItems>` block at a time and yields
+ * mapped products, so peak memory is one item plus the caller's batch.
+ *
+ * Pass a `stats` object to learn how many item blocks the response held and
+ * how many failed to parse — an empty delta and a changed response format
+ * look the same from the outside.
+ */
+async function* streamProducts({ DL, includeZeroPrice, skipLog, silent, timeoutMs, stats, ...options }) {
+    const params = buildComaxParams(options)
+    const source = await fetchComaxStream({ params, timeoutMs, skipLog }, { DL })
+
+    let count = 0
+    let blocks = 0
+    let unparsed = 0
+
+    for await (const block of splitItemBlocks(source)) {
+        blocks++
+        let item
+        try {
+            item = parseItemBlock(block)
+        } catch (e) {
+            unparsed++
+            if (!silent) console.warn(`[Comax] Failed to parse item block: ${e?.message || e}`)
+            continue
+        }
+        if (!item) continue
+
+        const product = mapItem(item)
+        if (!keepProduct(product, includeZeroPrice)) continue
+
+        count++
+        yield product
+    }
+
+    if (stats) {
+        stats.blocks = blocks
+        stats.kept = count
+        stats.unparsed = unparsed
+    }
+    if (!silent) console.log(`[Comax] Fetched ${count} products${unparsed ? ` (${unparsed} unparseable)` : ''}`)
+}
+
 async function getProductsFromFile({ inputFile }) {
     const items = await parseXmlFile(inputFile)
-    const products = items.map(mapItem).filter(p => p.superDepartmentCode != 12 && p.price > 0)
+    const products = items.map(mapItem).filter(p => keepProduct(p, false))
     console.log(`[Comax] Fetched ${products.length} products from file`)
     return products
 
@@ -75,6 +130,7 @@ async function getPromotions({ DL, ...options }) {
 
 const comax = ({ DL }) => ({
     getProducts: options => getProducts({ ...options, DL }),
+    streamProducts: options => streamProducts({ ...options, DL }),
     getProductsFromFile,
     getPromotions: options => getPromotions({ ...options, DL }),
     getBalance: options => getBalance({ ...options, DL }),

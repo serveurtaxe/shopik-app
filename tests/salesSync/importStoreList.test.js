@@ -25,14 +25,20 @@ function fakeDL(staleSales = []) {
                         lean: async () => null
                     })
                 }),
+                // The prune reads through Model.find on purpose: DL.read runs
+                // the filter through processFilter, which drops swAllBranches
+                // and stores.Kod (neither is a filter field) and would make the
+                // prune delete every store's promotions.
+                find: (filter, select) => {
+                    calls.pruneFilter = filter
+                    return {
+                        lean: async () => staleSales
+                    }
+                },
                 deleteMany: async filter => {
                     calls.deleteMany.push(filter)
                     return { deletedCount: staleSales.length }
                 }
-            },
-            read: async filter => {
-                calls.pruneFilter = filter
-                return staleSales
             },
             bulkWrite: async args => {
                 calls.bulkWrite = args
@@ -72,7 +78,7 @@ describe('comax sales import store list', () => {
 
         const result = await importComaxSales({}, { DL, external })
 
-        assert.deepEqual(calls.promotionsOptions.storeList, ['711'])
+        assert.deepEqual(calls.promotionsOptions.storeList, '711')
         assert.deepEqual(calls.pruneFilter, {
             swAllBranches: { $ne: true },
             'stores.Kod': { $nin: ['711'] }

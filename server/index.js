@@ -21,9 +21,22 @@ import compression from 'compression'
 import setupSecurity from './middleware/security.js'
 import setupWwwRedirect from './middleware/redirectWww.js'
 import { getHeapStatistics } from 'node:v8'
+import { containerMemoryLimitMb } from '#server/utils/mem.js'
 
 console.log(`\n⚡ Starting server...\n`)
-console.log(`[Heap] limit ${Math.round(getHeapStatistics().heap_size_limit / 1048576)}MB (raise via NODE_OPTIONS=--max-old-space-size=<MB> in the deploy environment)\n`)
+
+const heapLimitMB = Math.round(getHeapStatistics().heap_size_limit / 1048576)
+const containerMB = containerMemoryLimitMb()
+console.log(`[Heap] limit ${heapLimitMB}MB (raise via NODE_OPTIONS=--max-old-space-size=<MB> in the deploy environment)\n`)
+if (containerMB) {
+    console.log(`[Heap] container memory limit ${containerMB}MB\n`)
+    if (heapLimitMB > containerMB * 0.75) {
+        // V8 sizes its heap from the HOST, not the container, so it happily
+        // grows past the container limit and the kernel OOM-kills the process
+        // instead of V8 collecting. Cap the heap below the container limit.
+        console.warn(`[Heap] V8 heap limit (${heapLimitMB}MB) exceeds 75% of the container limit (${containerMB}MB) — the process will be OOM-killed before V8 collects. Set NODE_OPTIONS=--max-old-space-size=${Math.floor(containerMB * 0.7)} in the deploy environment.\n`)
+    }
+}
 
 const
     bootData = await boot(),
