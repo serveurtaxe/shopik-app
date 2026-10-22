@@ -3,8 +3,8 @@ import { fetchComax, fetchComaxBalance, fetchComaxPromotions, fetchComaxStream }
 import { parseXml, normalizeArray, parseXmlFile, splitItemBlocks, parseItemBlock } from './parser.js'
 import { mapItem, mapPromotion, mapBalance } from './mapper.js'
 import { writeDeliveryDocument } from './deliveryDocs.js'
-import { getDeliveryDocument } from './deliveryFetch.js'
-import { fetchAndStoreDeliveryDoc } from './deliverySync.js'
+import { getDeliveryDocument, findDeliveryDocByReference } from './deliveryFetch.js'
+import { fetchAndStoreDeliveryDoc, ensureDeliveryDoc } from './deliverySync.js'
 import { resolveDeliveryConfig } from './resolveDeliveryConfig.js'
 
 // Super-department 12 is excluded from the catalog.
@@ -136,7 +136,9 @@ const comax = ({ DL }) => ({
     getBalance: options => getBalance({ ...options, DL }),
     writeDeliveryDocument: (order, opts) => writeDeliveryDocument({ DL, order, opts }),
     getDeliveryDocument: (args) => getDeliveryDocument({ DL, ...args }),
+    findDeliveryDocByReference: (args) => findDeliveryDocByReference({ DL, ...args }),
     syncDeliveryDoc: (docNumber) => fetchAndStoreDeliveryDoc({ DL, docNumber }),
+    ensureDeliveryDoc: (args) => ensureDeliveryDoc({ DL, ...args }),
     resolveDeliveryConfig: storeId => resolveDeliveryConfig(DL, storeId)
 })
 export default comax

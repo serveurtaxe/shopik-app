@@ -31,15 +31,11 @@ export default async function comaxRetry(payload, { DL, utils, external }) {
             set.comaxDoc = { docNumber: res.docNumber, totalSum: res.totalSum, capturedAt: new Date(), error: null }
             try {
                 const cfg = await external.comax.resolveDeliveryConfig(order.storeId).catch(() => null)
-                await DL.ComaxDeliveryDoc.create({
-                    orderId: order.id,
-                    orderNumber: order.number,
-                    storeId: order.storeId,
+                await external.comax.ensureDeliveryDoc({
+                    order,
                     docNumber: res.docNumber,
                     customerId: cfg?.customerId || '',
-                    reference: String(order.number || ''),
-                    status: 'pending',
-                    attempts: 0,
+                    dateDoc: res.dateDoc || '',
                     nextAttemptAt: new Date()
                 })
             } catch {}
@@ -51,21 +47,14 @@ export default async function comaxRetry(payload, { DL, utils, external }) {
         // (docs created before the delivery-docs flow): ensure a pending row
         // so the deliveryDocsSync cron picks it up.
         try {
-            const row = await DL.ComaxDeliveryDoc.readOne({ docNumber: order.comaxDoc.docNumber })
-            if (!row) {
-                const cfg = await external.comax.resolveDeliveryConfig(order.storeId).catch(() => null)
-                await DL.ComaxDeliveryDoc.create({
-                    orderId: order.id,
-                    orderNumber: order.number,
-                    storeId: order.storeId,
-                    docNumber: order.comaxDoc.docNumber,
-                    customerId: cfg?.customerId || '',
-                    reference: String(order.number || ''),
-                    status: 'pending',
-                    attempts: 0,
-                    nextAttemptAt: new Date()
-                })
-            }
+            const cfg = await external.comax.resolveDeliveryConfig(order.storeId).catch(() => null)
+            await external.comax.ensureDeliveryDoc({
+                order,
+                docNumber: order.comaxDoc.docNumber,
+                customerId: cfg?.customerId || '',
+                dateDoc: order.comaxDoc.dateDoc || '',
+                nextAttemptAt: new Date()
+            })
         } catch {}
     }
     if (!Object.keys(set).length) return order

@@ -52,15 +52,11 @@ export default async function pack(payload, { DL, _admin, utils, external }) {
             try {
                 const cfg = await external.comax.resolveDeliveryConfig(order.storeId).catch(() => null)
                 const delayMs = Number(process.env.COMAX_DELIVERY_FETCH_DELAY_MS || 30000)
-                await DL.ComaxDeliveryDoc.create({
-                    orderId: order.id,
-                    orderNumber: order.number,
-                    storeId: order.storeId,
+                await external.comax.ensureDeliveryDoc({
+                    order,
                     docNumber: res.docNumber,
                     customerId: cfg?.customerId || '',
-                    reference: String(order.number || ''),
-                    status: 'pending',
-                    attempts: 0,
+                    dateDoc: res.dateDoc || '',
                     nextAttemptAt: new Date(Date.now() + delayMs)
                 })
                 // Non-blocking inline attempt once Comax has indexed the doc;
