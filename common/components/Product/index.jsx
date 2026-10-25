@@ -158,12 +158,20 @@ export function formatAmount(product, amount) {
 // Brand | net content, e.g. "אסם | 500 גרם". Both are GS1/Comax metadata;
 // when either is missing we show only the part we have (and nothing at all
 // when both are missing) instead of inventing a weight.
+// Each part is wrapped in a bidi isolate (FSI/PDI) so a mixed Hebrew/English
+// brand or net content cannot reorder around the separator.
+const BIDI_ISOLATE_START = '\u2068'
+const BIDI_ISOLATE_END = '\u2069'
+const isolateBidi = value => `${BIDI_ISOLATE_START}${value}${BIDI_ISOLATE_END}`
+
 export function getUnitInfoText(product) {
     if (!product) return ''
     const brand = String(product.label || '').trim()
     const netContent = String(product.netContentText || '').trim()
-    if (brand && netContent) return `${brand} | ${netContent}`
-    return brand || netContent
+    if (brand && netContent) return `${isolateBidi(brand)} | ${isolateBidi(netContent)}`
+    if (brand) return isolateBidi(brand)
+    if (netContent) return isolateBidi(netContent)
+    return ''
 }
 
 export function ProductInfo(props) {
