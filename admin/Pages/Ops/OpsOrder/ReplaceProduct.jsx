@@ -8,7 +8,7 @@ import styles from './replaceProduct.module.css'
 import apiReq from 'common/functions/apiReq'
 import useApi from 'common/functions/useApi'
 import classNames from 'common/functions/classNames'
-import { isWeightProduct, getUnitLabel, getUnitInfoText, formatAmount, ProductImage } from 'common/components/Product'
+import { isWeightProduct, getUnitLabel, ProductUnitInfo, formatAmount, ProductImage } from 'common/components/Product'
 import { getPickRange, isPickInRange, DEFAULT_PICK_LIMITS } from 'common/functions/pickLimits'
 import limitDecimalInput from 'common/functions/decimalInput'
 
@@ -281,7 +281,7 @@ export default function ReplaceProduct({ product = {}, orderId, onClose, onPicke
                 <Flex alignItems="center" gap={6}>
                     <Icon name={repIsCold ? 'snow' : 'stock'} size={14} />
                     {repPrice != null && <Text size="m" bold>₪{repPrice}</Text>}
-                    <Text size="xs" mode="sub">{getUnitInfoText(selected)}</Text>
+                    <Text size="xs" mode="sub"><ProductUnitInfo product={selected} /></Text>
                 </Flex>
                 <Flex gap={10} alignItems="center">
                     <ProductImage product={selected} size="s" hideSaleBadge />
@@ -414,7 +414,7 @@ export default function ReplaceProduct({ product = {}, orderId, onClose, onPicke
                     <Flex alignItems="center" gap={6} className={styles.rowTop}>
                         <Icon name={isCold ? 'snow' : 'stock'} size={14} />
                         {price != null && <Text size="m" bold>₪{price}</Text>}
-                        <Text size="xs" mode="sub">{getUnitInfoText(p)}</Text>
+                        <Text size="xs" mode="sub"><ProductUnitInfo product={p} /></Text>
                     </Flex>
                     <Flex gap={10} alignItems="center">
                         <ProductImage product={p} size="s" hideSaleBadge />

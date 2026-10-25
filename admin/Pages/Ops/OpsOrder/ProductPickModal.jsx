@@ -7,7 +7,7 @@ import Icon from 'common/components/Icon'
 import Button from 'common/components/Button'
 import Image from 'common/components/Image'
 import styles from './productPickModal.module.css'
-import { isWeightProduct, formatAmount, getUnitLabel, getUnitInfoText } from 'common/components/Product'
+import { isWeightProduct, formatAmount, getUnitLabel, getUnitInfoText, ProductUnitInfo } from 'common/components/Product'
 import { getProductImageUrls } from 'common/functions/productImageUrl.js'
 
 export default function ProductPickModal({ product = {}, orderId, onClose, onPicked }) {
@@ -118,7 +118,10 @@ function ProductDetails({ product = {}, orderId, onClose, onPicked, onScan, onRe
                 <Text size="xs" mode="sub">{barcode}</Text>
             </Flex>}
             <Text bold size="m" className={styles.productName}>{product.name || 'מוצר'}</Text>
-            <Text size="xs" mode="sub">{unitInfo ? `${unitInfo} • ` : ''}הוזמן: {orderedLabel}</Text>
+            <Text size="xs" mode="sub">
+                {unitInfo ? <><ProductUnitInfo product={product} /> • </> : ''}
+                הוזמן: {orderedLabel}
+            </Text>
 
             {/*  <Flex col gap={8} className={styles.infoRows}>
                 <Flex gap={8} alignItems="center">

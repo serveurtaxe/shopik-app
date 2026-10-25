@@ -26,7 +26,8 @@ import {
     ProductSaleBadge,
     ProductStamps,
     getFirstSale,
-    getUnitInfoText
+    getUnitInfoText,
+    ProductUnitInfo
 } from 'common/components/Product'
 import { selectKashrutStamps, getSupervisionLabel } from 'common/components/Kashrut/constants.js'
 import { FoodSymbolStamps } from 'common/components/Nutrition'
@@ -269,7 +270,7 @@ export default function Product() {
 
                     {getUnitInfoText(product) && (
                         <Text size="s" mode="sub" className={styles.labelLine}>
-                            {getUnitInfoText(product)}
+                            <ProductUnitInfo product={product} />
                         </Text>
                     )}
 
