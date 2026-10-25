@@ -64,6 +64,7 @@ export function buildCartProduct({ product, amount, unitKey, domainId, existingS
         } : undefined,
         label: product.label,
         producer: product.producer,
+        netContentText: product.netContentText,
         category: product.category,
         storageType: product.storageType,
         picking: product.picking ? {

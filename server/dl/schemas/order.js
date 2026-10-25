@@ -195,6 +195,7 @@ export const cartSchema = [{
     },
     label: String,
     producer: String,
+    netContentText: String,
     category: {
         id: String,
         title: String,

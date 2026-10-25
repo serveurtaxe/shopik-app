@@ -155,33 +155,15 @@ export function formatAmount(product, amount) {
     return `${str} ${getUnitLabel(product)}`
 }
 
+// Brand | net content, e.g. "אסם | 500 גרם". Both are GS1/Comax metadata;
+// when either is missing we show only the part we have (and nothing at all
+// when both are missing) instead of inventing a weight.
 export function getUnitInfoText(product) {
     if (!product) return ''
-    const label = product.label || product.producer || ''
-    const unit = product.unit
-    let unitText = ''
-    if (unit?.type === 'weight') {
-        if (unit.baseUnit === 'kg') unitText = unit.amount ? `${unit.amount} ק"ג` : 'משקל'
-        else if (unit.baseUnit === 'g') unitText = unit.amount ? `${unit.amount} גרם` : 'משקל'
-        else unitText = 'משקל'
-    } else if (unit?.type === 'pack' || unit?.type === 'item') {
-        unitText = unit.amount ? `${unit.amount} יח'` : ''
-    } else {
-        // fallback to legacy fields
-        if (product.unitType || product.unitAmount) {
-            return getUnitPriceText(product) || ''
-        }
-    }
-    // also handle cart unit with option
-    if (unit?.option?.name) return unit.option.name
-    if (unit?.option?.amount) {
-        const base = unit.baseUnit === 'kg' ? 'ק"ג' : unit.baseUnit === 'g' ? 'גרם' : "יח'"
-        return `${unit.option.amount} ${base}`
-    }
-    if (label && unitText) return `${label} | ${unitText}`
-    if (label) return label
-    if (unitText) return unitText
-    return label || '200 גרם'
+    const brand = String(product.label || '').trim()
+    const netContent = String(product.netContentText || '').trim()
+    if (brand && netContent) return `${brand} | ${netContent}`
+    return brand || netContent
 }
 
 export function ProductInfo(props) {

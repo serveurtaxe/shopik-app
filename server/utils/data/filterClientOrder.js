@@ -11,6 +11,8 @@ const allowedFields = [
     'saleIds',
     'missing',
     'replacedBy',
+    'label',
+    'netContentText',
     'unit'
 ]
 export default function filterClientOrder(order) {

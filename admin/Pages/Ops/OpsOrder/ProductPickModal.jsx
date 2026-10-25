@@ -118,7 +118,7 @@ function ProductDetails({ product = {}, orderId, onClose, onPicked, onScan, onRe
                 <Text size="xs" mode="sub">{barcode}</Text>
             </Flex>}
             <Text bold size="m" className={styles.productName}>{product.name || 'מוצר'}</Text>
-            <Text size="xs" mode="sub">{unitInfo} • הוזמן: {orderedLabel}</Text>
+            <Text size="xs" mode="sub">{unitInfo ? `${unitInfo} • ` : ''}הוזמן: {orderedLabel}</Text>
 
             {/*  <Flex col gap={8} className={styles.infoRows}>
                 <Flex gap={8} alignItems="center">

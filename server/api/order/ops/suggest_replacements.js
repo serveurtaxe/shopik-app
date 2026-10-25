@@ -15,7 +15,7 @@ export default async function suggest_replacements(payload, { DL, _admin }) {
     const select = {
         _id: 0, id: 1, barcode: 1, scannableBarcodes: 1, name: 1,
         'images.product': 1, /* images: 1, */ prices: 1, price: 1,
-        label: 1, producer: 1, unit: 1, saleIds: 1,
+        label: 1, producer: 1, netContentText: 1, unit: 1, saleIds: 1,
         category: 1, storageType: 1, picking: 1, status: 1
     }
 
