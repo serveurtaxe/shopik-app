@@ -230,7 +230,8 @@ const productSchema = {
     totalSalesUnits: { // used for sorting - should take the last X months of sales units
         type: Number,
         default: 0
-    }
+    },
+    netContentText: String
 }
 
 const defaultSelect = {
@@ -250,7 +251,8 @@ const defaultSelect = {
     producer: 1,
     nutrients: 1,
     unit: 1,
-    saleIds: 1
+    saleIds: 1,
+    netContentText: 1
 }
 
 const {

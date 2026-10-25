@@ -228,8 +228,9 @@ export function mapGs1ToProduct(payload) {
     const doc = {
         barcode: gtin,
         name,
-        producer: main.BrandName || general.Manufacturer_Name || '',
-        label: main.Variant || main.Sub_Brand_Name || '',
+        producer: general.Manufacturer_Name || '',
+        netContentText: main.Net_Content?.text || '',
+        label: main.BrandName || main.Variant || main.Sub_Brand_Name || '',
         regulatoryInfo: components.Ingredient_Sequence_and_Name || '',
         keywords,
         gs1ProductCode: internal.product_code || '',
