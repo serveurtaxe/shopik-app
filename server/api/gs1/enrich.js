@@ -14,7 +14,14 @@ export default async function gs1Enrich(payload, { DL, external }) {
     const onlyInStock = payload?.onlyInStock ?? true
     const barcode = payload?.barcode || ''
     const runId = `enrich:${Date.now()}`
-    const texts = await runEnrich({ DL, external, runId, onlyInStock, barcode })
+    const texts = await runEnrich({
+        DL,
+        external,
+        runId,
+        onlyInStock,
+        barcode,
+        force: payload?.forceTexts ?? false
+    })
     let images = null
     if (payload?.images) {
         images = await runImages({

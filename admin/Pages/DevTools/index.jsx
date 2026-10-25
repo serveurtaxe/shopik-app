@@ -26,6 +26,7 @@ export default function DevTools() {
     const [gs1OnlyInStock, setGs1OnlyInStock] = useState(true)
     const [gs1Images, setGs1Images] = useState(false)
     const [gs1ForceImages, setGs1ForceImages] = useState(false)
+    const [gs1ForceTexts, setGs1ForceTexts] = useState(false)
     const [gs1ImageLimit, setGs1ImageLimit] = useState('')
     const [gs1EnrichResult, setGs1EnrichResult] = useState(null)
     const [gs1EnrichError, setGs1EnrichError] = useState(null)
@@ -98,6 +99,7 @@ export default function DevTools() {
             const payload = { onlyInStock: gs1OnlyInStock }
             if (gs1Images) payload.images = true
             if (gs1ForceImages) payload.forceImages = true
+            if (gs1ForceTexts) payload.forceTexts = true
             if (gs1Barcode.trim()) payload.barcode = gs1Barcode.trim()
             const limit = Number(gs1ImageLimit)
             if (gs1ImageLimit !== '' && Number.isFinite(limit)) payload.imageLimit = limit
@@ -299,6 +301,7 @@ export default function DevTools() {
                     <Checkbox checked={gs1OnlyInStock} onChange={e => setGs1OnlyInStock(e.target.checked)} label="onlyInStock" />
                     <Checkbox checked={gs1Images} onChange={e => setGs1Images(e.target.checked)} label="images" />
                     <Checkbox checked={gs1ForceImages} onChange={e => setGs1ForceImages(e.target.checked)} label="forceImages" />
+                    <Checkbox checked={gs1ForceTexts} onChange={e => setGs1ForceTexts(e.target.checked)} label="forceTexts" />
                 </Flex>
                 <Flex>
                     <ConfirmButton

@@ -63,14 +63,21 @@ async function fetchStagedSource(external, barcode, wantedMain) {
 // Phase 2: enrich products from the local gs1_products collection.
 // Two-pass to bound memory: page barcode-only docs, gate in bulk, then load
 // full raws ONLY for passers. No GS1 calls, no per-doc writes, no images.
-export async function enrichBatch({ DL, external, runId, onlyInStock = true, barcode = '' }) {
-    const filter = barcode ? { status: 'fetched', barcode } : { status: 'fetched' }
+// afterBarcode: cursor for paging. force runs filter on nothing (every status
+// qualifies), so without a cursor the same first page is returned forever and
+// runEnrich loops indefinitely. barcode is unique + filterable, so the range +
+// sort is index-backed and each batch advances strictly forward.
+export async function enrichBatch({ DL, external, runId, onlyInStock = true, barcode = '', force = false, afterBarcode = '' }) {
+    const filter = {}
+    if (barcode) filter.barcode = barcode
+    else if (afterBarcode) filter.barcode = { $gt: afterBarcode }
+    if (!force) filter.status = 'fetched'
     const page = await DL.Gs1Product.read(
         filter,
         { _id: 0, barcode: 1 },
-        { limit: enrichBatchSize() }
+        { limit: enrichBatchSize(), sort: { barcode: 1 } }
     )
-    if (!page?.length) return { done: true, enriched: 0, skipped: 0, total: 0 }
+    if (!page?.length) return { done: true, enriched: 0, skipped: 0, total: 0, next: null }
 
     const barcodes = [...new Set(page.map(r => r?.barcode).filter(Boolean))]
     const products = await DL.Product.read(
@@ -189,7 +196,8 @@ export async function enrichBatch({ DL, external, runId, onlyInStock = true, bar
     bufferProgress(runId, { processed: page.length })
     await flush()
     mem(`enrich-batch done=${enriched + skipped} enriched=${enriched}`)
-    return { done: false, enriched, skipped, total: page.length }
+    const next = [...page].reverse().find(r => r?.barcode)?.barcode || null
+    return { done: false, enriched, skipped, total: page.length, next }
 }
 
 export async function runEnrich(opts) {
@@ -201,14 +209,19 @@ export async function runEnrich(opts) {
     } catch (e) {
         log.warn('[GS1] Rescue pass failed (continuing enrich):', e?.message || e)
     }
+    let after = ''
     for (; ;) {
-        const res = await enrichBatch(opts)
+        const res = await enrichBatch({ ...opts, afterBarcode: after })
         totals.enriched += res.enriched
         totals.skipped += res.skipped
         totals.batches++
         if (res.done) break
         // Single-barcode mode: one batch is the whole job.
         if (opts?.barcode) break
+        // A batch with no usable barcode can't advance the cursor — stop rather
+        // than re-read the same page forever.
+        if (!res.next || res.next === after) break
+        after = res.next
     }
     await flush()
     log.success(`[GS1] Enrich done: ${totals.enriched} enriched, ${totals.skipped} skipped, ${totals.batches} batches, ${totals.rescued} rescued`)
