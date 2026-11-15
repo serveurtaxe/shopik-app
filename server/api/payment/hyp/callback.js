@@ -1,4 +1,5 @@
 import { recordPaidOrder } from '#server/utils/data/userStats.js'
+import recordCouponUsage from '#server/utils/data/recordCouponUsage.js'
 
 function buildLoaderHtml({ ok, orderNumber, errorMessage }) {
     const safeNum = String(orderNumber || '').replace(/</g, '&lt;')
@@ -215,6 +216,11 @@ export default async function callback(payload, info) {
     if (order.status === DL.Order.constants.ORDER_STATUS.CART) {
         try {
             await recordPaidOrder(DL, order, Number(authorizedAmount))
+        } catch { }
+        // Single-use per customer: blacklist the paying user (and close the
+        // coupon when it is personal). Never block the paid order on this.
+        try {
+            await recordCouponUsage({ DL, utils, order })
         } catch { }
         await utils.data.orderSms.sendOrderStageSms({
             DL,

@@ -16,6 +16,15 @@ function statuses(DL) {
     return DL.Product.constants.STATUS
 }
 
+/**
+ * The buying-price requirement is armed only once buying prices were actually
+ * imported — otherwise the first deploy would archive everything. Shared with
+ * the catalog report so the "reason" it shows can never disagree with the sync.
+ */
+export async function shouldEnforceBuyingPrice(DL) {
+    return await DL.ComaxProduct.count({ buyingPrice: { $gt: 0 } }) > 0
+}
+
 export async function hideActiveProduct({ DL, barcode }) {
     if (!barcode) return 0
     const { ACTIVE, HIDDEN } = statuses(DL)
