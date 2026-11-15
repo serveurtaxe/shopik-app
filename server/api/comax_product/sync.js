@@ -3,7 +3,8 @@ import {
     hideCategoryFlaggedProducts,
     hideInactiveProducts,
     hideKashrutMissingProducts,
-    hideStorelessProducts
+    hideStorelessProducts,
+    shouldEnforceBuyingPrice
 } from './syncRules.js'
 import { deriveStatus, retailPrice } from './status.js'
 import { loadCategoryLookup, productCategoryFor } from '#server/services/categoryMap/index.js'
@@ -165,7 +166,7 @@ export default async function syncComax(payload, { DL }) {
 
     // Buying-price requirement is enforced only once buying prices were
     // actually imported — otherwise the first deploy would archive everything.
-    const enforceBuyingPrice = await DL.ComaxProduct.count({ buyingPrice: { $gt: 0 } }) > 0
+    const enforceBuyingPrice = await shouldEnforceBuyingPrice(DL)
     if (!enforceBuyingPrice)
         console.warn('[Comax Sync] No buying prices imported yet — buyingPrice requirement skipped for this run')
 

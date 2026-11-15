@@ -1,4 +1,11 @@
 import { createHash } from 'node:crypto'
+import { SALES_WINDOW_KEY } from '#server/api/comax_product/salesWindow.js'
+
+// Bump whenever the report SHAPE changes (columns, reason wording, row rules).
+// The data hash already changes with the columns, but the fast path below only
+// compares sourceVersion, so without this an old produced file would be served
+// after a deploy that only changed the report code.
+export const REPORT_FORMAT_VERSION = 2
 
 /**
  * Cheap fingerprint of everything the catalog report is built from.
@@ -10,6 +17,8 @@ import { createHash } from 'node:crypto'
  *   comax_products  count + newest updatedAt   (any import / edit)
  *   products        count + newest updatedAt   (GS1 enrich, admin price edit)
  *   gs1_products    count
+ *   category_map    count + newest updatedAt   (status + reason rules)
+ *   sales window    the configured per-department days (reason text)
  *   sync states     last completed run         (nightly syncs)
  *   stores          active store list          (columns are per store)
  *
@@ -25,6 +34,9 @@ export default async function sourceVersion(DL) {
         productCount,
         productLast,
         gs1Count,
+        categoryMapCount,
+        categoryMapLast,
+        salesWindow,
         comaxSync,
         gs1Sync
     ] = await Promise.all([
@@ -35,11 +47,15 @@ export default async function sourceVersion(DL) {
         DL.Product.Model.countDocuments({}),
         DL.Product.Model.findOne({}, { _id: 0, updatedAt: 1 }).sort({ updatedAt: -1 }).lean(),
         DL.Gs1Product.Model.countDocuments({}),
+        DL.CategoryMap.Model.countDocuments({}),
+        DL.CategoryMap.Model.findOne({}, { _id: 0, updatedAt: 1 }).sort({ updatedAt: -1 }).lean(),
+        DL.Setting.readOne({ key: SALES_WINDOW_KEY }, { _id: 0, value: 1 }),
         DL.ComaxSyncState.readOne({ key: 'products' }, { _id: 0, finishedAt: 1 }),
         DL.Gs1SyncState.readOne({ key: 'watermark' }, { _id: 0, lastSyncAt: 1 })
     ])
 
     const parts = [
+        REPORT_FORMAT_VERSION,
         domain?.id || '',
         stores.map(s => `${s.id}:${s.name}`).join(','),
         comaxCount,
@@ -47,6 +63,9 @@ export default async function sourceVersion(DL) {
         productCount,
         productLast?.updatedAt?.toISOString?.() || '',
         gs1Count,
+        categoryMapCount,
+        categoryMapLast?.updatedAt?.toISOString?.() || '',
+        JSON.stringify(salesWindow?.value ?? null),
         comaxSync?.finishedAt?.toISOString?.() || '',
         gs1Sync?.lastSyncAt?.toISOString?.() || ''
     ]

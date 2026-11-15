@@ -58,7 +58,7 @@ export default async function buildXlsx({ columns, rows, sheetName }) {
             const cell = row.getCell(index + 1)
             cell.font = BODY_FONT
             cell.border = BORDER
-            cell.alignment = { horizontal: column.align, vertical: 'middle' }
+            cell.alignment = { horizontal: column.align, vertical: 'middle', ...(column.wrap ? { wrapText: true } : {}) }
             if (column.asText) cell.numFmt = '@'
             else if (column.money) cell.numFmt = '#,##0.00'
         })
