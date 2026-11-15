@@ -44,9 +44,13 @@ const couponSchema = {
         required: true
     },
     maxSum: Number,
-    multi: {
+    // A personal coupon belongs to a single customer: it is canceled after the
+    // first paid use. Non-personal coupons stay usable by other customers but
+    // every customer is still blacklisted after their own use.
+    personal: {
         type: Boolean,
-        default: true
+        default: false,
+        filter: true
     },
     benefit: {
         type: String,

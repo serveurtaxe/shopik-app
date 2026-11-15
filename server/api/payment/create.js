@@ -3,9 +3,38 @@ import { invalidateUserStore } from '#server/utils/data/getUserStore.js'
 import { findByLocation } from '#server/external/supplyArea.js'
 import { isElevatorRequired } from '#common/functions/address.js'
 import { normalizeInvoiceRequest } from '#common/functions/invoice/request.js'
+import removeCouponFromCart from '#server/utils/data/removeCouponFromCart.js'
 
 const MAX_PAYMENTS_LIMIT = 36
 const DEFAULT_MAX_PAYMENTS = 6
+
+// A cart coupon must still be redeemable at payment time: an admin may have
+// canceled/edited it, it may have expired, or a purge write may have failed.
+export async function findInvalidCouponCodes({ DL, order, userId }) {
+    const codes = [...new Set((order.coupons || []).map(c => c?.code).filter(Boolean))]
+    if (!codes.length) return []
+
+    const coupons = await DL.Coupon.read({ code: { $in: codes } }, { _id: 0 }, { limit: 0 })
+    const byCode = new Map((coupons || []).map(c => [String(c.code).toLowerCase(), c]))
+    const now = new Date()
+    const uid = String(userId)
+
+    const invalid = []
+    for (const code of codes) {
+        const key = String(code).toLowerCase()
+        const coupon = byCode.get(key)
+        if (!coupon) { invalid.push(code); continue }
+        if (coupon.status !== DL.Coupon.constants.STATUS.ACTIVE) { invalid.push(code); continue }
+        if (coupon.start && now < new Date(coupon.start)) { invalid.push(code); continue }
+        if (coupon.end && now > new Date(coupon.end)) { invalid.push(code); continue }
+        if (Array.isArray(coupon.whitelist) && coupon.whitelist.length && !coupon.whitelist.map(String).includes(uid)) {
+            invalid.push(code)
+            continue
+        }
+        if (Array.isArray(coupon.blacklist) && coupon.blacklist.map(String).includes(uid)) invalid.push(code)
+    }
+    return invalid
+}
 
 function normalizeMaxPayments(value) {
     if (value === undefined || value === null || value === '') return DEFAULT_MAX_PAYMENTS
@@ -41,6 +70,37 @@ export default async function create(payload, info) {
             amount: Number(amount),
             expectedAmount
         }
+    }
+
+    // Never charge a total that still relies on a coupon the customer can no
+    // longer redeem. Remove it and ask the storefront to refresh the total.
+    try {
+        const invalidCouponCodes = await findInvalidCouponCodes({ DL, order, userId: _user.id })
+        if (invalidCouponCodes.length) {
+            for (const code of invalidCouponCodes) {
+                await removeCouponFromCart({
+                    DL,
+                    utils,
+                    order,
+                    code,
+                    actor: utils.data.timeline.userActor(_user)
+                })
+            }
+            const fresh = await DL.Order.readOne({ id: order.id }).catch(() => null)
+            const current = fresh || order
+            const currentAmount = current.finalSumWithShipping ?? current.finalSum ?? current.sum
+            throw {
+                status: 409,
+                code: 'CART_CHANGED',
+                message: 'Coupon is no longer valid for this order',
+                amount: Number(currentAmount),
+                expectedAmount: Number.isFinite(expectedAmount) ? expectedAmount : undefined
+            }
+        }
+    } catch (e) {
+        if (e?.code === 'CART_CHANGED') throw e
+        // Best-effort: a transient coupon-read error must not block a payment
+        // that otherwise passed validation.
     }
 
     // Enforce minSum / minSumPickup based on post-sale pre-coupon total (sumBeforeCoupon == order.sum)
