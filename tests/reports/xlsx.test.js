@@ -58,4 +58,17 @@ describe('report xlsx writer', () => {
         assert.equal(sheet.getRow(3).getCell(2).value, null)
         assert.equal(sheet.getRow(3).getCell(3).value, null)
     })
+
+    it('wraps only the columns that ask for it', async () => {
+        const { sheet } = await readBack(
+            [
+                { text: 'ברקוד', width: 14, align: 'center' },
+                { text: 'סיבה', width: 30, align: 'right', wrap: true }
+            ],
+            [['123', 'סיבה ארוכה מאוד']]
+        )
+
+        assert.equal(sheet.getRow(2).getCell(2).alignment.wrapText, true)
+        assert.ok(!sheet.getRow(2).getCell(1).alignment.wrapText)
+    })
 })
