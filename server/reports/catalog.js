@@ -115,6 +115,10 @@ function kashrutText(kashrut) {
 }
 
 const yesNo = value => value ? YES : NO
+// 0, null and an absent field are the same answer to the reader: no price. An
+// item Comax carries without an entry in 1069/255 arrives with 0 in both columns,
+// and a cell reading 0 next to 'חסר מחיר' only muddles it.
+const moneyOrNull = value => value > 0 ? value : null
 
 function toDate(value) {
     if (!value) return null
@@ -340,8 +344,8 @@ async function build(DL) {
             // A dated check means we asked GS1 and our account does not carry
             // the barcode — a different answer from never having looked.
             inGs1: !inGs1 && checkedAt ? `${NO} (נבדק ${formatDate(checkedAt)})` : yesNo(inGs1),
-            buyingPrice: item.buyingPrice ?? null,
-            salePrice: product?.prices?.find(price => price?.domainId === defaultDomain?.id)?.price ?? item.price ?? null,
+            buyingPrice: moneyOrNull(item.buyingPrice),
+            salePrice: moneyOrNull(product?.prices?.find(price => price?.domainId === defaultDomain?.id)?.price ?? item.price),
             // "Is there an image" means "is there image material to load": a
             // stored product image, a Comax picUrl the image worker can fetch, or
             // GS1 media assets waiting in the dump.

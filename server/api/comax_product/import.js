@@ -31,6 +31,14 @@ function chunk(array, size) {
  * Absence from the response now means "out of stock", and that inference is
  * only safe when the response is complete — hence the guards: an empty,
  * truncated or collapsed feed never removes a storeIds entry.
+ *
+ * Neither feed asks Comax to select by price list. That filter answers nothing
+ * for an item with no entry in 1069/255, so an unpriced counter item could sell
+ * every day for a month without ever becoming a row. Its selling price is written
+ * as 0 so a stale one cannot survive; the buying price keeps whatever Comax or the
+ * buying price CSV gave it. Either way the status ladder archives the row, so it
+ * cannot reach the site, and the catalog report lists it as חסר מחיר — being seen
+ * is the entire point.
  */
 export default async function importComaxProducts(payload, { DL, external }) {
     const startedAt = new Date()
@@ -117,10 +125,15 @@ export default async function importComaxProducts(payload, { DL, external }) {
         await DL.ComaxProduct.bulkWrite({
             docs,
             getFilter: p => ({ barcode: p.barcode }),
-            // The store feed owns creation: only sellable, non-archived items.
-            // Deposit products are internal, so they are upserted by their own
-            // write even though they never appear in a store feed.
-            getUpsert: p => p.isTrailingItem || (p.price > 0 && !p.archived),
+            // The store feed owns creation, and an item it carried is an item the
+            // store has — including one Comax lists without a price. The status
+            // ladder archives a price-less row, so creating one cannot put anything
+            // on the site; it is what lets a counter item that sells unpriced show
+            // up in the catalog report instead of never being seen at all. Archived
+            // items stay out: those rows belong to the catalog backfill, which
+            // writes them flagged. Deposit products are internal, so they are
+            // upserted by their own write even though they never appear in a feed.
+            getUpsert: p => p.isTrailingItem || !p.archived,
             getUpdate: p => {
                 // storeIds is owned by $addToSet, never by $set — a feed only
                 // asserts "in stock here", it never replaces other stores.
@@ -162,6 +175,7 @@ export default async function importComaxProducts(payload, { DL, external }) {
         let batch = []
         let count = 0
         let failed = 0
+        let unpriced = 0
         let errored = null
 
         const flush = async () => {
@@ -183,6 +197,23 @@ export default async function importComaxProducts(payload, { DL, external }) {
         try {
             for await (const p of stream(stats)) {
                 p.lastImportedAt = startedAt
+                // No sell price in the response means no entry in 1069: item.Price IS
+                // the retail price of the requested price list, so 0 is Comax saying
+                // "this item has no selling price". Write it instead of leaving the
+                // row untouched, or a price from the last time it had one survives and
+                // the report shows a number where the gap is.
+                //
+                // The buying price keeps the mapper's rule and is NOT touched here: a
+                // 255 row with 0 already clears it, and a 255 row that is simply absent
+                // means the feed has no opinion — that price can come from the buying
+                // price CSV instead. Plenty of counter items have a buying price and
+                // no selling price (139232 מסטר נתחים צלעות בקר טרי חלק: 42 to buy,
+                // nothing to sell for), and that is exactly the gap the report should
+                // name.
+                if (!(p.price > 0)) {
+                    p.price = 0
+                    unpriced++
+                }
                 await applyTrailingItem(p)
                 if (p.barcode != null) barcodes.add(String(p.barcode))
                 batch.push(p)
@@ -217,7 +248,7 @@ export default async function importComaxProducts(payload, { DL, external }) {
         failedDocs += failed
         unparsedDocs += stats.unparsed
 
-        results.push({ key, label, barcodes, removalsSafe, blocks, count, failed })
+        results.push({ key, label, barcodes, removalsSafe, blocks, count, failed, unpriced })
     }
 
     console.log(`[Comax Import] Store feed: ${registers.length} register(s), ${storeIds.length} store(s)`)
@@ -355,6 +386,9 @@ export default async function importComaxProducts(payload, { DL, external }) {
     // leaves the stored state untouched instead of mass-deleting it.
     let windowRemoved = 0
     let windowSkipped = 0
+    // Sold items with no Comax row at all: invisible to the catalog report, and no
+    // feed is allowed to create them. Counted and named so the gap is fixable.
+    let soldWithoutRow = 0
     const salesWindow = await resolveSalesWindow(DL)
 
     if (!salesWindow.enabled) {
@@ -452,6 +486,21 @@ export default async function importComaxProducts(payload, { DL, external }) {
             console.log(`[Comax Import] store ${reg.storeId}: ${stale.length} item(s) not sold inside their window`)
         }
 
+        // A sold barcode with no comax_products row cannot appear in the catalog
+        // report, and no feed is allowed to create it: it is either a
+        // super-department 12 deposit item or an item Comax answers no catalog data
+        // for. Naming the codes is what makes the gap fixable — the catalog
+        // backfill on the Comax products page takes exactly these codes.
+        if (lastSaleByBarcode.size) {
+            const norm = barcode => String(barcode ?? '').trim()
+            const stored = new Set((await DL.ComaxProduct.Model.distinct('barcode', {}) || []).map(norm))
+            const missing = [...lastSaleByBarcode.keys()].filter(barcode => !stored.has(norm(barcode)))
+            soldWithoutRow = missing.length
+            if (missing.length)
+                console.warn(`[Comax Import] ${missing.length} sold item(s) have no catalog row: ` +
+                    `${missing.slice(0, 10).join(', ')}${missing.length > 10 ? ' …' : ''}`)
+        }
+
         // Newest sale per barcode, across stores — informational, for the admin.
         if (lastSaleByBarcode.size) {
             const ops = [...lastSaleByBarcode].map(([barcode, lastSaleDate]) => ({
@@ -493,6 +542,11 @@ export default async function importComaxProducts(payload, { DL, external }) {
         }
     }
 
+    // Items the feeds carried with no price in either list. They are written, and
+    // the status ladder keeps them off the site until Comax gives them one — the
+    // point is that they are in comax_products and in the catalog report at all.
+    const noPrice = results.reduce((sum, feed) => sum + feed.unpriced, 0)
+
     const anyIncomplete = incomplete.length > 0 || errors.length > 0
     const status = written === 0 && anyIncomplete ? 'error' : anyIncomplete || failedDocs > 0 ? 'partial' : 'success'
 
@@ -507,17 +561,19 @@ export default async function importComaxProducts(payload, { DL, external }) {
     })
 
     const summary = `[Comax Import] ${written} item(s) from ${results.length} feed(s), ` +
+        `${noPrice} without a price in Comax, ` +
+        `${soldWithoutRow ? `${soldWithoutRow} sold item(s) with no catalog row, ` : ''}` +
         `${removed} out-of-stock removal(s), ${windowRemoved} not-sold-in-window removal(s), ` +
         `${prunedStoreIds} stale-store removal(s)` +
         `${windowSkipped ? ` (${windowSkipped} store(s) kept as-is)` : ''}, status ${status}`
 
     if (anyIncomplete) {
         console.warn(summary)
-        return { message: 'Import partially failed', count: written, removed: removed + windowRemoved, prunedStoreIds, status, errors }
+        return { message: 'Import partially failed', count: written, noPrice, soldWithoutRow, removed: removed + windowRemoved, prunedStoreIds, status, errors }
     }
 
     console.log(summary)
-    return { message: 'Import complete', count: written, removed: removed + windowRemoved, prunedStoreIds, status }
+    return { message: 'Import complete', count: written, noPrice, soldWithoutRow, removed: removed + windowRemoved, prunedStoreIds, status }
 }
 
 importComaxProducts.config = {

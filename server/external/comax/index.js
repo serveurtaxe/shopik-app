@@ -8,8 +8,10 @@ import { fetchAndStoreDeliveryDoc, ensureDeliveryDoc } from './deliverySync.js'
 import { resolveDeliveryConfig } from './resolveDeliveryConfig.js'
 
 // Super-department 12 is excluded from the catalog.
-// includeZeroPrice (buying-price import): zero-price items must survive so a
-// removed price can clear the stored value instead of silently keeping it.
+// includeZeroPrice (the catalog feeds and the buying-price import): a zero-price
+// item must survive so a removed price clears the stored value instead of silently
+// keeping it, and so an item Comax carries without a price becomes a row that the
+// catalog report can show.
 // includeInternal (trailing-item lookup): deposit products live in super
 // department 12 and must be readable even though they are never catalog items.
 function keepProduct(product, includeZeroPrice, includeInternal) {
@@ -118,6 +120,17 @@ async function getItemById({ DL, itemId, includeInternal = true, includeZeroPric
  * `LastUpdatedFromDate=` stays empty on purpose: this is a snapshot, not a
  * delta. `SalesPriceArray` adds the delivery/buying price row to the same
  * response.
+ *
+ * No `SelByPriceList`, and `includeZeroPrice` is forced on: that filter selects
+ * ITEMS by price-list membership, so Comax answers nothing at all for an item
+ * with no entry in 1069 or 255 — the counter items that sell unpriced (43001 בקר
+ * טחון מחפוד, 43209 צלעות מחפוד and their block). Those items were invisible to
+ * the import, so a store could sell them for a month and neither comax_products
+ * nor the catalog report ever heard of them. The price rows come from
+ * `SalesPriceArray` on its own — measured on live Comax: removing the filter
+ * leaves every price of a priced item byte-identical (retail and the 255 buying
+ * price), and only adds the items that have neither. A row with no price is what
+ * the status ladder archives, so an unpriced item can never reach the site.
  */
 async function* streamStoreProducts({ DL, storeId, priceListId, ...options }) {
     const listId = priceListId || process.env.COMAX_PRICELIST_ID
@@ -128,7 +141,7 @@ async function* streamStoreProducts({ DL, storeId, priceListId, ...options }) {
         priceListId: listId,
         salesPriceArray: options.salesPriceArray || buildSalesPriceArray({ priceListId: listId }),
         hasInventory: true,
-        selByPriceList: true
+        includeZeroPrice: true
     })
 }
 
@@ -139,6 +152,10 @@ async function* streamStoreProducts({ DL, storeId, priceListId, ...options }) {
  * Comax stock, so `HasInventory=1` excludes them (dept 13: 2 items of 1,588).
  * `DepartmentID` takes exactly one code (comma/pipe/semicolon all return 0),
  * and the response is store-independent, hence one call per department.
+ *
+ * Same price-list rule as the store feed, and it matters most here: the counter
+ * items with no entry in 1069/255 (the מחפוד scale codes) are fresh-department
+ * items, so this is the feed that has to see them.
  */
 async function* streamDepartmentProducts({ DL, departmentId, storeId, priceListId, ...options }) {
     const listId = priceListId || process.env.COMAX_PRICELIST_ID
@@ -149,7 +166,7 @@ async function* streamDepartmentProducts({ DL, departmentId, storeId, priceListI
         storeId: storeId || process.env.COMAX_STORE_ID,
         priceListId: listId,
         salesPriceArray: options.salesPriceArray || buildSalesPriceArray({ priceListId: listId }),
-        selByPriceList: true
+        includeZeroPrice: true
     })
 }
 

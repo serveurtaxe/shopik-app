@@ -375,6 +375,23 @@ describe('catalog report', () => {
         assert.match(reportRow.reason, /^ארכיון באתר: חסר מחיר קנייה/)
     })
 
+    it('leaves both price columns empty for an item Comax carries without a price list', async () => {
+        // The import writes 0 and null for these rows so a stale price cannot
+        // survive the write. In the sheet 0 and an absent field must read the same
+        // way: an empty cell, next to a reason that names both missing prices.
+        const { rows } = await catalog.build(fakeDL({
+            comax: [comaxRow({ barcode: '43001', price: 0, buyingPrice: null, storeIds: [] })],
+            products: []
+        }))
+        const reportRow = row(rows[0])
+
+        assert.equal(reportRow.buyingPrice, null)
+        assert.equal(reportRow.salePrice, null)
+        assert.equal(reportRow.siteStatus, 'ארכיון באתר')
+        assert.match(reportRow.reason, /חסר מחיר מכירה בקומקס/)
+        assert.match(reportRow.reason, /חסר מחיר קנייה/)
+    })
+
     it('shows the ladder status for active and hidden rows as well', async () => {
         const active = (await catalog.build(fakeDL({
             comax: [comaxRow()],
