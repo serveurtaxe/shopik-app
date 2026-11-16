@@ -210,12 +210,18 @@ export default async function syncComax(payload, { DL }) {
             (!(retailPrice(c) > 0) || (enforceBuyingPrice && !(c.buyingPrice > 0)))
         ).length
 
+        // Comax's archive is seasonal, not dead stock: those rows need a doc so
+        // the image worker and GS1 enrich can fill it while it is off the site.
+        const seasonal = new Set(comaxProducts.filter(c => c.archived).map(c => c.barcode))
         const result = await DL.Product.bulkWrite({
             docs: productsToSync,
             getFilter: p => ({ barcode: p.barcode }),
             // Upsert everything except archived: imageless HIDDEN products must exist
-            // as docs or the image worker would never pick them up (deadlock).
-            getUpsert: p => p.status !== DL.Product.constants.STATUS.ARCHIVED
+            // as docs or the image worker would never pick them up (deadlock). The
+            // one exception is a Comax-archived (seasonal) item: its doc is created
+            // as ARCHIVED, so it stays off the site but its images and kashrut can
+            // be ready on the day the item comes back.
+            getUpsert: p => p.status !== DL.Product.constants.STATUS.ARCHIVED || seasonal.has(p.barcode)
         })
         created += result.upsertedCount ?? result.insertedCount ?? 0
         updated += result.modifiedCount ?? 0

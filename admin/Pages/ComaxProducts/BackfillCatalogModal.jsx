@@ -15,9 +15,9 @@ const LIST_LIMIT = 20
 
 const COUNTS = [
     'codes', 'known', 'targets', 'processed', 'found',
-    'inserted', 'refreshed', 'existing', 'withBuyingPrice', 'zeroPrice', 'errorCount'
+    'inserted', 'refreshed', 'existing', 'archived', 'withBuyingPrice', 'zeroPrice', 'errorCount'
 ]
-const SKIPS = ['archived', 'notFound', 'noBarcode', 'idMismatch', 'duplicateBarcode']
+const SKIPS = ['notFound', 'noBarcode', 'idMismatch', 'duplicateBarcode']
 
 function totalize(totals, report) {
     const next = { ...totals, skipped: { ...totals.skipped } }
@@ -55,6 +55,8 @@ function ItemList({ title, items, TR }) {
  * The import only brings what a store is stocking, so an item that is out of
  * stock everywhere has no catalog row at all. This reads a full-catalog export
  * from Comax and adds the missing rows (server/api/comax_product/backfill_catalog).
+ * Items Comax has archived (seasonal stock) are added too, flagged archived so
+ * they stay off the site until Comax brings them back.
  *
  * The server owns parsing, matching and writing; this modal only carries the
  * file and the report. `בדיקה בלבד` plans without asking Comax anything, so the
@@ -193,6 +195,7 @@ export default function BackfillCatalogModal({ onDone }) {
                 <Stat TR={TR} label='backfill_inserted' value={stats.inserted} />
                 <Stat TR={TR} label='backfill_refreshed' value={stats.refreshed} />
                 <Stat TR={TR} label='backfill_existing' value={stats.existing} />
+                <Stat TR={TR} label='backfill_archived' value={stats.archived} />
                 <Stat TR={TR} label='backfill_buying_price' value={stats.withBuyingPrice} />
                 <Stat TR={TR} label='backfill_zero_price' value={stats.zeroPrice} />
                 <Stat TR={TR} label='backfill_errors' value={stats.errorCount} />

@@ -15,10 +15,14 @@ import { gtinOf } from '#server/services/gs1/gtin.js'
  * catalog report. A full-catalog export from Comax gives the item codes; this
  * reads each one by its Comax item ID and inserts the missing row.
  *
- * Archived items are never written. The lookups keep the buildComaxParams
- * default WithOutArchive=1, so an archived item is not returned at all, and any
- * mapped row that still reports itself archived is dropped before the write.
- * Archived products have their own report and need no rows here.
+ * Archived items ARE written, flagged `archived: true`. Comax uses its archive
+ * for seasonal products: they leave the catalog between seasons and come back
+ * later. The lookups ask with WithOutArchive=0 so those items are returned, and
+ * the row is stored with no storeIds so the status ladder can never put it on
+ * the site while Comax still reports it archived. Having the row (and its GS1
+ * lookup) ready is what lets images and kashrut be in place on the day the item
+ * returns instead of starting the pipeline then. The nightly import clears the
+ * flag when the item is un-archived and a store feed stocks it.
  *
  * Writes only create rows for anything the import owns: the update is
  * $setOnInsert, so an existing row — its price, its storeIds, an admin's edit —
@@ -193,7 +197,10 @@ export default async function backfillCatalog(payload = {}, { DL, external }) {
         inserted: 0,
         refreshed: 0,
         existing: 0,
-        skipped: { archived: 0, notFound: 0, noBarcode: 0, idMismatch: 0, duplicateBarcode: 0 },
+        skipped: { notFound: 0, noBarcode: 0, idMismatch: 0, duplicateBarcode: 0 },
+        // Written rows Comax reports as archived (seasonal). Stored and flagged,
+        // never live while the flag is set.
+        archived: 0,
         withBuyingPrice: 0,
         zeroPrice: 0,
         errors: [],
@@ -231,7 +238,8 @@ export default async function backfillCatalog(payload = {}, { DL, external }) {
         if (product.price > 0) product.priceWithTrailing = round2(product.price + product.trailingPrice)
     }
 
-    // One item by its Comax id. WithOutArchive stays at its default (1),
+    // One item by its Comax id. WithOutArchive=0 on purpose: archived items are
+    // seasonal stock we want on file before they return, not items to hide.
     // SelByPriceList + SalesPriceArray bring the buying price (255) in the same
     // call, includeZeroPrice keeps a zero-priced item readable instead of letting
     // it look "not found", and skipLog keeps a run of thousands of lookups from
@@ -240,6 +248,7 @@ export default async function backfillCatalog(payload = {}, { DL, external }) {
         itemId: code,
         includeInternal: false,
         includeZeroPrice: true,
+        withOutArchive: false,
         selByPriceList: true,
         salesPriceArray,
         silent: true,
@@ -333,10 +342,6 @@ export default async function backfillCatalog(payload = {}, { DL, external }) {
 
         if (!product) {
             report.skipped.notFound++
-        } else if (product.archived) {
-            // WithOutArchive=1 should make this unreachable; if Comax ever
-            // answers with an archived item it must not enter the catalog.
-            report.skipped.archived++
         } else if (normalizeCode(product.comaxId) !== normalizeCode(code)) {
             // The search matched something other than the requested id — writing
             // it would attach unknown data to a catalog row.
@@ -357,6 +362,7 @@ export default async function backfillCatalog(payload = {}, { DL, external }) {
                 pendingBarcodes.add(key)
                 pending.push(row)
                 report.found++
+                if (row.archived) report.archived++
                 if (row.buyingPrice > 0) report.withBuyingPrice++
                 if (!(row.price > 0)) report.zeroPrice++
             }

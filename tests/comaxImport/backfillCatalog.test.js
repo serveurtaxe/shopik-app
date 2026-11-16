@@ -199,22 +199,37 @@ describe('catalog backfill writes', () => {
         assert.equal(store.length, 1)
     })
 
-    it('never writes an archived, unknown, mismatched or barcode-less item', async () => {
+    it('stores an archived (seasonal) item, flagged and stocked nowhere', async () => {
+        const { DL, store } = fakeDL()
+        const { external, calls } = fakeComax({ 1: item('1', { archived: true }) })
+
+        const report = await backfillCatalog({ csv: csv('1'), dryRun: false }, { DL, external })
+
+        assert.equal(report.inserted, 1)
+        assert.equal(report.archived, 1)
+        const row = store.find(doc => doc.barcode === '1')
+        assert.equal(row.archived, true)
+        assert.deepEqual(row.storeIds, [], 'an archived row must never claim a store')
+        // Archived items are only returned when the lookup asks for them.
+        assert.equal(calls[0].withOutArchive, false)
+    })
+
+    it('never writes an unknown, mismatched or barcode-less item', async () => {
         const { DL, store, writes } = fakeDL()
         const { external } = fakeComax({
-            1: item('1', { archived: true }),
             3: item('999', { comaxId: '999', barcode: '7290000000015' }),
             4: item('4', { barcode: '   ' })
-            // 2 has no fixture: Comax answered with nothing (archived or unknown).
+            // 2 has no fixture: Comax answered with nothing (gone or unknown).
         })
 
-        const report = await backfillCatalog({ csv: csv('1', '2', '3', '4'), dryRun: false }, { DL, external })
+        const report = await backfillCatalog({ csv: csv('2', '3', '4'), dryRun: false }, { DL, external })
 
         assert.deepEqual(store, [])
         assert.deepEqual(writes, [])
         assert.equal(report.inserted, 0)
+        assert.equal(report.archived, 0)
         assert.deepEqual(report.skipped, {
-            archived: 1, notFound: 1, noBarcode: 1, idMismatch: 1, duplicateBarcode: 0
+            notFound: 1, noBarcode: 1, idMismatch: 1, duplicateBarcode: 0
         })
     })
 
