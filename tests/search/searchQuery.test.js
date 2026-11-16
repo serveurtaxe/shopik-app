@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import searchFactory from '../../server/dl/defaults/search.js'
 
 // Product-like model: tiered prefix/regular/fuzzy config, several search fields.
-function makeProductModel() {
+function makeProductModel(searchBoost) {
     const calls = {}
     const Model = {
         getSearchIndexName: () => 'products_search',
@@ -17,6 +17,7 @@ function makeProductModel() {
             return []
         }
     }
+    if (searchBoost) Model.searchBoost = searchBoost
     return { Model, calls }
 }
 
@@ -111,5 +112,41 @@ describe('dl search query', () => {
 
         assert.deepEqual(result, [])
         assert.equal(calls.pipe, undefined)
+    })
+
+    it('adds a log-scaled, capped sales boost to the score when configured', async () => {
+        const { Model, calls } = makeProductModel({
+            path: 'totalSalesUnits',
+            multiplier: 10,
+            cap: 30
+        })
+        await searchFactory(Model)('milk')
+
+        const boostStage = calls.pipe.find(stage => stage.$addFields?.searchScore?.$add)
+        assert.ok(boostStage, 'expected a score boost stage')
+
+        const [base, boost] = boostStage.$addFields.searchScore.$add
+        assert.equal(base, '$searchScore')
+        assert.equal(boost.$min[0], 30)
+        assert.deepEqual(boost.$min[1], {
+            $multiply: [
+                10,
+                { $log10: { $add: [{ $ifNull: ['$totalSalesUnits', 0] }, 1] } }
+            ]
+        })
+
+        // The boost path is projected before the arithmetic stage so it can be read...
+        const intermediate = calls.pipe.find(stage => stage.$project)
+        assert.equal(intermediate.$project.totalSalesUnits, 1)
+
+        // ...and the final projection strips it again.
+        assert.equal(calls.pipe.at(-1).$project.totalSalesUnits, undefined)
+    })
+
+    it('leaves the score unboosted when the model does not configure searchBoost', async () => {
+        const { Model, calls } = makeProductModel()
+        await searchFactory(Model)('milk')
+
+        assert.equal(calls.pipe.some(stage => stage.$addFields?.searchScore?.$add), false)
     })
 })

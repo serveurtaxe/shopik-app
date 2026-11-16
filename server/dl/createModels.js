@@ -336,6 +336,7 @@ async function createModelFromSchema(schemaPath) {
     if (meta?.defaultSelect) Model.defaultSelect = meta.defaultSelect
     if (meta?.defaultSelectOne) Model.defaultSelectOne = meta.defaultSelectOne
     if (meta?.defaultSort) Model.defaultSort = meta.defaultSort
+    if (meta?.searchBoost) Model.searchBoost = meta.searchBoost
     if (meta?.methods) Model.methods = meta?.methods(Model)
 
     const {

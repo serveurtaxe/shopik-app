@@ -35,8 +35,8 @@ const productSchema = {
         type: String,
         required: true,
         trim: true,
-        search: 30,
-        searchPrefixBoost: 100,
+        search: 50,
+        searchPrefixBoost: 60,
         searchFuzzy: 3,
         filter: true
     },
@@ -159,7 +159,7 @@ const productSchema = {
     limit: Number,
     keywords: {
         type: [{ trim: true, type: String }],
-        search: 2,
+        search: 5,
         filter: true
     },
     googleCategory: String,
@@ -206,7 +206,7 @@ const productSchema = {
         id: { type: String, filter: true },
         title: {
             type: String,
-            search: 5,
+            search: 2,
             filter: true
         },
         pathIds: { type: [String], index: true, filter: true }
@@ -286,11 +286,22 @@ const defaultSort = {
     id: 1,
 }
 
+// Popularity nudge applied to search relevance (see dl/defaults/search.js).
+// Points grow with log10 of sales units, so 10 units → +10, 100 → +20,
+// 1000+ → +30 (capped). The cap keeps a best seller from outranking a
+// name-prefix match; the nudge only breaks close text-relevance decisions.
+const searchBoost = {
+    path: 'totalSalesUnits',
+    multiplier: 100,
+    cap: 1000
+}
+
 export const meta = {
     constants,
     defaultSelect,
     defaultSelectOne,
     defaultSort,
+    searchBoost,
     index: [
         { storeIds: 1 },
         { status: 1, 'category.pathIds': 1 },

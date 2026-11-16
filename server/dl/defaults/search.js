@@ -199,6 +199,33 @@ function buildSearchQuery(Model, words) {
     }
 }
 
+/**
+ * Builds an additive popularity boost for search relevance, or null when the
+ * model opts out.
+ *
+ * The boost is `multiplier * log10(1 + value)` capped at `cap`, so points grow
+ * quickly for the first sales and flatten out. Because relevance tiers are
+ * constant scores (name prefix 100, autocomplete 30, category 5, ...), this
+ * nudges best sellers up without letting popularity beat a strong text match.
+ *
+ * @param {Object} boost - e.g. { path: 'totalSalesUnits', multiplier: 10, cap: 30 }.
+ * @returns {Object|null} Aggregation expression, or null when disabled.
+ */
+function buildBoostExpression(boost) {
+    if (!boost?.path || !boost.multiplier) return null
+
+    const expression = {
+        $multiply: [
+            boost.multiplier,
+            { $log10: { $add: [{ $ifNull: [`$${boost.path}`, 0] }, 1] } }
+        ]
+    }
+
+    return boost.cap != null
+        ? { $min: [boost.cap, expression] }
+        : expression
+}
+
 export default (Model) => async function search(value = '', filter, options = {}) {
     if (!value || typeof value !== 'string') return []
     if (!Model.searchFields)
@@ -228,6 +255,7 @@ export default (Model) => async function search(value = '', filter, options = {}
 
     const projection = select || Model.defaultSelect
     const sort = Model.defaultSort || {}
+    const boostExpression = buildBoostExpression(Model.searchBoost)
     const pipe = [
         searchStage,
         ...(filter ? [{ $match: filter }] : []),
@@ -237,6 +265,9 @@ export default (Model) => async function search(value = '', filter, options = {}
                     _id: 0,
                     ...projection,
                     ...sort,
+                    // The boost path must survive this stage to be read below;
+                    // the final $project strips it again.
+                    ...(boostExpression ? { [Model.searchBoost.path]: 1 } : {}),
                     searchScore: { $meta: 'score' }
                 }
             }] :
@@ -245,6 +276,14 @@ export default (Model) => async function search(value = '', filter, options = {}
                     searchScore: { $meta: 'score' }
                 }
             }]
+        ),
+        ...(boostExpression ?
+            [{
+                $addFields: {
+                    searchScore: { $add: ['$searchScore', boostExpression] }
+                }
+            }] :
+            []
         ),
         { $sort: { searchScore: -1, ...sort } },
         { $skip: Number(skip) },
