@@ -65,6 +65,15 @@ function safeNextPath(value) {
 
 const isApiPath = path => path === '/api' || path.startsWith('/api/')
 
+// Payment-provider callbacks run inside the customer's payment iframe: the
+// provider (Hyp) redirects the iframe from its own domain back to us, and a
+// cross-site iframe never carries the SameSite=Lax gate cookie. Gating the
+// callback would answer 401 before the handler runs, leaving the order in
+// 'cart' while the customer sees the paid page. The handler is safe without
+// the gate: it verifies every redirect against Hyp's own signature
+// (What=VERIFY) before touching anything.
+export const GATE_EXEMPT_PATHS = new Set(['/api/payment/hyp/callback'])
+
 // PRODUCTION is a string, so a literal "false" would still be truthy and would
 // mark the cookie Secure over plain http://localhost — an endless login loop.
 const isHttpsDeployment = () => {
@@ -164,6 +173,8 @@ export default function createGate({
         if (req.method === 'OPTIONS') return next()
 
         const path = req.path
+        const exemptPath = path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path
+        if (GATE_EXEMPT_PATHS.has(exemptPath)) return next()
 
         if (path === GATE_LOGOUT_PATH) {
             res.clearCookie(GATE_COOKIE, { path: '/' })

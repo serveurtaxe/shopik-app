@@ -108,6 +108,25 @@ export default function Checkout() {
         if (isHoldExpired(order.window)) clearWindow()
     }, [order?.window?.id, order?.window?.holdUntil, order?.window?.reservedAt, order?.window?.leadTimestamp, clearWindow])
 
+    // The callback moves the order to 'paid' before it posts its success
+    // message or redirects back, so the server is authoritative: anything it
+    // does not confirm must never render the success page — a blocked or
+    // failed callback would otherwise look like a completed sale while the
+    // order stays in 'cart'.
+    async function confirmPaidOrder(orderNumber) {
+        for (let attempt = 0; attempt < 4; attempt++) {
+            try {
+                const res = await apiReq('order/status', { orderNumber })
+                const placedOrder = res?.order || res?.data
+                const status = placedOrder?.status
+                if (status && status !== 'cart' && status !== 'failed' && status !== 'canceled')
+                    return placedOrder
+            } catch { }
+            await new Promise(r => setTimeout(r, 1000))
+        }
+        return null
+    }
+
     // Listen for hyp callback postMessage (lightweight loader html) + fetch updated order
     const iframeRef = useRef(null)
     useEffect(() => {
@@ -117,16 +136,15 @@ export default function Checkout() {
             const data = e.data || {}
             if (data.type !== 'hyp_callback') return
             if (data.ok && data.orderNumber) {
-                // verify via API then show success
-                apiReq('order/status', { orderNumber: data.orderNumber }).then(res => {
-                    const paidOrder = res?.order || res?.data || order
-                    if (paidOrder?.status === 'paid' || data.ok) {
-                        setDoneOrder(paidOrder?.id ? paidOrder : { ...order, number: data.orderNumber })
+                // verify via API — success only once the server moved the order out of cart
+                confirmPaidOrder(data.orderNumber).then(placedOrder => {
+                    if (placedOrder) {
+                        setDoneOrder(placedOrder?.id ? placedOrder : { ...order, number: data.orderNumber })
+                        setPaymentUrl(null)
+                    } else {
+                        setPayError({ message: TR?.('payment_status_unconfirmed') })
                         setPaymentUrl(null)
                     }
-                }).catch(() => {
-                    setDoneOrder({ ...order, number: data.orderNumber })
-                    setPaymentUrl(null)
                 })
             } else if (data.ok === false) {
                 setPayError({ message: data.error || 'payment_failed_generic' })
@@ -143,15 +161,23 @@ export default function Checkout() {
             if (!loc) return
             const href = loc.href || ''
             const search = loc.search || ''
-            // fallback if postMessage missed - check query for Order/CCode
+            // fallback if postMessage missed - check query for Order/CCode,
+            // but confirm the order actually left 'cart' before showing success
             if (href.includes('hyp/callback') || href.includes('success') || search.includes('CCode=')) {
                 const params = new URLSearchParams(search)
                 const orderNumber = params.get('Order') || params.get('order')
                 const ccode = params.get('CCode') ?? params.get('Ccode')
                 const isOk = ccode === '0' || ccode === '700'
                 if (isOk && orderNumber) {
-                    setDoneOrder(prev => prev || { ...order, number: orderNumber })
-                    setPaymentUrl(null)
+                    confirmPaidOrder(orderNumber).then(placedOrder => {
+                        if (!placedOrder) {
+                            setPayError(prev => prev || { message: TR?.('payment_status_unconfirmed') })
+                            setPaymentUrl(null)
+                            return
+                        }
+                        setDoneOrder(prev => prev || (placedOrder?.id ? placedOrder : { ...order, number: orderNumber }))
+                        setPaymentUrl(null)
+                    })
                 }
             }
         } catch { }

@@ -71,6 +71,24 @@ describe('access gate', () => {
         })
     })
 
+    it('lets the provider payment callback through without a cookie', async () => {
+        // Hyp redirects the payment iframe from its own domain back to the
+        // callback; a cross-site iframe never carries the SameSite=Lax gate
+        // cookie, so gating it would 401 the callback and leave orders in cart.
+        await withGate({}, async base => {
+            const res = await fetch(`${base}/api/payment/hyp/callback?Order=10000066&Id=512933518&CCode=0`)
+            assert.equal(res.status, 200)
+            assert.deepEqual(await res.json(), { ok: true, path: '/api/payment/hyp/callback' })
+
+            const trailing = await fetch(`${base}/api/payment/hyp/callback/?Order=1`)
+            assert.equal(trailing.status, 200)
+
+            // sibling payment routes stay gated
+            const create = await fetch(`${base}/api/payment/create`, { method: 'post' })
+            assert.equal(create.status, 401)
+        })
+    })
+
     it('rejects a wrong password without setting a cookie', async () => {
         await withGate({}, async base => {
             const res = await login(base, { password: 'nope' })

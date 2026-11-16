@@ -1,5 +1,6 @@
 import { recordPaidOrder } from '#server/utils/data/userStats.js'
 import recordCouponUsage from '#server/utils/data/recordCouponUsage.js'
+import log from '#server/utils/log.js'
 
 function buildLoaderHtml({ ok, orderNumber, errorMessage }) {
     const safeNum = String(orderNumber || '').replace(/</g, '&lt;')
@@ -36,6 +37,35 @@ export default async function callback(payload, info) {
     function sendHtml({ ok, order, errorMessage }) {
         const html = buildLoaderHtml({ ok, orderNumber: order?.number || orderNumber, errorMessage })
         res.status(ok ? 200 : 400).type('html').send(html)
+    }
+
+    // cart -> paid must never fail silently: a SUCCESS transaction with the
+    // order still in 'cart' is exactly the "paid but stuck" bug — log it,
+    // record it in the timeline and report the truth to the customer.
+    async function applyPaidStatus(order, paymentData) {
+        try {
+            await DL.Order.updateOne({ id: order.id }, {
+                status: DL.Order.constants.ORDER_STATUS.PAID,
+                payment: paymentData,
+                paymentError: null
+            })
+            return true
+        } catch (e) {
+            const msg = e?.message || 'order status update failed'
+            log.error(`payment/hyp/callback: order ${orderNumber} status update failed:`, msg)
+            try {
+                const { record } = utils.data.timeline
+                await record({
+                    DL, order,
+                    eventType: DL.Timeline.constants.EVENT_TYPES.PAYMENT,
+                    actor: null,
+                    context: { step: 'order_status_update_failed', provider: 'hyp', providerTxnId, orderNumber },
+                    outcome: { success: false, errorMessage: msg },
+                    metadata: { source: 'payment/hyp/callback' }
+                })
+            } catch { }
+            return false
+        }
     }
 
     // 1. VERIFY
@@ -98,6 +128,31 @@ export default async function callback(payload, info) {
         const existing = await DL.PaymentTransaction.readOne({ providerTxnId: String(providerTxnId) })
         if (existing) {
             const isSuccess = existing.status === DL.PaymentTransaction.constants.TRANSACTION_STATUS.SUCCESS
+            // SUCCESS transaction recorded but the order still sits in 'cart':
+            // an earlier callback captured the money and failed to move the
+            // order. Repair from the stored transaction instead of reporting
+            // success forever.
+            if (isSuccess && order.status === DL.Order.constants.ORDER_STATUS.CART) {
+                const repaired = await applyPaidStatus(order, {
+                    provider: 'hyp',
+                    providerTxnId: existing.providerTxnId,
+                    authCode: existing.authCode,
+                    providerUid: existing.providerUid,
+                    providerPayerId: existing.providerPayerId,
+                    cardToken: existing.cardToken,
+                    cardExpiry: existing.cardExpiry,
+                    last4digits: existing.last4digits,
+                    cardCompany: existing.cardCompany,
+                    payments: existing.payments,
+                    terminalId: existing.terminalId,
+                    authorizedAmount: existing.amount
+                })
+                sendHtml({
+                    ok: repaired, order,
+                    errorMessage: repaired ? undefined : 'התשלום אושר, אך עדכון ההזמנה נכשל — נסו שוב או פנו למוקד Support'
+                })
+                return
+            }
             sendHtml({ ok: isSuccess, order, errorMessage: existing.error })
             return
         }
@@ -191,24 +246,25 @@ export default async function callback(payload, info) {
         })
     } catch { }
 
-    try {
-        await DL.Order.updateOne({ id: order.id }, {
-            status: DL.Order.constants.ORDER_STATUS.PAID,
-            payment: {
-                provider: 'hyp',
-                providerTxnId: String(providerTxnId),
-                authCode: q.ACode ? String(q.ACode) : undefined,
-                providerUid: q.UID ? String(q.UID) : undefined,
-                providerPayerId: q.UserId ? String(q.UserId) : undefined,
-                cardToken, cardExpiry,
-                last4digits, cardCompany,
-                payments,
-                terminalId: process.env.HYP_MASOF || undefined,
-                authorizedAmount: Number(authorizedAmount)
-            },
-            paymentError: null
-        })
-    } catch { }
+    const paid = await applyPaidStatus(order, {
+        provider: 'hyp',
+        providerTxnId: String(providerTxnId),
+        authCode: q.ACode ? String(q.ACode) : undefined,
+        providerUid: q.UID ? String(q.UID) : undefined,
+        providerPayerId: q.UserId ? String(q.UserId) : undefined,
+        cardToken, cardExpiry,
+        last4digits, cardCompany,
+        payments,
+        terminalId: process.env.HYP_MASOF || undefined,
+        authorizedAmount: Number(authorizedAmount)
+    })
+    if (!paid) {
+        // Money was authorized (the SUCCESS transaction above is the record
+        // of truth), but the order could not be updated. Report it honestly —
+        // a success page over a cart order is how the bug went unnoticed.
+        sendHtml({ ok: false, order, errorMessage: 'התשלום אושר, אך עדכון ההזמנה נכשל — נסו שוב או פנו למוקד Support' })
+        return
+    }
 
     // Maintain user_stats on first successful checkout (cart -> paid).
     // Idempotent: duplicate callbacks return early at the providerTxnId

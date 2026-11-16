@@ -90,7 +90,9 @@ setupNoindex(app)
 
 // The gate runs before the body parsers so an unauthenticated request can never
 // buffer a large body, and after cookieParser so it can read its own cookie.
-// It is a no-op unless SITE_GATE_PASSWORD is set.
+// It is a no-op unless SITE_GATE_PASSWORD is set. Provider payment callbacks
+// are exempt (see GATE_EXEMPT_PATHS in middleware/gate.js) — the provider's
+// iframe redirect never carries the gate cookie.
 app.use(cookieParser())
 app.use(createGate())
 
