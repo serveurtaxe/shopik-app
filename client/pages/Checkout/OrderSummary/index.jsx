@@ -329,16 +329,6 @@ export default function OrderSummary({ onPayment, paying, showPayBtn = true, mis
                             </Text>
                         </Flex>
 
-                        {/*  {isBelowMinSum && (
-                        <Flex alignItems='center' justifyContent='space-between' className={styles.subtotalRow}>
-                            <Text mode='sub' size='m'>
-                                {TR?.('minimum_order_sum')}
-                            </Text>
-                            <Text size='m' bold>
-                                {render({ type: 'coin', value: minSumThreshold })}
-                            </Text>
-                        </Flex>
-                    )} */}
                         {/* CTA Pay Button */}
                         {showPayBtn && (
                             <button
