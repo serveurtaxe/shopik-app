@@ -176,12 +176,18 @@ export default async function syncComax(payload, { DL }) {
     let hiddenNoImage = 0
     let archivedNoPrice = 0
 
-    for (let skip = 0; skip < total; skip += BATCH) {
-        const comaxProducts = await DL.ComaxProduct.read(filter, select, {
-            limit: BATCH,
-            skip,
-            sort: { barcode: 1 }
-        })
+    // Keyset paging on the unique barcode instead of skip: MongoDB bounds a
+    // blocking sort by skip + limit, so skip-paging a 24k catalog died with
+    // 'Sort exceeded memory limit of 33554432 bytes' once skip passed 23000.
+    // Walking barcode > last barcode keeps every page a TopK sort of BATCH docs.
+    let afterBarcode = null
+    let page = 0
+    while (true) {
+        const comaxProducts = await DL.ComaxProduct.read(
+            afterBarcode ? { ...filter, barcode: { $gt: afterBarcode } } : filter,
+            select,
+            { limit: BATCH, sort: { barcode: 1 } }
+        )
         if (!comaxProducts?.length) break
 
         // Existing per-domain prices + images so the sync merges prices instead of
@@ -204,12 +210,18 @@ export default async function syncComax(payload, { DL }) {
             (!(retailPrice(c) > 0) || (enforceBuyingPrice && !(c.buyingPrice > 0)))
         ).length
 
+        // Comax's archive is seasonal, not dead stock: those rows need a doc so
+        // the image worker and GS1 enrich can fill it while it is off the site.
+        const seasonal = new Set(comaxProducts.filter(c => c.archived).map(c => c.barcode))
         const result = await DL.Product.bulkWrite({
             docs: productsToSync,
             getFilter: p => ({ barcode: p.barcode }),
             // Upsert everything except archived: imageless HIDDEN products must exist
-            // as docs or the image worker would never pick them up (deadlock).
-            getUpsert: p => p.status !== DL.Product.constants.STATUS.ARCHIVED
+            // as docs or the image worker would never pick them up (deadlock). The
+            // one exception is a Comax-archived (seasonal) item: its doc is created
+            // as ARCHIVED, so it stays off the site but its images and kashrut can
+            // be ready on the day the item comes back.
+            getUpsert: p => p.status !== DL.Product.constants.STATUS.ARCHIVED || seasonal.has(p.barcode)
         })
         created += result.upsertedCount ?? result.insertedCount ?? 0
         updated += result.modifiedCount ?? 0
@@ -220,8 +232,16 @@ export default async function syncComax(payload, { DL }) {
         )
 
         synced += comaxProducts.length
+        page++
         const m = process.memoryUsage()
-        console.log(`[Comax Sync] batch ${Math.floor(skip / BATCH) + 1}/${Math.ceil(total / BATCH)}: ${synced}/${total} (heap ${Math.round(m.heapUsed / 1048576)}MB)`)
+        console.log(`[Comax Sync] batch ${page}/${Math.ceil(total / BATCH)}: ${synced}/${total} (heap ${Math.round(m.heapUsed / 1048576)}MB)`)
+
+        // The cursor must advance or the same page reads forever. barcode is
+        // required and unique, so a row without one is broken data: stop rather
+        // than loop on it.
+        const lastBarcode = comaxProducts[comaxProducts.length - 1]?.barcode
+        if (!lastBarcode || comaxProducts.length < BATCH) break
+        afterBarcode = lastBarcode
     }
 
     // Backstop for products the loop never visits: no Comax row (or one the

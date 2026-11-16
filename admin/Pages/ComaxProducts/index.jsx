@@ -4,6 +4,7 @@ import { useModal } from 'common/components/Modal'
 import { useNotificationCount } from 'features/Notifications'
 import SalesWindowModal from './SalesWindowModal'
 import Gs1MatchModal from './Gs1MatchModal'
+import BackfillCatalogModal from './BackfillCatalogModal'
 
 export default function ComaxProducts({ }) {
     const { openModal, closeModal } = useModal()
@@ -46,9 +47,21 @@ export default function ComaxProducts({ }) {
         },
         permission: 'comax_product:update'
     }
+    // The nightly import only brings what a store is stocking, so an item that
+    // is out of stock everywhere has no row at all. This adds those rows from a
+    // full-catalog export.
+    const backfillCatalog = {
+        icon: 'upload',
+        text: 'comax_products_backfill',
+        onClick: ({ refresh }) => openModal(
+            <BackfillCatalogModal onDone={refresh} />,
+            { title: 'comax_products_backfill' }
+        ),
+        permission: 'comax_product:update'
+    }
     return <DataManager
         apiRoute='comax_product'
-        actions={[importProducts, syncProducts, gs1Matches, salesWindow, 'export', 'refresh']}
+        actions={[importProducts, syncProducts, backfillCatalog, gs1Matches, salesWindow, 'export', 'refresh']}
         rowActions={['active']}
         defaultSort={{ lastImportedAt: -1 }}
         cols={[

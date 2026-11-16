@@ -10,7 +10,7 @@ describe('comax sync storeless sweep', () => {
     it('runs even when there is no Comax row to sync', async () => {
         const updates = []
         const DL = {
-            ComaxProduct: { count: async () => 0 },
+            ComaxProduct: { count: async () => 0, read: async () => [] },
             CategoryMap: { read: async () => [] },
             Product: {
                 constants: { STATUS },

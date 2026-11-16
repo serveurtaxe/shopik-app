@@ -59,13 +59,15 @@ async function backfillProducts(DL, plan) {
 
     const metaByCode = new Map()
     let updated = 0
-    let skip = 0
+    let afterBarcode = null
 
     while (true) {
+        // Keyset on the unique barcode: a sorted skip page over the whole catalog
+        // goes past MongoDB's 32MB sort buffer (see api/comax_product/sync.js).
         const batch = await DL.ComaxProduct.read(
-            {},
+            afterBarcode ? { barcode: { $gt: afterBarcode } } : {},
             { _id: 0, barcode: 1, subGroupCode: 1, ...COMAX_META_FIELDS },
-            { limit: BATCH, skip, sort: { barcode: 1 } }
+            { limit: BATCH, sort: { barcode: 1 } }
         )
         if (!batch?.length) break
 
@@ -86,7 +88,9 @@ async function backfillProducts(DL, plan) {
             updated += result?.modifiedCount || 0
         }
 
-        skip += batch.length
+        const lastBarcode = batch[batch.length - 1]?.barcode
+        if (!lastBarcode) break
+        afterBarcode = lastBarcode
         if (batch.length < BATCH) break
     }
 

@@ -20,11 +20,28 @@ function fakeDL({
     buyingPriceRows = 1
 } = {}) {
     const list = docs => ({ sort: () => ({ lean: async () => docs }), lean: async () => docs })
+
+    // The report reads gs1_products through a filter, so the fixture is docs.
+    // A bare barcode string means "GS1 answered and the raw is stored".
+    const gs1Docs = gs1.map(doc => typeof doc === 'string' ? { barcode: doc, raw: {} } : doc)
+
+    // Just enough query semantics to honour the filters the report actually uses.
+    const matching = (docs, filter = {}) => docs.filter(doc =>
+        Object.entries(filter).every(([key, rule]) => {
+            const value = key.split('.').reduce((obj, part) => obj?.[part], doc)
+            if (rule && typeof rule === 'object' && !Array.isArray(rule)) {
+                if ('$ne' in rule) return value !== rule.$ne
+                if ('$in' in rule) return rule.$in.includes(value)
+                if ('$exists' in rule) return (value !== undefined) === rule.$exists
+            }
+            return value === rule
+        }))
+
     return {
         Domain: { readOne: async () => ({ id: 'default-domain' }) },
         Store: { Model: { find: () => list(STORES) } },
         ComaxProduct: {
-            Model: { find: () => list(comax) },
+            Model: { find: filter => list(matching(comax, filter)) },
             count: async () => buyingPriceRows
         },
         Product: {
@@ -32,7 +49,12 @@ function fakeDL({
             constants: { STATUS }
         },
         CategoryMap: { read: async () => categoryFlags },
-        Gs1Product: { Model: { distinct: async () => gs1 } },
+        Gs1Product: {
+            Model: {
+                distinct: async (field, filter = {}) => matching(gs1Docs, filter).map(doc => doc[field]),
+                find: filter => ({ lean: async () => matching(gs1Docs, filter) })
+            }
+        },
         Setting: { readOne: async () => ({ value: salesWindow }) }
     }
 }
@@ -65,33 +87,35 @@ const productRow = (overrides = {}) => ({
     ...overrides
 })
 
-// Column order is part of the report contract: [0..19] fixed, then one column
+// Column order is part of the report contract: [0..20] fixed, then one column
 // per active store in the same order the stores were read.
 const row = values => ({
     superDepartment: values[0], department: values[1], group: values[2], subGroup: values[3],
     categoryShown: values[4], categoryRequires: values[5], barcode: values[6], name: values[7],
     supplier: values[8], kashrut: values[9], kashrutValid: values[10], vat: values[11],
     inGs1: values[12], buyingPrice: values[13], salePrice: values[14], hasImage: values[15],
-    unitsSold: values[16], lastSaleDate: values[17], existsOnSite: values[18], reason: values[19],
-    stores: values.slice(20)
+    unitsSold: values[16], lastSaleDate: values[17], existsOnSite: values[18],
+    siteStatus: values[19], reason: values[20],
+    stores: values.slice(21)
 })
 
 describe('catalog report', () => {
     it('adds one availability column per active store', async () => {
         const { columns } = await catalog.build(fakeDL({ comax: [comaxRow()] }))
 
-        assert.equal(columns.length, 22)
+        assert.equal(columns.length, 23)
         assert.deepEqual(columns.slice(4, 6).map(column => column.text), [
             'קטגוריה מוצגת באתר',
             'קטגוריה דורשת כשרות'
         ])
-        assert.deepEqual(columns.slice(16, 20).map(column => column.text), [
+        assert.deepEqual(columns.slice(16, 21).map(column => column.text), [
             'מכר',
             'תאריך מכירה אחרונה',
             'קיים באתר',
+            'סטטוס לפי כללי האתר',
             'סיבת אי הצגה באתר'
         ])
-        assert.deepEqual(columns.slice(20).map(column => column.text), [
+        assert.deepEqual(columns.slice(21).map(column => column.text), [
             'האם בסניף נטו בת ים',
             'האם בסניף נטו ביתר עלית'
         ])
@@ -138,6 +162,68 @@ describe('catalog report', () => {
         assert.equal(reportRow.kashrutValid, 'כן')
         assert.equal(reportRow.vat, 'true')
         assert.equal(reportRow.inGs1, 'כן')
+        assert.equal(reportRow.hasImage, 'כן')
+    })
+
+    it('says when a barcode was checked in GS1 and is not in our account', async () => {
+        const { rows } = await catalog.build(fakeDL({
+            comax: [comaxRow()],
+            products: [productRow()],
+            gs1: [{ barcode: '7290000000015', status: 'skipped', skipReason: 'no-gs1-record', syncedAt: new Date(2026, 10, 15) }]
+        }))
+
+        assert.equal(row(rows[0]).inGs1, 'לא (נבדק 15/11/2026)')
+    })
+
+    it('outranks a failed check with the GS1 data it already holds', async () => {
+        const { rows } = await catalog.build(fakeDL({
+            comax: [comaxRow()],
+            products: [productRow()],
+            gs1: [{
+                barcode: '7290000000015', raw: {}, status: 'skipped',
+                skipReason: 'no-gs1-record', syncedAt: new Date(2026, 10, 15)
+            }]
+        }))
+
+        assert.equal(row(rows[0]).inGs1, 'כן')
+    })
+
+    it('never claims GS1 for a barcode the collection holds under another key', async () => {
+        const { rows } = await catalog.build(fakeDL({
+            comax: [comaxRow()],
+            products: [productRow()],
+            gs1: [{ barcode: '7290000000099', raw: {} }]
+        }))
+
+        assert.equal(row(rows[0]).inGs1, 'לא')
+    })
+
+    it('reads kashrut and media from the GS1 dump when the row has no Product doc', async () => {
+        // A backfilled row without a buying price never gets a Product doc (the
+        // sync gate), so the GS1 dump is the only place its content can live.
+        // The UPC here is 12 digits in Comax and 13 (0-padded) in the GS1 dump,
+        // which is the pair the lookup has to bridge.
+        const { rows } = await catalog.build(fakeDL({
+            comax: [comaxRow({ barcode: '729000000001', storeIds: [] })],
+            products: [],
+            gs1: [{
+                barcode: '0729000000001',
+                assetCount: 4,
+                raw: {
+                    product_info: {
+                        Kashrut: {
+                            Rabbinate: [{ value: 'בד"ץ העדה החרדית', code: '67085' }],
+                            Kosher_Supervision_Type: [{ code: '182' }]
+                        }
+                    }
+                }
+            }]
+        }))
+        const reportRow = row(rows[0])
+
+        assert.equal(reportRow.inGs1, 'כן')
+        assert.equal(reportRow.kashrut, 'בד"ץ העדה החרדית (חלבי)')
+        assert.equal(reportRow.kashrutValid, 'כן')
         assert.equal(reportRow.hasImage, 'כן')
     })
 
@@ -201,7 +287,7 @@ describe('catalog report', () => {
             comax: [comaxRow({ storeIds: ['store-beitar'] })]
         }))
 
-        assert.deepEqual(rows[0].slice(20), ['לא', 'כן'])
+        assert.deepEqual(rows[0].slice(21), ['לא', 'כן'])
     })
 
     it('sorts by category and puts rows with no category last', async () => {
@@ -275,6 +361,34 @@ describe('catalog report', () => {
         assert.match(reportRow.reason, /חסר מחיר קנייה/)
     })
 
+    it('says whose archive a price-less row is in: ours, not Comax', async () => {
+        // A live Comax item with no buying price is archived by OUR ladder. The
+        // status column and the reason both say it, so the row reads as "add it
+        // to the price list" instead of looking like a Comax archive row.
+        const { rows } = await catalog.build(fakeDL({
+            comax: [comaxRow({ barcode: '7290000000022', buyingPrice: 0, storeIds: [] })],
+            products: []
+        }))
+        const reportRow = row(rows[0])
+
+        assert.equal(reportRow.siteStatus, 'ארכיון באתר')
+        assert.match(reportRow.reason, /^ארכיון באתר: חסר מחיר קנייה/)
+    })
+
+    it('shows the ladder status for active and hidden rows as well', async () => {
+        const active = (await catalog.build(fakeDL({
+            comax: [comaxRow()],
+            products: [productRow()]
+        }))).rows[0]
+        const hidden = (await catalog.build(fakeDL({
+            comax: [comaxRow({ storeIds: [] })],
+            products: [productRow()]
+        }))).rows[0]
+
+        assert.equal(row(active).siteStatus, 'פעיל')
+        assert.equal(row(hidden).siteStatus, 'מוסתר')
+    })
+
     it('does not enforce the buying-price rule before any buying price exists', async () => {
         const { rows } = await catalog.build(fakeDL({
             comax: [comaxRow({ buyingPrice: 0 })],
@@ -325,13 +439,20 @@ describe('catalog report', () => {
         assert.match(row(noKashrut).reason, /חסרה כשרות מתאימה/)
     })
 
-    it('reports a Comax archive as the reason', async () => {
+    it('reports no archived, inactive or trailing Comax row', async () => {
+        // Archived products have their own export and are never stored by the
+        // backfill, so a report row is always an item Comax still sells.
         const { rows } = await catalog.build(fakeDL({
-            comax: [comaxRow({ archived: true })],
+            comax: [
+                comaxRow({ barcode: '1', archived: true }),
+                comaxRow({ barcode: '2', active: false }),
+                comaxRow({ barcode: '3', isTrailingItem: true }),
+                comaxRow({ barcode: '4' })
+            ],
             products: [productRow()]
         }))
 
-        assert.match(row(rows[0]).reason, /המוצר הועבר לארכיון בקומקס/)
+        assert.deepEqual(rows.map(values => values[6]), ['4'])
     })
 
     it('explains an image that exists only as a Comax picUrl', async () => {

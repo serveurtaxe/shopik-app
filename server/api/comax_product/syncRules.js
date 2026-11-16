@@ -40,25 +40,31 @@ export async function hideInactiveProducts({ DL, batchSize } = {}) {
     const { ACTIVE, HIDDEN } = statuses(DL)
     const filter = { active: false, barcode: { $nin: [null, ''] } }
 
-    const total = await DL.ComaxProduct.count(filter)
     let hidden = 0
+    let afterBarcode = null
 
-    for (let skip = 0; skip < total; skip += BATCH) {
+    // Keyset on the unique barcode, not skip: MongoDB bounds a blocking sort by
+    // skip + limit, which the full catalog walks straight past (32MB limit).
+    while (true) {
         const rows = await DL.ComaxProduct.read(
-            filter,
+            afterBarcode ? { ...filter, barcode: { $gt: afterBarcode } } : filter,
             { _id: 0, barcode: 1 },
-            { limit: BATCH, skip, sort: { barcode: 1 } }
+            { limit: BATCH, sort: { barcode: 1 } }
         )
         if (!rows?.length) break
 
+        afterBarcode = rows[rows.length - 1]?.barcode
+
         const barcodes = rows.map(r => r.barcode).filter(Boolean)
-        if (!barcodes.length) continue
+        if (!barcodes.length) break
 
         const res = await DL.Product.update(
             { barcode: { $in: barcodes }, status: ACTIVE },
             { status: HIDDEN }
         )
         hidden += res?.modifiedCount || 0
+
+        if (rows.length < BATCH) break
     }
 
     return hidden

@@ -14,13 +14,22 @@ export default async function enqueueChangedImages(DL) {
     let scanned = 0
     let enqueued = 0
     let skippedProtected = 0
-    for (let skip = 0; skip < total; skip += BATCH) {
+    // Keyset on the unique barcode: an unsorted skip/limit has no page order to
+    // trust (this runs right after the sync rewrote these rows), so a page can
+    // repeat or drop rows. Sorting is what makes the cursor mean anything.
+    let afterBarcode = null
+    while (true) {
         const comaxProducts = await DL.ComaxProduct.Model.find(
-            filter,
+            afterBarcode ? { ...filter, barcode: { $gt: afterBarcode } } : filter,
             { _id: 0, barcode: 1, picUrl: 1 }
-        ).skip(skip).limit(BATCH).lean()
+        ).sort({ barcode: 1 }).limit(BATCH).lean()
         if (!comaxProducts?.length) break
         scanned += comaxProducts.length
+
+        // Advance before anything can `continue`, or the page repeats forever.
+        const lastBarcode = comaxProducts[comaxProducts.length - 1]?.barcode
+        if (!lastBarcode) break
+        afterBarcode = lastBarcode
 
         const barcodes = [...new Set(comaxProducts.map(p => p.barcode).filter(Boolean))]
         if (!barcodes.length) continue
@@ -54,6 +63,8 @@ export default async function enqueueChangedImages(DL) {
 
         if (jobs.length) await enqueueImageJobs(jobs)
         enqueued += jobs.length
+
+        if (comaxProducts.length < BATCH) break
     }
 
     log.info(`[ImageQueue] Enqueued ${enqueued}/${scanned} products with images (skipped ${skippedProtected} protected-source mains)`)

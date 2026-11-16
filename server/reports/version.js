@@ -5,7 +5,14 @@ import { SALES_WINDOW_KEY } from '#server/api/comax_product/salesWindow.js'
 // The data hash already changes with the columns, but the fast path below only
 // compares sourceVersion, so without this an old produced file would be served
 // after a deploy that only changed the report code.
-export const REPORT_FORMAT_VERSION = 2
+//
+// 3: archived Comax rows stopped being report rows (they have their own export),
+//    and "האם ב GS1" became a dated answer for a barcode our GS1 account does
+//    not carry instead of a bare "לא". The ladder's verdict also became a column
+//    of its own — "סטטוס לפי כללי האתר" (פעיל / מוסתר / ארכיון באתר) — and the
+//    price rules say in the reason that the archive is ours, which is not the
+//    same as Comax archiving the item.
+export const REPORT_FORMAT_VERSION = 3
 
 /**
  * Cheap fingerprint of everything the catalog report is built from.
@@ -42,7 +49,7 @@ export default async function sourceVersion(DL) {
     ] = await Promise.all([
         DL.Domain.readOne({ isDefault: true, active: true }, { _id: 0, id: 1 }),
         DL.Store.Model.find({ active: { $ne: false } }, { _id: 0, id: 1, name: 1 }).sort({ createdAt: 1 }).lean(),
-        DL.ComaxProduct.Model.countDocuments({ active: { $ne: false }, isTrailingItem: { $ne: true } }),
+        DL.ComaxProduct.Model.countDocuments({ active: { $ne: false }, isTrailingItem: { $ne: true }, archived: { $ne: true } }),
         DL.ComaxProduct.Model.findOne({}, { _id: 0, updatedAt: 1 }).sort({ updatedAt: -1 }).lean(),
         DL.Product.Model.countDocuments({}),
         DL.Product.Model.findOne({}, { _id: 0, updatedAt: 1 }).sort({ updatedAt: -1 }).lean(),

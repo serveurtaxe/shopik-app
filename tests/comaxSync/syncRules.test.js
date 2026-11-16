@@ -56,20 +56,16 @@ describe('comax sync rules', () => {
         assert.equal(await hideActiveProduct({ DL }), 0)
     })
 
-    it('hides active products for inactive comax rows in batches', async () => {
+    it('hides active products for inactive comax rows in barcode pages', async () => {
+        const rows = [{ barcode: '1' }, { barcode: '2' }, { barcode: '3' }]
         const updates = []
+        const pages = []
         const DL = {
             ComaxProduct: {
-                count: async filter => {
-                    assert.deepEqual(filter, INACTIVE_FILTER)
-                    return 3
-                },
-                read: async (filter, select, { skip }) => {
-                    assert.deepEqual(filter, INACTIVE_FILTER)
-                    assert.deepEqual(select, { _id: 0, barcode: 1 })
-                    return skip === 0
-                        ? [{ barcode: '1' }, { barcode: '2' }]
-                        : [{ barcode: '3' }]
+                read: async (filter, select, options) => {
+                    pages.push({ filter, select, options })
+                    const after = filter.barcode?.$gt
+                    return rows.filter(row => !after || row.barcode > after).slice(0, options.limit)
                 }
             },
             Product: {
@@ -94,15 +90,22 @@ describe('comax sync rules', () => {
                 update: { status: 'hidden' }
             }
         ])
+        // Keyset pages on the unique barcode, never skip: MongoDB bounds a
+        // blocking sort by skip + limit, which the whole catalog walks past.
+        assert.deepEqual(pages.map(page => page.filter.barcode), [
+            INACTIVE_FILTER.barcode,
+            { $gt: '2' }
+        ])
+        assert.deepEqual(pages.map(page => page.options), [
+            { limit: 2, sort: { barcode: 1 } },
+            { limit: 2, sort: { barcode: 1 } }
+        ])
     })
 
     it('stops when there are no inactive comax rows', async () => {
         const DL = {
             ComaxProduct: {
-                count: async filter => {
-                    assert.deepEqual(filter, INACTIVE_FILTER)
-                    return 0
-                }
+                read: async () => []
             },
             Product: {
                 constants: { STATUS },

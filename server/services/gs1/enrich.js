@@ -302,7 +302,12 @@ export async function runEnrich(opts) {
 // flow picks them up. Covers catalog churn (product created after the skip)
 // and restocks (out-of-stock skip, now in stock — or a false-run following a
 // true-run). map-error/empty-raw are NOT rescuable by enrich alone.
-const RESCUABLE_REASONS = ['no-product', 'no-comax', 'out-of-stock', 'alias-ambiguous']
+//
+// 'no-gs1-record' (our GS1 account does not carry the barcode) is deliberately
+// NOT here: re-asking about every one of those barcodes on every enrich run
+// would be a full-catalog GS1 sweep. Later additions arrive on their own, as
+// New_Publish / Update_Product messages that gs1/sync queues.
+const RESCUABLE_REASONS = ['no-product', 'out-of-stock', 'alias-ambiguous']
 export async function requeueRescued({ DL, onlyInStock = true, barcode = '' }) {
     const match = barcode
         ? { status: 'skipped', skipReason: { $in: RESCUABLE_REASONS }, barcode }

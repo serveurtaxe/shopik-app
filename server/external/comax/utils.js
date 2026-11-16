@@ -34,8 +34,10 @@ const nameMap = {
     itemColorId: 'ItemColorID',
     itemSizeId: 'ItemSizeID',
     storeIdForOpenOrdersOffset: 'StoreIDForOpenOrdersOffset',
-    lastUpdatedFromDate: 'LastUpdatedFromDate',
-    withOutArchive: 'WithOutArchive'
+    lastUpdatedFromDate: 'LastUpdatedFromDate'
+    // withOutArchive is deliberately NOT here: it has a default (1) that the loop
+    // below could never override, because `result[comaxKey]` is already set.
+    // It is applied explicitly instead, so a caller can ask for archived items.
 }
 
 /**
@@ -89,6 +91,11 @@ export function buildComaxParams(options) {
             result[comaxKey] = value
         }
     }
+
+    // WithOutArchive=1 means "hide archived items". Default stays 1; a caller that
+    // needs archived items (or needs to prove an item is archived) passes
+    // withOutArchive: false explicitly.
+    if (options.withOutArchive != null) result.WithOutArchive = options.withOutArchive ? 1 : 0
 
     // Undocumented but real Comax filters. They are only sent when the caller
     // asks for them, so every other request stays byte-identical to before.
