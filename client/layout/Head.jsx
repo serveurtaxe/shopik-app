@@ -10,7 +10,8 @@ export default function Head({
     themeColor,
     appTitle,
     meta,
-    glassix
+    glassix,
+    gtmId
 }) {
     const appleIcon = appleTouchIcon || favicon
     return <>
@@ -43,5 +44,15 @@ export default function Head({
             DNS/TLS handshake in the gap that deferral leaves open. */}
         {glassix && GLASSIX_ORIGINS.map(origin =>
             <link key={origin} rel="preconnect" href={origin} />)}
+        {/* GTM – async script loaded via SSR when the admin has set a GTM ID
+            in Settings > SEO. The async attribute keeps it non-render-blocking.
+            dns-prefetch warms the connection early without hurting Lighthouse. */}
+        {gtmId && <>
+            <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
+            <script async src={`https://www.googletagmanager.com/gtm.js?id=${gtmId}`} />
+            <script dangerouslySetInnerHTML={{ __html:
+                `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());`
+            }} />
+        </>}
     </>
 }
