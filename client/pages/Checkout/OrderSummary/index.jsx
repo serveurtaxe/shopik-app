@@ -284,11 +284,11 @@ export default function OrderSummary({ onPayment, paying, showPayBtn = true, mis
                     <Flex col gap={8} className={styles.breakdown}>
                         <Flex alignItems='center' justifyContent='space-between' className={styles.subtotalRow}>
                             <Text mode='sub' size='m'>
-                                subtotal_text
+                                {TR?.('subtotal_text')}{isBelowMinSum && (
+                                    <Text size='s' style={{ fontWeight: 'normal' }}>{` (${TR?.('minimum_order_sum')} ${render({ type: 'coin', value: minSumThreshold })})`}</Text>
+                                )}
                             </Text>
-                            <Text size='m' bold>
-                                {render({ type: 'coin', value: subtotal })}
-                            </Text>
+                            <Text size='m' bold>{render({ type: 'coin', value: subtotal })}</Text>
                         </Flex>
 
                         <Flex alignItems='center' justifyContent='space-between' className={styles.subtotalRow}>
@@ -329,9 +329,16 @@ export default function OrderSummary({ onPayment, paying, showPayBtn = true, mis
                             </Text>
                         </Flex>
 
-                        {isBelowMinSum && (
-                            <Text size='s' mode='sub' style={{ textAlign: 'center' }}>{TR?.('minimum_order_sum')} {render({ type: 'coin', value: minSumThreshold })}</Text>
-                        )}
+                        {/*  {isBelowMinSum && (
+                        <Flex alignItems='center' justifyContent='space-between' className={styles.subtotalRow}>
+                            <Text mode='sub' size='m'>
+                                {TR?.('minimum_order_sum')}
+                            </Text>
+                            <Text size='m' bold>
+                                {render({ type: 'coin', value: minSumThreshold })}
+                            </Text>
+                        </Flex>
+                    )} */}
                         {/* CTA Pay Button */}
                         {showPayBtn && (
                             <button

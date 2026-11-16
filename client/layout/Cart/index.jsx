@@ -136,7 +136,7 @@ export default function Cart({ }) {
         <Flex col className={styles.footer}>
             <Flex col gap={15} className={styles.summary}>
                 <Flex alignItems='center' justifyContent='space-between'>
-                    <Text bold>subtotal_text</Text>
+                    <Text bold>{TR?.('subtotal_text')}{isBelowMinSum && !emptyCart && (<Text size='s' style={{fontWeight:'normal'}}>{` (${TR?.('minimum_order_sum')} ${render({ type: 'coin', value: minSumThreshold })})`}</Text>)}</Text>
                     <Text bold>{render({ type: 'coin', value: sum })}</Text>
                 </Flex>
                 <Flex alignItems='center' justifyContent='space-between'>
@@ -155,9 +155,7 @@ export default function Cart({ }) {
                     <Text size='l' bold>{render({ type: 'coin', value: savings })}</Text>
                 </Flex>
             </Flex>
-            {isBelowMinSum && !emptyCart && (
-                <Text size='s' className={styles.minSumNote}>{TR?.('minimum_order_sum')} {render({ type: 'coin', value: minSumThreshold })}</Text>
-            )}
+
             <Button icon='cart' onClick={goToCheckout} disabled={isBelowMinSum}>
                 <Text>to_pay</Text>
                 <Text>{render({ type: 'coin', value: displayTotal })}</Text>
