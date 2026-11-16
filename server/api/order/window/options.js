@@ -1,7 +1,7 @@
 import getWindowTS from '#common/functions/getWindowTS.js'
 import formatISODate from '#common/functions/formatISODate.js'
 import { buildSpecialMap, specialDaysFor, overlapsWindow } from '#common/functions/specialDay.js'
-import { findUserGroupIds } from '#server/utils/data/windowGroups.js'
+import { findUserGroupIds, purgeExpiredHolds } from '#server/utils/data/windowGroups.js'
 const GET_DAYS_AHEAD = 10
 
 export default async function options(payload, { DL, _user, utils }) {
@@ -24,7 +24,7 @@ export default async function options(payload, { DL, _user, utils }) {
         ? await findUserGroupIds(DL, storeId, cartOrder.address?.areaId)
         : []
 
-    const windows = await DL.OrderWindow.Model.find({
+    const loadWindows = () => DL.OrderWindow.Model.find({
         storeId,
         date: { $gte: dateFrom, $lte: dateTo },
         active: true
@@ -45,6 +45,15 @@ export default async function options(payload, { DL, _user, utils }) {
         .sort({ date: 1, start: 1 })
         .lean()
 
+    let windows = await loadWindows()
+    if (!windows?.length) return windows
+
+    // Holds expire lazily (no sweep): correct the counters of the windows in
+    // view before reporting "full", so the first request after an expiry is
+    // accurate and the expired customer's own window stops looking chosen.
+    if (await purgeExpiredHolds(DL, windows.map(w => w.id))) {
+        windows = await loadWindows()
+    }
     if (!windows?.length) return windows
 
     // Special-day closures are enforced at read time (no mutation of generated rows)

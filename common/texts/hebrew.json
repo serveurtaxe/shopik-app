@@ -462,6 +462,7 @@
         "available": "פנוי",
         "past": "עבר",
         "chosen window": "חלון נבחר",
+        "window_hold_remaining": "החלון שמור לעוד {time}",
         "day": "יום",
         "add_to_cart": "לעגלה",
         "to_pay": "לתשלום:",

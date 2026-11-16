@@ -3,6 +3,7 @@ import { invalidateUserStore } from './getUserStore.js'
 import handleSelect from '#server/dl/handleSelect.js'
 import { record, userActor } from './timeline.js'
 import enrichCart from './enrichCart.js'
+import { expireWindowHold } from './windowGroups.js'
 
 export default async function getUserOrder({ DL, _user }) {
     const cartOrder = await DL.Order.readOne(
@@ -11,6 +12,23 @@ export default async function getUserOrder({ DL, _user }) {
     )
 
     if (cartOrder) {
+        // A reservation that outlived its hold must stop looking selected the
+        // moment anything reads the cart, even if nobody browses the window
+        // list (where counters are corrected on demand).
+        const expiredWindow = cartOrder.window
+        if (await expireWindowHold(DL, cartOrder)) {
+            try {
+                await record({
+                    DL,
+                    order: cartOrder,
+                    eventType: DL.Timeline.constants.EVENT_TYPES.ORDER_WINDOW,
+                    actor: userActor(_user),
+                    changes: { oldData: { window: expiredWindow }, newData: { window: null } },
+                    context: { step: 'window_hold_expired' },
+                    outcome: { success: true }
+                })
+            } catch { }
+        }
         await enrichCart(cartOrder, DL)
         return cartOrder
     }

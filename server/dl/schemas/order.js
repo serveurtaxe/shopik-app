@@ -120,6 +120,8 @@ const windowSchema = {
     end: Number,
     reservedGroupId: String,
     reservedAt: Date,
+    holdUntil: Date,
+    holdExtendedAt: Date,
     startTimestamp: Date,
     endTimestamp: Date,
     leadTimestamp: Date
@@ -590,7 +592,9 @@ const index = [
     // The ops queue always asks for one store over a window.date range — the
     // manage views scan more stores over a wider range, so a single-field index
     // on either side makes them pick one and scan the other.
-    { storeId: 1, 'window.date': -1 }
+    { storeId: 1, 'window.date': -1 },
+    // Window-hold expiry scans cart orders by deadline on demand.
+    { status: 1, active: 1, 'window.holdUntil': 1 }
 ]
 
 export const meta = {

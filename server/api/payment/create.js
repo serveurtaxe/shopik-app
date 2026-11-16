@@ -1,4 +1,9 @@
-import { releaseWindowReservation } from '#server/utils/data/windowGroups.js'
+import {
+    releaseWindowReservation,
+    expireWindowHold,
+    holdDeadline,
+    extendWindowHold
+} from '#server/utils/data/windowGroups.js'
 import { invalidateUserStore } from '#server/utils/data/getUserStore.js'
 import { findByLocation } from '#server/external/supplyArea.js'
 import { isElevatorRequired } from '#common/functions/address.js'
@@ -202,15 +207,20 @@ export default async function create(payload, info) {
     }
     if (invoice.value !== undefined) updates.invoiceRequest = invoice.value
 
-    // If the chosen window's lead time has passed, remove it and treat as missing
-    if (order.window?.leadTimestamp) {
-        const lead = new Date(order.window.leadTimestamp).getTime()
-        if (!Number.isNaN(lead) && lead < Date.now()) {
+    // A window hold runs for HOLD_MINUTES from selection, capped by the
+    // window's lead time, plus one checkout grace. Once it is spent the
+    // reservation is released and the customer must pick a new window.
+    if (order.window?.id) {
+        const lead = order.window.leadTimestamp ? new Date(order.window.leadTimestamp).getTime() : null
+        if (holdDeadline(order.window) == null && lead != null && lead < Date.now()) {
+            // Legacy cart with no hold fields: keep the old lead-time rule.
             const expiredWindowId = order.window.id
             const expiredGroupId = order.window.reservedGroupId
             try { await releaseWindowReservation(DL, expiredWindowId, expiredGroupId) } catch { }
             try { await DL.Order.updateOne({ id: order.id }, { $unset: { window: 1 } }) } catch { }
             order.window = undefined
+        } else {
+            await expireWindowHold(DL, order)
         }
     }
 
@@ -257,6 +267,17 @@ export default async function create(payload, info) {
             else Object.assign(order, updates)
         } catch { }
         if (updates.storeId) await invalidateUserStore(DL, _user.id)
+    }
+
+    // One-off checkout grace: a customer who started paying gets the extra
+    // minutes to finish. Applied at most once per reservation and never
+    // shortens the hold.
+    let holdUntil = null
+    if (order.window?.id) {
+        try {
+            const next = await extendWindowHold(DL, order)
+            if (next != null) holdUntil = new Date(next)
+        } catch { }
     }
 
     const hyp = external.hyp
@@ -318,7 +339,7 @@ export default async function create(payload, info) {
         })
     } catch { }
 
-    return { paymentUrl, transactionId: txn.id }
+    return { paymentUrl, transactionId: txn.id, ...(holdUntil ? { holdUntil } : {}) }
 }
 
 create.config = {

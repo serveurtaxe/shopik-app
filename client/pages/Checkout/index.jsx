@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useOrder } from 'features/Order/OrderProvider'
 import { useUser } from 'features/User'
 import { useNavigate } from 'react-router'
@@ -19,6 +19,7 @@ import { extractLimits, getMinSumForMethod, getRemainingToMin } from '#common/fu
 import useMediaQuery from 'common/functions/useMediaQuery'
 import render from '#common/functions/render.js'
 import { isElevatorRequired } from '#common/functions/address.js'
+import { isHoldExpired } from 'features/Order/windowHold'
 
 export default function Checkout() {
     const { order = {}, setOrder, refreshCart } = useOrder()
@@ -76,7 +77,7 @@ export default function Checkout() {
             }
         }
         if (!order?.window || !order.window.id || !order.window.date) missing.push('window')
-        else if (order.window.leadTimestamp && new Date(order.window.leadTimestamp).getTime() < Date.now()) missing.push('window')
+        else if (isHoldExpired(order.window)) missing.push('window')
         const invoice = order?.invoiceRequest
         if (invoice?.required && !String(invoice.taxId || '').trim()) missing.push('invoice')
         return missing
@@ -91,19 +92,21 @@ export default function Checkout() {
     useEffect(() => {
         if (user?.id) refreshCart()
     }, [refreshCart, user?.id])
-    // If window lead time has passed, clear it from the order and prompt user to pick a new one
-    useEffect(() => {
-        if (!order?.window?.leadTimestamp) return
-        const ts = new Date(order.window.leadTimestamp).getTime()
-        if (Number.isNaN(ts) || ts >= Date.now()) return
-        // expired → remove window from local order state and show missing
+    // Expired hold (or passed lead time on a legacy cart): drop the window
+    // locally and let the summary open the window section for a new choice.
+    const clearWindow = useCallback(() => {
         setOrder(prev => {
             if (!prev?.window) return prev
             const { window: _w, ...rest } = prev
             return rest
         })
         setMissingFields(prev => (prev.includes('window') ? prev : [...prev, 'window']))
-    }, [order?.window?.leadTimestamp, order?.window?.id])
+    }, [setOrder])
+
+    useEffect(() => {
+        if (!order?.window?.id) return
+        if (isHoldExpired(order.window)) clearWindow()
+    }, [order?.window?.id, order?.window?.holdUntil, order?.window?.reservedAt, order?.window?.leadTimestamp, clearWindow])
 
     // Listen for hyp callback postMessage (lightweight loader html) + fetch updated order
     const iframeRef = useRef(null)
@@ -171,13 +174,7 @@ export default function Checkout() {
         const localMissing = getLocalMissing()
         if (localMissing.length) {
             setMissingFields(localMissing)
-            if (localMissing.includes('window') && order?.window?.leadTimestamp && new Date(order.window.leadTimestamp).getTime() < Date.now()) {
-                setOrder(prev => {
-                    if (!prev?.window) return prev
-                    const { window: _w, ...rest } = prev
-                    return rest
-                })
-            }
+            if (localMissing.includes('window')) clearWindow()
             return
         }
         setPaying(true)
@@ -197,6 +194,12 @@ export default function Checkout() {
                 expectedAmount,
                 invoiceRequest: order.invoiceRequest
             })
+            if (res?.holdUntil) {
+                // Checkout extends the hold once so the payment has time to finish.
+                setOrder(prev => prev?.window
+                    ? { ...prev, window: { ...prev.window, holdUntil: res.holdUntil } }
+                    : prev)
+            }
             if (res?.paymentUrl) setPaymentUrl(res.paymentUrl)
         } catch (e) {
             console.error('payment create failed:', e)
@@ -210,13 +213,7 @@ export default function Checkout() {
             if (Array.isArray(fields) && fields.length) {
                 // trigger auto-open one-by-one (OrderSummary watches this array)
                 setMissingFields(fields)
-                if (fields.includes('window')) {
-                    setOrder(prev => {
-                        if (!prev?.window) return prev
-                        const { window: _w, ...rest } = prev
-                        return rest
-                    })
-                }
+                if (fields.includes('window')) clearWindow()
             }
         } finally {
             setPaying(false)
@@ -302,7 +299,7 @@ export default function Checkout() {
 
                 {/* Sidebar Area (End Side in RTL) */}
                 <aside className={styles.sidebar}>
-                    <OrderSummary onPayment={handlePayment} paying={paying} showPayBtn={!paymentUrl} missingFields={missingFields} hasNoService={hasNoService} hasElevatorIssue={hasElevatorIssue} hideSummary={isMobile && (paying || paymentUrl)} />
+                    <OrderSummary onPayment={handlePayment} paying={paying} showPayBtn={!paymentUrl} missingFields={missingFields} hasNoService={hasNoService} hasElevatorIssue={hasElevatorIssue} hideSummary={isMobile && (paying || paymentUrl)} onWindowExpired={clearWindow} />
                 </aside>
             </div>
         </div>

@@ -1,5 +1,11 @@
 import { overlapsWindow } from '#common/functions/specialDay.js'
-import { findUserGroupIds, reserveGuard, releaseWindowReservation } from '#server/utils/data/windowGroups.js'
+import {
+    findUserGroupIds,
+    reserveGuard,
+    releaseWindowReservation,
+    purgeExpiredHolds,
+    selectionHoldDeadline
+} from '#server/utils/data/windowGroups.js'
 
 export default async function choose(payload, { DL, _user, utils }) {
     const { DELIVERY_METHOD } = DL.Order.constants
@@ -58,6 +64,10 @@ export default async function choose(payload, { DL, _user, utils }) {
             throw { status: 400, message: 'window is unavailable' }
     }
 
+    // Counters can be stale while nobody browsed this store (holds expire
+    // lazily); release what has actually expired before deciding it is full.
+    await purgeExpiredHolds(DL, [windowId])
+
     const updatedWindow = await DL.OrderWindow.Model.findOneAndUpdate(
         reserveGuard(windowId, reservedGroupId),
         {
@@ -74,11 +84,18 @@ export default async function choose(payload, { DL, _user, utils }) {
 
     if (!updatedWindow) throw { status: 409, message: 'window is at capacity' }
 
+    const reservedAt = new Date()
     const orderUpdate = {
         window: {
             ...windowDoc,
             reservedGroupId,
-            reservedAt: new Date()
+            reservedAt,
+            // The hold never outlives the window's lead time: choosing five
+            // minutes before the cutoff leaves five minutes to complete.
+            holdUntil: new Date(selectionHoldDeadline({
+                now: reservedAt.getTime(),
+                leadTimestamp: windowDoc.leadTimestamp
+            }))
         }
     }
 
