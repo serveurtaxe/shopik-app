@@ -1,0 +1,20 @@
+.holdTimer {
+    display: inline-block;
+    font-size: 12px;
+    line-height: 1.4;
+    font-variant-numeric: tabular-nums;
+    /* Fades from the normal text colour to the danger colour as the hold runs out. */
+    color: color-mix(in oklab, var(--text-primary) calc((1 - var(--hold-progress, 0)) * 100%), var(--danger-color));
+    transition: color 180ms linear;
+}
+
+/* Older browsers: no gradual fade, but the final warning still shows in red. */
+@supports not (color: color-mix(in oklab, red, blue)) {
+    .holdTimer {
+        color: var(--text-secondary);
+    }
+
+    .holdTimer.urgent {
+        color: var(--danger-color);
+    }
+}

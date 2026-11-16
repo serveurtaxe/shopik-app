@@ -10,6 +10,7 @@ import { useUser } from 'features/User'
 import { useOrder } from 'features/Order/OrderProvider'
 import { useAppData } from 'App'
 import WindowOptions from 'features/Order/WindowOptions'
+import WindowHoldTimer from 'features/Order/WindowHoldTimer'
 import Addresses, { AddressForm } from 'pages/Account/Addresses'
 import { useText } from 'common/texts/TextProvider'
 import { CouponCollapse } from './CouponSection'
@@ -28,7 +29,7 @@ import {
     LuUserRound
 } from 'react-icons/lu'
 
-export default function OrderSummary({ onPayment, paying, showPayBtn = true, missingFields = [], hasNoService = false, hasElevatorIssue = false, hideSummary = false }) {
+export default function OrderSummary({ onPayment, paying, showPayBtn = true, missingFields = [], hasNoService = false, hasElevatorIssue = false, hideSummary = false, onWindowExpired }) {
     const { order = {}, setOrder } = useOrder()
     const user = useUser()
     const { addresses = [] } = user || {}
@@ -251,9 +252,12 @@ export default function OrderSummary({ onPayment, paying, showPayBtn = true, mis
                                     <div className={styles.iconCircle}>
                                         <LuClock className={styles.rowIcon} />
                                     </div>
-                                    <Text bold size='m' className={styles.rowText}>
-                                        {deliveryTimeText}
-                                    </Text>
+                                    <Flex col gap={2}>
+                                        <Text bold size='m' className={styles.rowText}>
+                                            {deliveryTimeText}
+                                        </Text>
+                                        <WindowHoldTimer window={activeWindow} onExpire={onWindowExpired} />
+                                    </Flex>
                                 </Flex>
                                 <button
                                     type='button'
