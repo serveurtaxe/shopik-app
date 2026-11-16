@@ -36,6 +36,10 @@ import { shouldEnforceBuyingPrice } from '#server/api/comax_product/syncRules.js
  * different thing from an item Comax itself has archived: those rows are not in
  * this report at all.
  *
+ * "ללא מחיר בקומקס" is that gap as a filter: Comax carries the item without a
+ * selling price of its own, so there is nothing to put on the site. It is כן even
+ * for a row whose site price was set by hand — that price is not Comax's.
+ *
  * "מכר", "תאריך מכירה אחרונה" and the stale-sales reason make the sales window
  * visible: an item that has not sold inside its department's window loses its
  * stores and therefore drops off the site on the next import. The units are the
@@ -66,6 +70,7 @@ const BASE_COLUMNS = [
     { text: 'האם ב GS1', width: 14, align: 'center' },
     { text: 'מחיר קנייה', width: 13, align: 'left', money: true },
     { text: 'מחיר מכירה', width: 13, align: 'left', money: true },
+    { text: 'ללא מחיר בקומקס', width: 16, align: 'center' },
     { text: 'האם יש תמונה', width: 14, align: 'center' },
     { text: 'מכר', width: 12, align: 'center' },
     { text: 'תאריך מכירה אחרונה', width: 16, align: 'center' },
@@ -346,6 +351,11 @@ async function build(DL) {
             inGs1: !inGs1 && checkedAt ? `${NO} (נבדק ${formatDate(checkedAt)})` : yesNo(inGs1),
             buyingPrice: moneyOrNull(item.buyingPrice),
             salePrice: moneyOrNull(product?.prices?.find(price => price?.domainId === defaultDomain?.id)?.price ?? item.price),
+            // Filterable answer to "why is this row not on the site": Comax has no
+            // selling price for the item at all, so nothing here can invent one. It
+            // says כן even when the site shows a price of its own — that price is not
+            // from Comax. The buying-price half is named in the reason column.
+            noComaxPrice: yesNo(!(item.price > 0)),
             // "Is there an image" means "is there image material to load": a
             // stored product image, a Comax picUrl the image worker can fetch, or
             // GS1 media assets waiting in the dump.
@@ -388,6 +398,7 @@ async function build(DL) {
             row.inGs1,
             row.buyingPrice,
             row.salePrice,
+            row.noComaxPrice,
             row.hasImage,
             row.unitsSold,
             row.lastSaleDate,
