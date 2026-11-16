@@ -176,12 +176,18 @@ export default async function syncComax(payload, { DL }) {
     let hiddenNoImage = 0
     let archivedNoPrice = 0
 
-    for (let skip = 0; skip < total; skip += BATCH) {
-        const comaxProducts = await DL.ComaxProduct.read(filter, select, {
-            limit: BATCH,
-            skip,
-            sort: { barcode: 1 }
-        })
+    // Keyset paging on the unique barcode instead of skip: MongoDB bounds a
+    // blocking sort by skip + limit, so skip-paging a 24k catalog died with
+    // 'Sort exceeded memory limit of 33554432 bytes' once skip passed 23000.
+    // Walking barcode > last barcode keeps every page a TopK sort of BATCH docs.
+    let afterBarcode = null
+    let page = 0
+    while (true) {
+        const comaxProducts = await DL.ComaxProduct.read(
+            afterBarcode ? { ...filter, barcode: { $gt: afterBarcode } } : filter,
+            select,
+            { limit: BATCH, sort: { barcode: 1 } }
+        )
         if (!comaxProducts?.length) break
 
         // Existing per-domain prices + images so the sync merges prices instead of
@@ -220,8 +226,16 @@ export default async function syncComax(payload, { DL }) {
         )
 
         synced += comaxProducts.length
+        page++
         const m = process.memoryUsage()
-        console.log(`[Comax Sync] batch ${Math.floor(skip / BATCH) + 1}/${Math.ceil(total / BATCH)}: ${synced}/${total} (heap ${Math.round(m.heapUsed / 1048576)}MB)`)
+        console.log(`[Comax Sync] batch ${page}/${Math.ceil(total / BATCH)}: ${synced}/${total} (heap ${Math.round(m.heapUsed / 1048576)}MB)`)
+
+        // The cursor must advance or the same page reads forever. barcode is
+        // required and unique, so a row without one is broken data: stop rather
+        // than loop on it.
+        const lastBarcode = comaxProducts[comaxProducts.length - 1]?.barcode
+        if (!lastBarcode || comaxProducts.length < BATCH) break
+        afterBarcode = lastBarcode
     }
 
     // Backstop for products the loop never visits: no Comax row (or one the

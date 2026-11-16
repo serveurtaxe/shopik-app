@@ -58,7 +58,7 @@ describe('catalog report source version', () => {
     })
 
     it('exposes the report format version', () => {
-        assert.equal(REPORT_FORMAT_VERSION, 2)
+        assert.equal(REPORT_FORMAT_VERSION, 3)
     })
 
     it('moves when a category flag row changes', async () => {

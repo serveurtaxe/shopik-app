@@ -1,0 +1,26 @@
+.modal {
+    padding: 4px 2px;
+}
+
+.report {
+    padding: 12px;
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius-md);
+}
+
+.list {
+    padding: 8px 10px;
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius-md);
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.listRow {
+    unicode-bidi: plaintext;
+}
+
+/* Comax / GS1 connection failures must not look like a note. */
+.error {
+    color: var(--text-error-primary);
+}

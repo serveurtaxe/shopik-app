@@ -41,6 +41,14 @@ describe('per-route body limits', () => {
         assert.equal((await res.json()).size, 2 * 1024 * 1024)
     })
 
+    it('accepts it on the csv import routes, whose own cap is above 1MB', async () => {
+        for (const path of ['/api/comax_product/backfill_catalog', '/api/product/load_kashrut']) {
+            const res = await postJson(path)
+            assert.equal(res.status, 200, path)
+            assert.equal((await res.json()).size, 2 * 1024 * 1024, path)
+        }
+    })
+
     it('accepts it with a trailing slash too', async () => {
         const res = await postJson('/api/product/upload_image/')
         assert.equal(res.status, 200)

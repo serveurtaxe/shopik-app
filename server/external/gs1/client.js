@@ -26,6 +26,12 @@ async function get(path, { timeoutMs = JSON_TIMEOUT_MS, binary = false, maxBytes
         })
         if (res.status === 404) return null
         if (res.status === 401) throw new Error('GS1 401 Unauthorized — check GS1_USERNAME/GS1_PASSWORD')
+        // GS1 answers 400 (`pcode is cannot be null`) for a GTIN that is not in
+        // OUR account's catalog — visibility is per customer and changes over
+        // time. That is a lookup result, not a failure, so it is tagged instead
+        // of thrown as a generic 4xx the worker would retry five times.
+        if (res.status === 400)
+            throw Object.assign(new Error(`GS1 400 not in our GS1 account: ${res.statusText}`), { notFound: true })
         if (res.status === 429) throw Object.assign(new Error('GS1 429 rate limited'), { rateLimited: true })
         if (res.status >= 500) throw Object.assign(new Error(`GS1 ${res.status} server error`), { transient: true })
         if (!res.ok) throw new Error(`GS1 HTTP ${res.status}: ${res.statusText}`)

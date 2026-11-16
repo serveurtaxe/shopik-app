@@ -7,8 +7,10 @@ import { initBulkFlusher } from '#server/services/gs1/bulk.js'
 // pre-alternates mains; single-still products are still skipped). imageLimit caps
 // raw docs taken per call (0 = all) — repeat until queued=0 to stay inside
 // Cloud Run request timeouts on large backfills. barcode scopes both phases to
-// one product (deployed single-product probes; GS1 is IP-whitelisted so local
-// probes are impossible).
+// one product (a single-product probe: GS1 answers for our account from anywhere
+// the credentials work, so this also runs from a dev machine). onlyInStock:false
+// is what a catalog backfill needs — those rows have a Comax row and no in-stock
+// Product, so the stock gate would skip every one of them.
 export default async function gs1Enrich(payload, { DL, external }) {
     initBulkFlusher(DL)
     const onlyInStock = payload?.onlyInStock ?? true

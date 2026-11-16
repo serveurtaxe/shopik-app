@@ -95,6 +95,11 @@ const comaxProductSchema = {
     syncedAt: Date,
     lastImportedAt: Date,
     buyingPriceImportedAt: Date,
+    // Set only by the catalog backfill (api/comax_product/backfill_catalog):
+    // this row came from a per-item Comax lookup of the full catalog, not from a
+    // store feed. It is never overwritten by an import, which keeps the two
+    // sources distinguishable when a row looks wrong.
+    backfilledAt: Date,
     // Latest sale of this barcode in any store, from the sales-window feed.
     // Informational: the per-store decision is storeIds (see salesWindow.js).
     lastSaleDate: Date,

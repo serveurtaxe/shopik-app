@@ -1,5 +1,7 @@
 // Maps a GS1 product payload (GET /external/product/{code}.json) to Shopik Product fields.
-// GS1 wins for content — Comax remains the gate for existence (checked by the caller).
+// GS1 wins for content. Whether a barcode belongs in the catalog is decided by
+// the caller, which gates on the Product the Comax import created — this mapper
+// never decides who gets written.
 
 import { pruneEmpty } from './prune.js'
 
