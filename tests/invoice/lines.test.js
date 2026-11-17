@@ -162,13 +162,16 @@ describe('buildInvoiceLines', () => {
             finalShipping: 20
         }
         const lines = buildInvoiceLines({ order })
+        // Mixed basket: one coupon row per VAT class.
+        assert.deepEqual(lines.discountLines.map(l => l.gross), [-10, -5])
+        assert.deepEqual(lines.discountLines.map(l => l.vat), [true, false])
         assert.equal(invoiceTotal(lines), 155)
         assert.equal(lines.coupon, 15)
         assert.equal(lines.shippingLine.gross, 20)
         assert.equal(assertTotalsMatch({ ...lines, captured: 155 }), 155)
     })
 
-    it('shows the pre-coupon unit price with an explicit per-line discount', () => {
+    it('shows the coupon as a negative row instead of touching item prices', () => {
         const order = {
             cart: [
                 { id: 'a', name: 'Coffee', finalAmount: 2, totalSum: 25, vat: true },
@@ -180,16 +183,16 @@ describe('buildInvoiceLines', () => {
         const lines = buildInvoiceLines({ order })
         // Shelf prices, exactly as the customer saw them.
         assert.deepEqual(lines.items.map(i => i.price), [12.5, 5])
-        // A mixed basket cannot use a document discount: it is per line.
-        assert.equal(lines.documentDiscount, 0)
-        assert.deepEqual(lines.items.map(i => i.discount), [3, 1.2])
-        // Line totals (price * qty - discount) still sum to the charged amount.
+        assert.deepEqual(lines.items.map(i => i.discount), [0, 0])
+        // Mixed basket: the coupon splits into a taxable and an exempt row.
+        assert.deepEqual(lines.discountLines.map(l => l.gross), [-3, -1.2])
+        assert.deepEqual(lines.discountLines.map(l => l.name), ['קופון first40 (חייב)', 'קופון first40 (פטור)'])
         assert.equal(invoiceTotal(lines), 30.8)
         assert.equal(lines.roundingLine, null)
         assert.equal(assertTotalsMatch({ ...lines, captured: 30.8 }), 30.8)
     })
 
-    it('uses one document-level discount when every line is taxable', () => {
+    it('uses one coupon row when every line is taxable', () => {
         const order = {
             cart: [
                 { id: 'a', name: 'Coffee', finalAmount: 2, totalSum: 25, vat: true },
@@ -201,12 +204,14 @@ describe('buildInvoiceLines', () => {
         const lines = buildInvoiceLines({ order })
         assert.deepEqual(lines.items.map(i => i.price), [12.5, 5])
         assert.deepEqual(lines.items.map(i => i.discount), [0, 0])
-        assert.equal(lines.documentDiscount, 4.2)
+        assert.equal(lines.discountLines.length, 1)
+        assert.equal(lines.discountLines[0].name, 'קופון first40')
+        assert.equal(lines.discountLines[0].gross, -4.2)
         assert.equal(invoiceTotal(lines), 30.8)
         assert.equal(assertTotalsMatch({ ...lines, captured: 30.8 }), 30.8)
     })
 
-    it('keeps the discount capped so a fully-discounted line never goes negative', () => {
+    it('turns a fully-discounted basket into a zero-total coupon row', () => {
         const order = {
             cart: [{ id: 'a', name: 'Free', finalAmount: 1, totalSum: 10, vat: false }],
             coupons: [{ discount: 10 }],
@@ -214,8 +219,8 @@ describe('buildInvoiceLines', () => {
         }
         const lines = buildInvoiceLines({ order })
         assert.equal(lines.items[0].price, 10)
-        assert.equal(lines.items[0].discount, 10)
-        assert.equal(lines.documentDiscount, 0)
+        assert.equal(lines.discountLines[0].gross, -10)
+        assert.equal(lines.discountLines[0].vat, false)
         assert.equal(invoiceTotal(lines), 0)
     })
 

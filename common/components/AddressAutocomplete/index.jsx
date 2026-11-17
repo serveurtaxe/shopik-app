@@ -65,7 +65,7 @@ export default function AddressAutocomplete({ value = {}, onChange, required, ci
                 value={city}
                 required={required}
                 fetchOptions={fetchCities}
-                minChars={1}
+                minChars={2}
                 onSelect={(opt) => {
                     const nextCity = opt.city || opt.label
                     setCity(nextCity)
@@ -92,7 +92,7 @@ export default function AddressAutocomplete({ value = {}, onChange, required, ci
                 value={street}
                 required={required}
                 fetchOptions={fetchStreets}
-                minChars={1}
+                minChars={2}
                 disabled={!city}
                 onSelect={(opt) => {
                     const nextStreet = opt.street || opt.label
