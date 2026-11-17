@@ -54,10 +54,13 @@ export async function runSequential({ client, fixtures, observer, routes, calls,
             results.push({ route: route.route, skipped: 'missing fixture', config: route })
             continue
         }
-        log(`(${index + 1}/${routes.length}) ${route.route} — ${calls} calls × ${concurrency}`)
+        // preventMultiple routes 429 their own concurrent burst (request lock),
+        // which pollutes both the latency stats and the probe window. Serial.
+        const burstConcurrency = route.preventMultiple ? 1 : concurrency
+        log(`(${index + 1}/${routes.length}) ${route.route} — ${calls} calls × ${burstConcurrency}${route.preventMultiple ? ' (request-locked)' : ''}`)
         observer.openWindow(route.route)
         const until = { done: false }
-        const bursting = burst(client, route.route, payload, { calls, concurrency, domainId })
+        const bursting = burst(client, route.route, payload, { calls, concurrency: burstConcurrency, domainId })
             .finally(() => { until.done = true })
         const probe = probeLoop(client, fixtures, { domainId, probeEvery, until })
         const [callsResult, probeResult] = await Promise.all([bursting, probe])

@@ -62,11 +62,41 @@ export async function loadFixtures(uri, { idNum = null } = {}) {
     if (idNum)
         admin = await col('admins').findOne({ $or: [{ idNum }, { idNum: String(idNum) }] }, { projection: { _id: 0, id: 1, phone: 1, currentStoreId: 1 } })
 
+    // Real ids for the required:['id'] routes (400 without one) and the
+    // readById routes (an undefined id silently reads an arbitrary first doc).
+    const [apiKey, cashRegister, comaxProduct, comaxSale, coupon, displayBlock, carouselBlock,
+        orderWindowTemplate, setting, sale, supplyArea] = await Promise.all([
+        col('api_keys').findOne({}, { projection: { _id: 0, id: 1 } }),
+        col('cash_registers').findOne({}, { projection: { _id: 0, id: 1 } }),
+        col('comax_products').findOne({}, { projection: { _id: 0, id: 1 } }),
+        col('comax_sales').findOne({}, { projection: { _id: 0, id: 1 } }),
+        col('coupons').findOne({}, { projection: { _id: 0, id: 1 } }),
+        col('display_blocks').findOne({}, { projection: { _id: 0, id: 1 } }),
+        col('display_blocks').findOne({ kind: 'product_carousel', active: true }, { projection: { _id: 0, id: 1 } }),
+        col('order_window_templates').findOne({}, { projection: { _id: 0, id: 1 } }),
+        col('settings').findOne({}, { projection: { _id: 0, id: 1 } }),
+        col('sales').findOne({}, { projection: { _id: 0, id: 1 } }),
+        col('supply_areas').findOne({}, { projection: { _id: 0, id: 1 } })
+    ])
+
     return {
         conn,
         db,
         otpCollection: col('otps'),
         domainId: domain?.id || null,
+        adminId: admin?.id || null,
+        apiKeyId: apiKey?.id || null,
+        cashRegisterId: cashRegister?.id || null,
+        comaxProductId: comaxProduct?.id || null,
+        comaxSaleId: comaxSale?.id || null,
+        couponId: coupon?.id || null,
+        displayBlockId: displayBlock?.id || null,
+        carouselBlockId: carouselBlock?.id || null,
+        orderWindowTemplateId: orderWindowTemplate?.id || null,
+        settingId: setting?.id || null,
+        saleId: sale?.id || null,
+        supplyAreaId: supplyArea?.id || null,
+        productPagePath: categories[0]?.path ? `/products/${categories[0].path}` : '/',
         storeIds: stores.map(s => s.id).filter(Boolean),
         currentStoreId: admin?.currentStoreId || stores[0]?.id || null,
         coordinates,
