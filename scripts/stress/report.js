@@ -20,11 +20,11 @@ function verdict(row) {
     return flags.join(' + ') || 'ok'
 }
 
-function summarize(results, baseline) {
+function summarize(results, baseline, mode = 'sequential') {
     const rows = []
     for (const entry of results) {
         if (entry.skipped) {
-            rows.push({ route: entry.route, verdict: `skipped (${entry.skipped})` })
+            rows.push({ route: entry.route, mode, skipped: true, verdict: `skipped (${entry.skipped})` })
             continue
         }
         if (entry.route === '__chaos_total__') continue
@@ -36,12 +36,13 @@ function summarize(results, baseline) {
         const maxDocs = Math.max(0, ...(profile?.worst || []).map(w => w.maxDocsExamined || 0))
         const row = {
             route: entry.route,
+            mode,
             calls: calls.count ?? 0,
             errors: entry.calls?.kinds?.['server-error'] || 0,
             badPayload: entry.calls?.kinds?.['bad-payload'] || 0,
-            p50: fmtMs(calls.p50),
-            p95: fmtMs(calls.p95),
-            probeP95: fmtMs(probeP95),
+            p50Ms: calls.p50 ?? null,
+            p95Ms: calls.p95 ?? null,
+            probeP95Ms: probeP95 ?? null,
             impact,
             collscans: collscans || 0,
             maxDocsExamined: maxDocs || null,
@@ -80,9 +81,9 @@ export function printReport({ opts, capabilities, baseline, sequential, chaos, d
             console.log(
                 pad(row.route, 34)
                 + pad(row.calls, 6, true)
-                + pad(row.p50, 9, true)
-                + pad(row.p95, 9, true)
-                + pad(row.probeP95, 11, true)
+                + pad(fmtMs(row.p50Ms), 9, true)
+                + pad(fmtMs(row.p95Ms), 9, true)
+                + pad(fmtMs(row.probeP95Ms), 11, true)
                 + pad(row.impact == null ? '—' : `${row.impact}×`, 7, true)
                 + pad(row.collscans || '—', 9, true)
                 + pad(row.wtMB ?? '—', 8, true)
@@ -103,7 +104,7 @@ export function printReport({ opts, capabilities, baseline, sequential, chaos, d
         console.log(`\n── chaos (aggregate; attribution not possible — use sequential for that) ${'─'.repeat(8)}`)
         const rows = summarize(chaos.filter(r => r.route !== '__chaos_total__'), baseline)
         for (const row of rows)
-            console.log(pad(row.route, 34) + pad(row.calls, 6, true) + pad(row.p50, 9, true) + pad(row.p95, 9, true) + `  ${row.verdict}`)
+            console.log(pad(row.route, 34) + pad(row.calls, 6, true) + pad(fmtMs(row.p50Ms), 9, true) + pad(fmtMs(row.p95Ms), 9, true) + `  ${row.verdict}`)
         const total = chaos.find(r => r.route === '__chaos_total__')
         if (total?.chaosDb) {
             const db = total.chaosDb
@@ -119,6 +120,8 @@ export function saveReport({ opts, startedAt, capabilities, baseline, sequential
     fs.mkdirSync(opts.reportDir, { recursive: true })
     const stamp = startedAt.toISOString().replace(/[:.]/g, '-').slice(0, 19)
     const file = path.join(opts.reportDir, `${stamp}-${opts.target}-${opts.mode}.json`)
+    const sequentialRows = sequential && summarize(sequential, baseline, 'sequential')
+    const chaosRows = chaos && summarize(chaos.filter(r => r.route !== '__chaos_total__'), baseline, 'chaos')
     const data = {
         startedAt: startedAt.toISOString(),
         durationMs,
@@ -126,14 +129,27 @@ export function saveReport({ opts, startedAt, capabilities, baseline, sequential
         capabilities,
         options: { mode: opts.mode, calls: opts.calls, concurrency: opts.concurrency, chaosDuration: opts.chaosDuration },
         baseline,
-        sequential: sequential && summarize(sequential, baseline),
+        sequential: sequentialRows,
         sequentialRaw: sequential && sequential.map(entry => ({ ...entry, db: entry.db })),
         chaos: chaos && {
-            rows: summarize(chaos.filter(r => r.route !== '__chaos_total__'), baseline),
+            rows: chaosRows,
             db: chaos.find(r => r.route === '__chaos_total__')?.chaosDb
         }
     }
     fs.writeFileSync(file, JSON.stringify(data, null, 2))
     console.log(`\nreport saved: ${file}`)
+
+    // Spreadsheet-friendly ranking: raw numeric ms columns, sorted by impact.
+    const columns = ['route', 'mode', 'skipped', 'calls', 'errors', 'badPayload',
+        'p50Ms', 'p95Ms', 'probeP95Ms', 'impact', 'collscans', 'maxDocsExamined',
+        'wtMB', 'dirtyMB', 'evictions', 'verdict']
+    const escape = value => value == null ? '' : `"${String(value).replace(/"/g, '""')}"`
+    const rows = [...(sequentialRows || []), ...(chaosRows || [])]
+    const csv = ['\uFEFF' + columns.join(',')]
+        .concat(rows.map(row => columns.map(col => escape(row[col])).join(',')))
+        .join('\r\n')
+    const csvFile = file.replace(/\.json$/, '.csv')
+    fs.writeFileSync(csvFile, csv)
+    console.log(`csv saved:  ${csvFile}`)
     return file
 }
