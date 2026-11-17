@@ -87,12 +87,12 @@ export function guardAgainstProduction(uri) {
         )
     if (process.env.PRODUCTION)
         throw new Error('Refusing to run with PRODUCTION set in the stress runner\u2019s own environment.')
-    try {
-        const host = new URL(uri).host
-        console.log(`[stress] target db host: ${host}`)
-    } catch {
-        throw new Error(`Invalid mongo URI: ${uri}`)
-    }
+    // WHATWG new URL() chokes on multi-host mongodb:// replica-set lists;
+    // parse with a regex and never echo the URI (it carries credentials).
+    const match = /^mongodb(\+srv)?:\/\/(?:[^/?@]*@)?([^/?]+)/.exec(uri)
+    if (!match)
+        throw new Error('Invalid mongo URI (expected mongodb:// or mongodb+srv://)')
+    console.log(`[stress] target db host: ${match[2].split(',')[0]}`)
 }
 
 export function usage() {

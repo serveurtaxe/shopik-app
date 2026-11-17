@@ -10,6 +10,7 @@ import mongoose from 'mongoose'
 
 const POLL_MS = 750
 const SLOW_OP_SECS = 0.15
+const SLOW_OP_MS = 100 // setProfilingLevel slowms is in milliseconds
 
 export class MongoObserver {
     constructor(uri, { profileEnabled = false } = {}) {
@@ -30,7 +31,7 @@ export class MongoObserver {
             bufferCommands: false
         }).asPromise()
         this.db = this.conn.db
-        this.admin = this.db.admin
+        this.admin = this.db.admin() // must be CALLED — the method itself has no .command
 
         try {
             await this.admin.command({ currentOp: 1, active: true, maxTimeMS: 5000 })
@@ -46,9 +47,13 @@ export class MongoObserver {
         }
         if (this.profileEnabled) {
             try {
-                await this.db.command({ setProfilingLevel: 1, slowms: SLOW_OP_SECS })
-                await this.db.collection('system.profile').createIndex({ ts: 1 })
-                this.hasProfiler = true
+                await this.db.command({ setProfilingLevel: 1, slowms: SLOW_OP_MS })
+                this.hasProfiler = true // even if the index below fails, profiling is ON and must be reset
+                try {
+                    await this.db.collection('system.profile').createIndex({ ts: 1 })
+                } catch (err) {
+                    this.note('profiler ts index not created (best-effort)', err)
+                }
             } catch (err) {
                 this.note('profiler not enabled', err)
             }
@@ -59,7 +64,11 @@ export class MongoObserver {
 
     capabilities() {
         const caps = { currentOp: this.hasCurrentOp, serverStatus: this.hasServerStatus, profiler: this.hasProfiler }
-        caps.mode = caps.profiler ? 'rich' : (caps.currentOp ? 'ops-only' : 'latency-only')
+        caps.mode = caps.profiler ? 'rich'
+            : caps.currentOp && caps.serverStatus ? 'ops+wiredtiger'
+                : caps.serverStatus ? 'wiredtiger+latency'
+                    : caps.currentOp ? 'ops-only'
+                        : 'latency-only'
         return caps
     }
 
@@ -145,39 +154,43 @@ export class MongoObserver {
             dirtyMB: window.latestDirty != null ? +(window.latestDirty / 1048576).toFixed(1) : null
         }
         if (this.hasProfiler) {
-            // system.profile ts is server-time: pad both ends against clock skew.
-            const pad = 1000
-            const rows = await this.db.collection('system.profile').aggregate([
-                { $match: { ts: { $gte: new Date(window.startedAt.getTime() - pad), $lte: new Date(Date.now() + pad) } } },
-                {
-                    $group: {
-                        _id: '$ns',
-                        ops: { $sum: 1 },
-                        millis: { $sum: '$millis' },
-                        maxDocs: { $max: '$docsExamined' },
-                        collscans: {
-                            $sum: {
-                                $cond: [{
-                                    $regexMatch: { input: { $ifNull: ['$planSummary', ''] }, regex: 'COLLSCAN' }
-                                }, 1, 0]
+            try {
+                // system.profile ts is server-time: pad both ends against clock skew.
+                const pad = 1000
+                const rows = await this.db.collection('system.profile').aggregate([
+                    { $match: { ts: { $gte: new Date(window.startedAt.getTime() - pad), $lte: new Date(Date.now() + pad) } } },
+                    {
+                        $group: {
+                            _id: '$ns',
+                            ops: { $sum: 1 },
+                            millis: { $sum: '$millis' },
+                            maxDocs: { $max: '$docsExamined' },
+                            collscans: {
+                                $sum: {
+                                    $cond: [{
+                                        $regexMatch: { input: { $ifNull: ['$planSummary', ''] }, regex: 'COLLSCAN' }
+                                    }, 1, 0]
+                                }
                             }
                         }
-                    }
-                },
-                { $sort: { millis: -1 } },
-                { $limit: 10 }
-            ]).toArray()
-            stats.profile = {
-                totalOps: rows.reduce((sum, row) => sum + row.ops, 0),
-                totalCollscans: rows.reduce((sum, row) => sum + row.collscans, 0),
-                totalMillis: rows.reduce((sum, row) => sum + row.millis, 0),
-                worst: rows.map(row => ({
-                    ns: row._id,
-                    ops: row.ops,
-                    collscans: row.collscans,
-                    millis: row.millis,
-                    maxDocsExamined: row.maxDocs
-                }))
+                    },
+                    { $sort: { millis: -1 } },
+                    { $limit: 10 }
+                ]).toArray()
+                stats.profile = {
+                    totalOps: rows.reduce((sum, row) => sum + row.ops, 0),
+                    totalCollscans: rows.reduce((sum, row) => sum + row.collscans, 0),
+                    totalMillis: rows.reduce((sum, row) => sum + row.millis, 0),
+                    worst: rows.map(row => ({
+                        ns: row._id,
+                        ops: row.ops,
+                        collscans: row.collscans,
+                        millis: row.millis,
+                        maxDocsExamined: row.maxDocs
+                    }))
+                }
+            } catch (err) {
+                this.note('system.profile read failed (degraded to window counters)', err)
             }
         }
         return stats

@@ -7,7 +7,7 @@
 export function payloadFor(route, fixtures) {
     const fx = fixtures
     switch (route) {
-        case 'product/search': return fx.searchTerm ? { search: fx.searchTerm } : {}
+        case 'product/search': return { value: fx.searchTerm }
         case 'product/get':
             return fx.productBarcodes.length ? { barcode: fx.productBarcodes[0] } : {}
         case 'product/count': return {}
@@ -21,7 +21,10 @@ export function payloadFor(route, fixtures) {
         case 'order/supplier_report': return { month: fx.month }
         case 'order/ops/list': return { limit: 25 }
         case 'order/ops/count': return {}
-        case 'order/window/options': return fx.currentStoreId ? { storeId: fx.currentStoreId } : {}
+        // Storefront routes that read _user (the logged-in customer) — an admin
+        // session never populates _user and the routes 500, so skip them.
+        case 'order/cart/get': return null
+        case 'order/window/options': return null
         case 'order_window/read': return fx.currentStoreId ? { storeId: fx.currentStoreId } : {}
         case 'store/nearby': return { coordinates: fx.coordinates }
         case 'shipment/id': return fx.shipmentId ? { id: fx.shipmentId } : null

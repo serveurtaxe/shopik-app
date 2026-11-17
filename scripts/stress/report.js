@@ -45,6 +45,8 @@ function summarize(results, baseline) {
             impact,
             collscans: collscans || 0,
             maxDocsExamined: maxDocs || null,
+            wtMB: entry.db?.cacheMB ?? null,
+            dirtyMB: entry.db?.dirtyMB ?? null,
             evictions: entry.db?.evictions || null,
             verdict: verdict({ collscans, impact, heavyScan: maxDocs >= 50_000 })
         }
@@ -71,7 +73,8 @@ export function printReport({ opts, capabilities, baseline, sequential, chaos, d
         const rows = summarize(sequential, baseline)
         console.log(`\n── sequential (probe inflation ranks the DB drag) ${'─'.repeat(8)}`)
         console.log(pad('route', 34) + pad('calls', 6, true) + pad('p50', 9, true) + pad('p95', 9, true)
-            + pad('probe-p95', 11, true) + pad('impact', 7, true) + pad('collscan', 9, true) + '  verdict')
+            + pad('probe-p95', 11, true) + pad('impact', 7, true) + pad('collscan', 9, true)
+            + pad('wtMB', 8, true) + pad('dirty', 7, true) + '  verdict')
         for (const row of rows) {
             if (row.skipped) { console.log(pad(row.route, 34) + `  ${row.verdict}`); continue }
             console.log(
@@ -82,6 +85,8 @@ export function printReport({ opts, capabilities, baseline, sequential, chaos, d
                 + pad(row.probeP95, 11, true)
                 + pad(row.impact == null ? '—' : `${row.impact}×`, 7, true)
                 + pad(row.collscans || '—', 9, true)
+                + pad(row.wtMB ?? '—', 8, true)
+                + pad(row.dirtyMB ?? '—', 7, true)
                 + `  ${row.verdict}`
             )
         }
