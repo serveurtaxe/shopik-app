@@ -14,6 +14,7 @@
     "build:server": "vite build --ssr entry-server.jsx --outDir ../build/server --config client/vite.config.js",
     "build": "npm run build:client && npm run build:admin && npm run build:server",
     "test": "node --test \"tests/**/*.test.js\"",
+    "stress": "node scripts/stress/run.js",
     "release": "node scripts/release.js"
   },
   "dependencies": {
