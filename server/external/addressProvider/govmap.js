@@ -10,7 +10,7 @@ export async function searchGovmap({ DL, q, city, street, type = 'street', limit
     try {
         if (type === 'city') {
             // distinct cities with prefix
-            const match = query ? { city: new RegExp(`^${escapeRegex(query)}`, 'i') } : {}
+            const match = query ? { city: new RegExp(`^${escapeRegex(query)}`) } : {}
             const docs = await DL.GovAddress.Model.aggregate([
                 { $match: match },
                 { $group: { _id: '$city', city: { $first: '$city' } } },
@@ -27,7 +27,7 @@ export async function searchGovmap({ DL, q, city, street, type = 'street', limit
         if (type === 'street') {
             if (!city) return []
             const filter = { city }
-            if (query) filter.street = new RegExp(escapeRegex(query), 'i')
+            if (query) filter.street = new RegExp(escapeRegex(query))
             const docs = await DL.GovAddress.Model.aggregate([
                 { $match: filter },
                 { $group: { _id: { city: '$city', street: '$street' }, city: { $first: '$city' }, street: { $first: '$street' } } },

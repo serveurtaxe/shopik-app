@@ -5,12 +5,14 @@ const govAddressSchema = {
         type: String,
         required: true,
         trim: true,
-        filter: true
+        filter: true,
+        lowercase: true
     },
     street: {
         type: String,
         trim: true,
-        filter: true
+        filter: true,
+        lowercase: true
     }
 }
 
