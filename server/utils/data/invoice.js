@@ -328,8 +328,9 @@ export async function issueInvoice({
         idTransaction: idempotencyKey
     })
 
-    const itemSnapshot = items.map(({ productId, barcode, name, quantity, gross, price, vat }) => ({
-        productId, barcode, name, quantity, gross, price: price != null ? price : (quantity > 0 ? round2(gross / quantity) : gross), vat
+    const itemSnapshot = items.map(({ productId, barcode, name, quantity, gross, price, discount, vat }) => ({
+        productId, barcode, name, quantity, gross, discount: round2(Number(discount) || 0),
+        price: price != null ? price : (quantity > 0 ? round2(gross / quantity) : gross), vat
     }))
     const { record, created } = await findOrCreateInvoice({
         DL,

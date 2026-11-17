@@ -225,7 +225,10 @@ describe('issueInvoice', () => {
         assert.equal(payload.show_items_including_vat, 1)
         assert.deepEqual(payload.item.map(i => i.vat_type), ['NON', 'INC', 'INC'])
         assert.deepEqual(payload.item.map(i => i.amount), ['2', '3', '1'])
-        assert.deepEqual(payload.item.map(i => i.price), ['22.50', '30.00', '20.00'])
+        // Unit prices are the pre-coupon shelf prices.
+        assert.deepEqual(payload.item.map(i => i.price), ['25.00', '33.33', '20.00'])
+        // The coupon is an explicit line discount (EZcount `discount_price`).
+        assert.deepEqual(payload.item.map(i => i.discount_price), ['5.00', '9.99', undefined])
         assert.equal(payload.item.length, 3)
 
         // Local record + order mirror.
@@ -448,6 +451,8 @@ describe('retrying an existing record', () => {
         assert.equal(stored.request.show_items_including_vat, 1)
         assert.deepEqual(stored.request.item.map(i => i.vat_type), ['NON', 'INC', 'INC'])
         assert.equal(stored.items.length, 3)
+        // The snapshot records the explicit discount sent to the provider.
+        assert.deepEqual(stored.items.map(i => i.discount), [5, 9.99, 0])
         assert.equal(stored.amount, 155)
     })
 
