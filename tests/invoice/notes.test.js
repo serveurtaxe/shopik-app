@@ -29,7 +29,7 @@ describe('buildInvoiceNotes', () => {
         assert.equal(notes, [
             'הוחלף: Potatoes 2 ק"ג ← Prepared salad 2 יח\'',
             'לא סופק: Tomatoes 1 ק"ג',
-            'קופון SAVE10: -15.00'
+            'קופון SAVE10: הנחה 15.00 ₪'
         ].join('\n'))
     })
 
@@ -96,7 +96,7 @@ describe('buildInvoiceNotes', () => {
         })
         assert.equal(notes, [
             'הוחלף: Potatoes 2 ק"ג ← Prepared salad 2 יח\'',
-            'קופון SAVE10: -15.00'
+            'קופון SAVE10: הנחה 15.00 ₪'
         ].join('\n'))
     })
 

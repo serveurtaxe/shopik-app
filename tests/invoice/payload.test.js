@@ -35,6 +35,20 @@ describe('buildInvoiceItems', () => {
         assert.equal(items[1].details, 'Milk 3%')
     })
 
+    it('sends an explicit per-line discount without changing the shelf price', () => {
+        const items = buildInvoiceItems([
+            { name: 'Coffee', gross: 25, quantity: 2, price: 12.5, discount: 3, vat: true }
+        ])
+        assert.equal(items[0].price, '12.50')
+        assert.equal(items[0].discount_price, '3.00')
+        assert.equal(items[0].amount, '2')
+    })
+
+    it('omits discount_price when there is no discount', () => {
+        const items = buildInvoiceItems(lines)
+        assert.equal(items.some(i => 'discount_price' in i), false)
+    })
+
     it('drops zero-gross lines', () => {
         assert.equal(buildInvoiceItems([{ name: 'Zero', gross: 0 }]).length, 0)
     })
@@ -77,8 +91,29 @@ describe('buildDocPayload', () => {
     })
 
     it('sends the captured total as price_total on a 320 (mandatory field)', () => {
-        const payload = buildDocPayload({ order, lines, customer })
-        assert.equal(payload.price_total, 155)
+        const payload = buildDocPayload({
+            order, customer,
+            lines: [
+                { name: 'Coffee', gross: 25, quantity: 2, price: 12.5, discount: 3, vat: true },
+                { name: 'Shipping', gross: 20, quantity: 1, price: 20, vat: true }
+            ]
+        })
+        // 2 * 12.50 - 3.00 + 20.00
+        assert.equal(payload.price_total, 42)
+    })
+
+    it('applies a document-level discount once on a 320 (single coupon line)', () => {
+        const payload = buildDocPayload({ order, lines, customer, documentDiscount: 15 })
+        assert.equal(payload.discount, '15.00')
+        // 45 + 90 + 20 - 15
+        assert.equal(payload.price_total, 140)
+        // The item rows keep their shelf prices with no per-line discount.
+        assert.equal(payload.item.some(i => 'discount_price' in i), false)
+    })
+
+    it('never carries a document discount on a credit note', () => {
+        const payload = buildDocPayload({ order, lines, customer, docType: DOC_TYPE.CREDIT, documentDiscount: 15 })
+        assert.equal('discount' in payload, false)
     })
 
     it('does not send price_total on a credit note', () => {

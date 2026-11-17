@@ -225,7 +225,10 @@ describe('issueInvoice', () => {
         assert.equal(payload.show_items_including_vat, 1)
         assert.deepEqual(payload.item.map(i => i.vat_type), ['NON', 'INC', 'INC'])
         assert.deepEqual(payload.item.map(i => i.amount), ['2', '3', '1'])
-        assert.deepEqual(payload.item.map(i => i.price), ['22.50', '30.00', '20.00'])
+        // Unit prices are the pre-coupon shelf prices.
+        assert.deepEqual(payload.item.map(i => i.price), ['25.00', '33.33', '20.00'])
+        // The coupon is an explicit line discount (EZcount `discount_price`).
+        assert.deepEqual(payload.item.map(i => i.discount_price), ['5.00', '9.99', undefined])
         assert.equal(payload.item.length, 3)
 
         // Local record + order mirror.
@@ -237,6 +240,26 @@ describe('issueInvoice', () => {
         assert.equal(DL.Order.docs[0].invoice.status, 'issued')
         assert.equal(DL.Order.docs[0].vatBreakdown.total, 155)
         assert.ok(events.some(e => e.eventType === 'invoice_issued'))
+    })
+
+    it('uses one document-level coupon line for an all-taxable basket', async () => {
+        const DL = makeFakeDL({ settings: ENABLED_SETTING })
+        const external = fakeExternal(OK_RESPONSE)
+        const order = orderFixture()
+        order.cart = [
+            { id: '1', barcode: 'T1', name: 'Tomatoes', finalAmount: 2, totalSum: 50, vat: true },
+            { id: '2', barcode: 'M1', name: 'Milk', finalAmount: 3, totalSum: 100, vat: true }
+        ]
+
+        const record = await issueInvoice({ DL, external, utils, order, captured: 155 })
+
+        assert.equal(record.status, 'issued')
+        const payload = external.calls[0].payload
+        // One coupon line instead of a discount on every item.
+        assert.equal(payload.discount, '15.00')
+        assert.equal(payload.item.some(i => 'discount_price' in i), false)
+        assert.deepEqual(payload.item.map(i => i.price), ['25.00', '33.33', '20.00', '0.01'])
+        assert.equal(payload.price_total, 155)
     })
 
     it('does not create a second document for the same order', async () => {
@@ -448,6 +471,8 @@ describe('retrying an existing record', () => {
         assert.equal(stored.request.show_items_including_vat, 1)
         assert.deepEqual(stored.request.item.map(i => i.vat_type), ['NON', 'INC', 'INC'])
         assert.equal(stored.items.length, 3)
+        // The snapshot records the explicit discount sent to the provider.
+        assert.deepEqual(stored.items.map(i => i.discount), [5, 9.99, 0])
         assert.equal(stored.amount, 155)
     })
 

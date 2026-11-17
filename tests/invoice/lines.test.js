@@ -55,10 +55,11 @@ describe('collectInvoiceItems', () => {
 })
 
 describe('allocateCoupon', () => {
-    it('splits the discount proportionally across mixed lines', () => {
+    it('splits the discount proportionally while keeping the original gross', () => {
         const items = allocateCoupon({ items: collectInvoiceItems(mixedCart()), couponTotal: 15 })
-        assert.deepEqual(items.map(i => i.gross), [45, 90])
+        assert.deepEqual(items.map(i => i.gross), [50, 100])
         assert.deepEqual(items.map(i => i.discount), [5, 10])
+        assert.deepEqual(items.map(i => i.netGross), [45, 90])
     })
 
     it('gives the rounding remainder to the largest line', () => {
@@ -85,8 +86,9 @@ describe('allocateCoupon', () => {
             items: [{ id: 'a', name: 'A', gross: 10, vat: true }],
             couponTotal: 99
         })
-        assert.equal(items[0].gross, 0)
+        assert.equal(items[0].gross, 10)
         assert.equal(items[0].discount, 10)
+        assert.equal(items[0].netGross, 0)
     })
 })
 
@@ -164,6 +166,57 @@ describe('buildInvoiceLines', () => {
         assert.equal(lines.coupon, 15)
         assert.equal(lines.shippingLine.gross, 20)
         assert.equal(assertTotalsMatch({ ...lines, captured: 155 }), 155)
+    })
+
+    it('shows the pre-coupon unit price with an explicit per-line discount', () => {
+        const order = {
+            cart: [
+                { id: 'a', name: 'Coffee', finalAmount: 2, totalSum: 25, vat: true },
+                { id: 'b', name: 'Flour', finalAmount: 2, totalSum: 10, vat: false }
+            ],
+            coupons: [{ name: 'first40', discount: 4.2 }],
+            finalShipping: 0
+        }
+        const lines = buildInvoiceLines({ order })
+        // Shelf prices, exactly as the customer saw them.
+        assert.deepEqual(lines.items.map(i => i.price), [12.5, 5])
+        // A mixed basket cannot use a document discount: it is per line.
+        assert.equal(lines.documentDiscount, 0)
+        assert.deepEqual(lines.items.map(i => i.discount), [3, 1.2])
+        // Line totals (price * qty - discount) still sum to the charged amount.
+        assert.equal(invoiceTotal(lines), 30.8)
+        assert.equal(lines.roundingLine, null)
+        assert.equal(assertTotalsMatch({ ...lines, captured: 30.8 }), 30.8)
+    })
+
+    it('uses one document-level discount when every line is taxable', () => {
+        const order = {
+            cart: [
+                { id: 'a', name: 'Coffee', finalAmount: 2, totalSum: 25, vat: true },
+                { id: 'b', name: 'Flour', finalAmount: 2, totalSum: 10, vat: true }
+            ],
+            coupons: [{ name: 'first40', discount: 4.2 }],
+            finalShipping: 0
+        }
+        const lines = buildInvoiceLines({ order })
+        assert.deepEqual(lines.items.map(i => i.price), [12.5, 5])
+        assert.deepEqual(lines.items.map(i => i.discount), [0, 0])
+        assert.equal(lines.documentDiscount, 4.2)
+        assert.equal(invoiceTotal(lines), 30.8)
+        assert.equal(assertTotalsMatch({ ...lines, captured: 30.8 }), 30.8)
+    })
+
+    it('keeps the discount capped so a fully-discounted line never goes negative', () => {
+        const order = {
+            cart: [{ id: 'a', name: 'Free', finalAmount: 1, totalSum: 10, vat: false }],
+            coupons: [{ discount: 10 }],
+            finalShipping: 0
+        }
+        const lines = buildInvoiceLines({ order })
+        assert.equal(lines.items[0].price, 10)
+        assert.equal(lines.items[0].discount, 10)
+        assert.equal(lines.documentDiscount, 0)
+        assert.equal(invoiceTotal(lines), 0)
     })
 
     it('creates a rounding line when multi-pack promo creates agora drift', () => {

@@ -50,9 +50,10 @@ function couponEntries(coupons) {
  * The note printed on the invoice (`comment` in the EZcount payload).
  *
  * It describes what changed between the order and what was actually supplied:
- * replacements, items that were not supplied, and the coupon discount that was
- * already allocated across the line prices. Raw picker data (`missingReason`,
- * picker names) never reaches the document.
+ * replacements, items that were not supplied, and the coupon discount that is
+ * applied either as a single document discount or as an explicit discount on
+ * the line rows (never folded into the unit prices). Raw picker data
+ * (`missingReason`, picker names) never reaches the document.
  *
  * Capped at `maxLines` entries plus a pointer to the order; the EZcount comment
  * length limit is still unverified, so the total length is capped too.

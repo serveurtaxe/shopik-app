@@ -275,6 +275,7 @@ export async function issueInvoice({
             items: lines.items,
             shippingLine: lines.shippingLine,
             roundingLine: lines.roundingLine,
+            documentDiscount: lines.documentDiscount,
             captured: charged
         })
     } catch (e) {
@@ -325,11 +326,13 @@ export async function issueInvoice({
         settings: config,
         sendEmail: config.sendEmail,
         payment: [buildPaymentRow({ amount: charged, settings: config })],
-        idTransaction: idempotencyKey
+        idTransaction: idempotencyKey,
+        documentDiscount: lines.documentDiscount
     })
 
-    const itemSnapshot = items.map(({ productId, barcode, name, quantity, gross, price, vat }) => ({
-        productId, barcode, name, quantity, gross, price: price != null ? price : (quantity > 0 ? round2(gross / quantity) : gross), vat
+    const itemSnapshot = items.map(({ productId, barcode, name, quantity, gross, price, discount, vat }) => ({
+        productId, barcode, name, quantity, gross, discount: round2(Number(discount) || 0),
+        price: price != null ? price : (quantity > 0 ? round2(gross / quantity) : gross), vat
     }))
     const { record, created } = await findOrCreateInvoice({
         DL,

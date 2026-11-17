@@ -41,6 +41,8 @@ const invoiceSchema = {
         quantity: Number,
         gross: Number,
         price: Number,
+        // Explicit per-line coupon amount (EZcount `discount_price`).
+        discount: Number,
         vat: Boolean
     }],
     notes: String,
