@@ -65,7 +65,6 @@ const invoiceSchema = {
 const index = [
     { orderId: 1, kind: 1 },
     { docId: 1 },
-    { status: 1 },
     { status: 1, attempts: 1 }
 ]
 

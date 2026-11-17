@@ -1,6 +1,10 @@
+import { redisGet, redisSet } from '#server/utils/redisSafe.js'
+
 const STATUSES = new Set(['ambiguous', 'manual'])
 
 // GS1 name lives in the raw supplier payload, not on the light doc.
+// The page selects only the two leaves gs1Name reads, not the whole
+// Main_Fields blob (~4× lighter transfer on populated statuses).
 function gs1Name(doc) {
     const main = doc?.raw?.product_info?.Main_Fields || {}
     return [main.BrandName, main.Short_Description].filter(Boolean).join(' ').trim()
@@ -32,26 +36,35 @@ export default async function gs1Aliases(payload, { DL }) {
     const search = String(payload?.search || '').trim()
 
     const filter = { aliasStatus: status }
-    // barcode is filterable: the DL turns a string into a case-insensitive
-    // prefix regex, which is enough for "find this GTIN".
+    // barcode stays prefix-searchable (partial GTIN typing): GTINs are digits,
+    // so a case-insensitive prefix regex still bounds to the unique barcode
+    // index range. aliasStatus could not get the same treatment — see schema.
     if (search) filter.barcode = search
 
-    const [docs, total] = await Promise.all([
-        DL.Gs1Product.read(
-            filter,
-            {
-                _id: 0,
-                barcode: 1,
-                aliasStatus: 1,
-                aliasShort: 1,
-                aliasCandidates: 1,
-                aliasUpdatedAt: 1,
-                'raw.product_info.Main_Fields': 1
-            },
-            { limit, skip, sort: { barcode: 1 } }
-        ),
-        DL.Gs1Product.count(filter)
-    ])
+    // The badge count scans the status prefix of a 12k collection; alias
+    // states change in nightly batches and in gs1/alias (which drops these
+    // keys), so a short TTL answers it from Redis.
+    const countKey = `gs1:aliasCount:${status}`
+    let total = Number(await redisGet(DL.redis, countKey))
+    if (!Number.isFinite(total)) {
+        total = await DL.Gs1Product.count(filter)
+        redisSet(DL.redis, countKey, String(total), 'EX', 600)
+    }
+
+    const docs = await DL.Gs1Product.read(
+        filter,
+        {
+            _id: 0,
+            barcode: 1,
+            aliasStatus: 1,
+            aliasShort: 1,
+            aliasCandidates: 1,
+            aliasUpdatedAt: 1,
+            'raw.product_info.Main_Fields.BrandName': 1,
+            'raw.product_info.Main_Fields.Short_Description': 1
+        },
+        { limit, skip, sort: { barcode: 1 } }
+    )
 
     // Load every candidate in one query instead of one per row.
     const shorts = new Set()

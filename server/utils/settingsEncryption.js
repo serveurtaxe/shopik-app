@@ -1,9 +1,15 @@
 import crypto from 'node:crypto'
 
+// scrypt is deliberately expensive (~26ms and ~32MB per call). SECRET never
+// changes at runtime, so derive the key once per process — deriving it per
+// decrypted value made every setting/read block the event loop for every
+// encrypted setting it returned.
+let cachedKey = null
 function getKey() {
+    if (cachedKey) return cachedKey
     const SECRET = process.env.SECRET
     if (!SECRET) throw new Error('SECRET environment variable is missing')
-    return crypto.scryptSync(SECRET, 'settings-salt', 32)
+    return (cachedKey = crypto.scryptSync(SECRET, 'settings-salt', 32))
 }
 
 export function isEncrypted(str) {

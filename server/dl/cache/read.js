@@ -6,6 +6,10 @@ import get from '#common/functions/get.js'
 
 const SCAN_COUNT = 1000
 
+// Cap for exact-mode (readOne) hash scans: big hashes like gov_addresses
+// (150k docs) are not worth paging through for a single indexed findOne.
+const EXACT_MATCH_SCAN_MAX_DOCS = 20_000
+
 export default function (redis, Model) {
     function searchValue(doc, search) {
         if (!doc || typeof doc !== 'object') return false
@@ -79,7 +83,16 @@ export default function (redis, Model) {
         const { search, sort } = options
         const skip = Number(options.skip) || 0
         const limit = options.limit == null ? 30 : Number(options.limit)
-        const processedFilter = Model.processFilter(filter)
+
+        // exact mode (readOne): the caller pre-validated the raw filter
+        // (whitelisted keys, type-aligned primitive values), so equality must
+        // stay equality — processFilter's string→prefix-regex rewrite is list
+        // semantics, not findOne semantics. A full hash scan only pays for
+        // single-doc answers on small hashes; bigger ones answer "cannot
+        // answer" and the caller uses MongoDB.
+        if (options.exact && await redis.hlen(Model.cacheName) > EXACT_MATCH_SCAN_MAX_DOCS)
+            return null
+        const processedFilter = options.exact ? filter : Model.processFilter(filter)
         const shouldFilter = Object.keys(processedFilter).length > 0
         const searchTerm = search?.length ? search.toLowerCase() : null
         // Without a sort the order is already arbitrary (hash order), so stop

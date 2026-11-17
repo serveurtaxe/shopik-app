@@ -587,7 +587,6 @@ const index = [
     { storeId: -1 },
     { userId: -1 },
     { 'window.date': 1 },
-    { status: 1 },
     { deliveryMethod: 1 },
     // The ops queue always asks for one store over a window.date range — the
     // manage views scan more stores over a wider range, so a single-field index

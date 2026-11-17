@@ -225,7 +225,6 @@ const productSchema = {
     },
     status: {
         type: String,
-        index: true,
         enum: Object.values(constants.STATUS),
         default: constants.STATUS.ACTIVE,
         filter: true
@@ -303,10 +302,13 @@ export const meta = {
     defaultSort,
     searchBoost,
     index: [
-        { storeIds: 1 },
+        { storeIds: 1, status: 1 },
         { status: 1, 'category.pathIds': 1 },
         { status: 1, comaxSubGroupCode: 1 },
-        { status: 1, 'prices.domainId': 1 },
+        { status: 1, 'prices.domainId': 1, sortOrder: -1, totalSalesUnits: -1, id: 1 },
+        { status: 1, 'prices.domainId': 1, totalSalesUnits: -1, id: 1 },
+        { status: 1, 'prices.domainId': 1, createdAt: -1, id: 1 },
+        { updatedAt: 1, id: -1 },
         // sale/sync's stale-saleIds sweep (distinct barcode where saleIds non-empty):
         // sparse keeps the scan bounded to products that actually carry a sale.
         [{ saleIds: 1 }, { sparse: true }]

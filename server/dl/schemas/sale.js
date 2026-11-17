@@ -161,7 +161,14 @@ export const meta = {
         KINDS,
         TYPES,
         STATUS
-    }
+    },
+    index: [
+        // displayBlocks.resolveCarouselFilter's distinct of active sale ids runs
+        // on every onSale carousel request, and status had no index: the distinct
+        // read every sale ever made (5847 docs for 902 ids). With {status, id} it
+        // is covered — keys only, no document fetch.
+        { status: 1, id: 1 }
+    ]
 }
 
 export default saleSchema
