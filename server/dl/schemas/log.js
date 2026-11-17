@@ -98,6 +98,9 @@ const logSchema = {
 const HOUR = 60 * 60
 const DAY = 24 * HOUR
 const index = [
+    // Sort index for the admin Logs page
+    { createdAt: 1, id: -1 },
+    // Expiry has to be its own single-field index 
     [
         { createdAt: 1 },
         { expireAfterSeconds: process.env.PRODUCTION ? DAY : 6 * HOUR }

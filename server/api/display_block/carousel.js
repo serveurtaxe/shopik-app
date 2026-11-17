@@ -1,6 +1,8 @@
 // Public show-all data source for /carousel/:id.
-// Replays the carousel's stored filter with live pagination (always uncached —
-// deep pages are rare and skip-paginated on indexed queries).
+// Replays the carousel's stored filter with live pagination (always uncached):
+// each curated carousel sort has a sort-covering index in the product schema, so
+// a page is a bounded seek instead of a whole-match-set blocking sort — see the
+// carousel pagination note in dl/schemas/product.js.
 import { withDomainPrice } from '#server/utils/data/withDomainPrice.js'
 
 export default async function carousel(payload, { DL, _user, req, utils, platform }) {
@@ -14,10 +16,16 @@ export default async function carousel(payload, { DL, _user, req, utils, platfor
     const limit = payload.limit
 
     const display = utils.data.displayBlocks
-    const block = await DL.DisplayBlock.readOne(
-        { id, domainId, active: true },
-        DL.DisplayBlock.defaultSelect
-    )
+    // Block config and the shopper's stock context are independent reads: take
+    // them in one round trip instead of serializing two on a shopper-facing
+    // route (both are single-document seeks).
+    const [block, { mode, storeId }] = await Promise.all([
+        DL.DisplayBlock.readOne(
+            { id, domainId, active: true },
+            DL.DisplayBlock.defaultSelect
+        ),
+        utils.data.withStock.resolveStockContext(req, { DL, utils, _user })
+    ])
     if (!block || block.kind !== DL.DisplayBlock.constants.KIND.PRODUCT_CAROUSEL)
         throw { status: 404, message: 'carousel not found' }
 
@@ -31,7 +39,6 @@ export default async function carousel(payload, { DL, _user, req, utils, platfor
         return { block: carouselMeta(block), products: [], sales: {} }
     }
     const { filter, search } = resolved
-    const { mode, storeId } = await utils.data.withStock.resolveStockContext(req, { DL, utils, _user })
     const effectiveFilter = (mode === 'filter' && storeId)
         ? utils.data.withStock.applyStockFilter(filter, storeId, mode)
         : filter
