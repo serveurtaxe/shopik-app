@@ -6,6 +6,9 @@
 import { withDomainPrice } from '#server/utils/data/withDomainPrice.js'
 import { redisGet, redisSet } from '#server/utils/redisSafe.js'
 
+// key → in-flight build promise (cleared as soon as it settles)
+const inFlight = new Map()
+
 export default async function get(payload, { DL, _user, req, utils, platform }) {
     // Strict types: body values are client-controlled; objects slip past the
     // `required` check and either throw (path.startsWith) or silently drop
@@ -33,6 +36,30 @@ export default async function get(payload, { DL, _user, req, utils, platform }) 
         if (cached) return deriveView(JSON.parse(cached), mode, storeId, previewLimit, display, priceFor)
     } catch {}
 
+    // Single-flight the cold rebuild: when a page key is expired or just
+    // invalidated (block/category edit, boot), every concurrent visitor used
+    // to run the whole build (DisplayBlock.read + each carousel's product
+    // queries) before anyone could write the cache — a thundering herd that
+    // measured 3.7× cluster drag in the stress harness. Concurrent misses on
+    // the same key now share one build; each waiter derives its own view
+    // (store/mode/price) from it, exactly as it would from a Redis hit.
+    // Per-process coalescing; across processes the Redis cache still wins.
+    let building = inFlight.get(key)
+    if (!building) {
+        building = buildPage({ DL, display, domainId, pagePath, mode, previewLimit, key, priceFor })
+        inFlight.set(key, building)
+        const clear = () => inFlight.get(key) === building && inFlight.delete(key)
+        building.then(clear, clear)
+    }
+
+    return deriveView(await building, mode, storeId, previewLimit, display, priceFor)
+}
+
+// The base response is shared by all in-flight waiters (and becomes the Redis
+// cache value), so it is built platform-neutral: the off-mode slice bakes the
+// leading request's price shape exactly as the cross-request cache always has,
+// and every request re-derives its own view via deriveView.
+async function buildPage({ DL, display, domainId, pagePath, mode, previewLimit, key, priceFor }) {
     const now = new Date()
     const blocks = await DL.DisplayBlock.read(
         { domainId, active: true },
@@ -98,7 +125,7 @@ export default async function get(payload, { DL, _user, req, utils, platform }) 
         await redisSet(DL.redis, key, JSON.stringify(response), 'EX', display.DISPLAY_CACHE_TTL_SEC)
     } catch {}
 
-    return deriveView(response, mode, storeId, previewLimit, display, priceFor)
+    return response
 }
 
 function deriveView(response, mode, storeId, previewLimit, display, priceFor = (p) => p) {
