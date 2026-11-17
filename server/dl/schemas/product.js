@@ -225,7 +225,6 @@ const productSchema = {
     },
     status: {
         type: String,
-        index: true,
         enum: Object.values(constants.STATUS),
         default: constants.STATUS.ACTIVE,
         filter: true
