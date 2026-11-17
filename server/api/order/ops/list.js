@@ -21,6 +21,12 @@ export default async function list(payload, { DL, _admin }) {
         extraFilter
     })
 
+    // Two consumers with opposite needs: the queue list (the page refreshes every
+    // couple of minutes) and the OpsOrder detail lookup by id (needs the whole
+    // cart). The queue is only ever a window/status/store filter — an id lookup
+    // is always a string — so the shape is picked from the filter itself.
+    const isDetail = typeof extraFilter?.id === 'string'
+
     // Own orders first (mine, then unclaimed), then by window deadline.
     // mineFirst has to be computed before the sort stage, so the read is an
     // aggregation instead of find().sort() (which rejects projection fields).
@@ -59,6 +65,28 @@ export default async function list(payload, { DL, _admin }) {
         orderRestoredFrom: 1,
     }
 
+    // The queue row is what an ops card renders: the two cart *counts* (total and
+    // handled), not the cart itself. Shipping 25 full carts — every line with its
+    // images, unit and category snapshot — cost ~2.2MB brotli per page on prod;
+    // the counts are computed in the project stage, so MongoDB never carries the
+    // cart arrays at all. The by-id detail keeps the cart.
+    const { cart: _queueCart, ...listSelect } = select
+    const cartCounts = {
+        cartCount: { $size: { $ifNull: ['$cart', []] } },
+        // handled = a picked line (finalAmount set) or a flagged-missing one — the
+        // same rule the card applies to a full cart.
+        handledCount: {
+            $size: {
+                $filter: {
+                    input: { $ifNull: ['$cart', []] },
+                    // as:'item' — $$item is only in scope when $filter names it.
+                    as: 'item',
+                    cond: { $or: [{ $ne: [{ $ifNull: ['$$item.finalAmount', null] }, null] }, '$$item.missing'] }
+                }
+            }
+        }
+    }
+
     // Use raw Model for complex $or/$and that processFilter might strip — bypass read helper and use Model directly
     // But DL.Order.read will call processFilter which strips $or if not in filterFields. So we query Model directly.
     const Model = DL.Order.Model
@@ -69,7 +97,8 @@ export default async function list(payload, { DL, _admin }) {
         { $match: query },
         {
             $project: {
-                ...select,
+                ...(isDetail ? select : listSelect),
+                ...(isDetail ? {} : cartCounts),
                 mineFirst: {
                     $cond: [
                         {
@@ -145,17 +174,23 @@ export default async function list(payload, { DL, _admin }) {
         docs = await Model.aggregate([...pipelineBase, { $sort: mineSort }, { $skip: skipN }, { $limit: limitN }])
     }
 
-    // enrich cart items with product snapshot for old orders
+    // enrich cart items with product snapshot for old orders — only the detail
+    // row has a cart; queue rows ship counts and never touch the products.
     try {
-        await enrichOrders(docs, DL)
+        if (isDetail) await enrichOrders(docs, DL)
     } catch { }
 
     // Annotate isMine (mineFirst and closedFirst are only used for ordering).
-    // The cart is grouped by category for the ops screens.
-    return docs.map(({ mineFirst, closedFirst, ...d }) => withSortedCart({
-        ...d,
-        isMine: (d.picker?.adminId === me) || (d.shipper?.adminId === me)
-    }))
+    // Only the cart-carrying detail row is grouped by category for the ops screens.
+    return docs.map(({ mineFirst, closedFirst, cartCount, handledCount, ...d }) => {
+        const order = {
+            ...d,
+            isMine: (d.picker?.adminId === me) || (d.shipper?.adminId === me)
+        }
+        // The detail row carries the full cart: the counts are redundant there and
+        // would be a second, non-enriched source of truth for the card.
+        return isDetail ? withSortedCart(order) : { ...order, cartCount, handledCount }
+    })
 }
 
 list.config = {

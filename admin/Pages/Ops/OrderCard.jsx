@@ -12,7 +12,7 @@ import ProgressGauge from '#common/components/ProgressGauge/index.jsx'
 
 export default function OrderCard({ order = {} }) {
     const
-        { deliveryMethod, status, storeId, cart = [], bags = {} } = order,
+        { deliveryMethod, status, storeId, cart, bags = {}, cartCount, handledCount } = order,
         windowTime = formatWindow(order.window),
         tone = orderCardTone(order),
         isDelivery = isDeliveryCard(status),
@@ -21,8 +21,10 @@ export default function OrderCard({ order = {} }) {
         store = stores.find(s => s.value == storeId),
         address = deliveryMethod == 'pickup' ? store?.address : order.address,
         navigate = useNavigate(),
-        total = cart.length,
-        handled = cart.filter(p => p.finalAmount != null || !!p.missing).length,
+        // The queue ships the two counts directly; a full cart (a detail row, or an
+        // older server) is still derived the same way.
+        total = cartCount ?? (cart || []).length,
+        handled = handledCount ?? (cart || []).filter(p => p.finalAmount != null || !!p.missing).length,
         regularCount = bags.regular ?? 0,
         coldCount = bags.cold ?? 0,
         otherCount = bags.freeze ?? bags.extra ?? 0,
@@ -94,7 +96,7 @@ export default function OrderCard({ order = {} }) {
             </Flex>
         </Flex> : <Flex className={styles.row} justifyContent='space-between'>
             <Flex gap={20} center>
-                <ProgressGauge value={(handled / total) * 100} />
+                <ProgressGauge value={total ? (handled / total) * 100 : 0} />
                 <Flex col gap={5}>
                     <Text bold size='xl'>{handled}/{total}</Text>
                     <Text size='s' mode='sub'>ops_handled_products</Text>
