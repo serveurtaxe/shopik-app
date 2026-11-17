@@ -1,6 +1,7 @@
 import { MENU_CACHE_KEY } from '#common/constants.js'
 import getUserStore from './getUserStore.js'
 import { scanDel } from './displayBlocks.js'
+import { redisDel, redisGet, redisSet } from '#server/utils/redisSafe.js'
 
 const CACHE_TTL_SEC = 60 * 60
 
@@ -40,7 +41,7 @@ export default async function getMenu({ DL, req, utils, _user }) {
     const storeId = await getUserStore(req, { DL, utils, _user }).catch(() => null)
     const cacheKey = `${MENU_CACHE_KEY}:${storeId || 'any'}`
 
-    const cached = await DL.redis?.get(cacheKey).catch(() => null)
+    const cached = await redisGet(DL.redis, cacheKey).catch(() => null)
     if (cached) return JSON.parse(cached)
 
     const productFilter = { status: DL.Product.constants.STATUS.ACTIVE }
@@ -76,15 +77,13 @@ export default async function getMenu({ DL, req, utils, _user }) {
         ...baseMenu
     ]
 
-    await DL.redis?.set(cacheKey, JSON.stringify(menu), 'EX', CACHE_TTL_SEC).catch(() => null)
+    await redisSet(DL.redis, cacheKey, JSON.stringify(menu), 'EX', CACHE_TTL_SEC).catch(() => null)
     return menu
 }
 
 // Menu is cached per store (menu:<storeId|any>), so a plain DEL is not enough.
 export async function invalidateMenu({ DL }) {
-    if (!DL.redis) return
-    try {
-        await scanDel(DL.redis, `${MENU_CACHE_KEY}:*`)
-        await DL.redis.del(MENU_CACHE_KEY)
-    } catch { }
+    if (!DL?.redis) return
+    await scanDel(DL.redis, `${MENU_CACHE_KEY}:*`)
+    await redisDel(DL.redis, MENU_CACHE_KEY)
 }

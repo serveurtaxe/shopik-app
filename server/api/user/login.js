@@ -3,6 +3,7 @@ import toRemember from '#common/functions/toRemember.js'
 import { calcShipping } from '#common/functions/shipping.js'
 import { round2 } from '#common/functions/calcOrder/utils.js'
 import getShippingConfig from '#server/utils/data/getShippingConfig.js'
+import { redisDel } from '#server/utils/redisSafe.js'
 
 export default async function login({ domainId, phone, otpToken, otp, remember }, { DL, utils, platform, setCookie, cookies, clearCookie }) {
     const storedOtp = await DL.Otp.readOne({ token: otpToken })
@@ -38,7 +39,7 @@ export default async function login({ domainId, phone, otpToken, otp, remember }
     }
     const updatedUser = await DL.User.updateOne({ id: user.id }, update, { select: DL.User.defaultSelect })
 
-    await DL.redis?.del(`user_auth:${user.id}`)
+    await redisDel(DL.redis, `user_auth:${user.id}`)
     await DL.Otp.deleteOne({ _id: storedOtp._id })
     setCookie(USER_TOKEN_COOKIE, token, tokenExpiryMs)
 

@@ -1,6 +1,6 @@
 import cron from 'node-cron'
 import log from '#server/utils/log.js'
-import { acquireLock } from '#server/utils/redisLock.js'
+import { acquireLock } from '#server/utils/cronLock.js'
 import { round2 } from '#common/functions/calcOrder/utils.js'
 import { planRefundLegs, executeRefundPlan } from '#server/utils/data/refundCaptures.js'
 import { remainderRefundItems } from '#common/functions/refundCalc.js'
@@ -104,7 +104,7 @@ async function retryOrder({ DL, external, utils, order }) {
 export async function runRefundRetry({ DL, external, utils }) {
     let release
     try {
-        release = await acquireLock(DL.redis, LOCK_KEY, LOCK_TTL_SECONDS)
+        release = await acquireLock(LOCK_KEY, LOCK_TTL_SECONDS)
         if (!release) {
             log.warn('[RefundRetry] Skipped — another instance holds the lock')
             return

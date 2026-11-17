@@ -8,6 +8,7 @@ import { GUEST_CART_TOKEN_COOKIE, MENU_CACHE_KEY } from '../../common/constants.
 // cannot carry over: it is cached per store and only reaches the browser through
 // the SSR payload. These fakes stand in for Redis, the product index and the
 // category tree so the route contract can be checked without a database.
+// `status: 'ready'` matters: a cache is only used while its client can answer.
 const CATEGORIES = [
     { id: 'nc:7', name: 'ירקות', parentId: null, slug: 'ירקות', path: 'ירקות', sortOrder: 1 },
     { id: 'nc:7:41', name: 'עגבניות', parentId: 'nc:7', slug: 'עגבניות', path: 'ירקות/עגבניות', sortOrder: 1 },
@@ -18,6 +19,7 @@ const fakeRedis = () => {
     const entries = {}
     return {
         entries,
+        status: 'ready',
         get: async key => entries[key] ?? null,
         set: async (key, value) => { entries[key] = value; return 1 }
     }

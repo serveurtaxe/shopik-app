@@ -3,6 +3,8 @@ import apiKeyPermissions from '#common/constants/apiKeyPermissions.js'
 import resolveDomainId from '#server/utils/resolveDomainId.js'
 import pkg from '#package.json' with { type: 'json' }
 import uid from '#common/functions/uid.js'
+import { acquireRequestLock } from '#server/utils/requestLock.js'
+import { isRedisReady } from '#server/utils/redisSafe.js'
 
 const appVersion = pkg?.version || 'unknown'
 
@@ -77,6 +79,7 @@ export default function router(app, bootData) {
             actorName,
             requestLog,
             requestLogPromise,
+            releaseRequestLock,
             info
         try {
             // Domain middleware - storefront traffic always uses the server-resolved
@@ -241,8 +244,12 @@ export default function router(app, bootData) {
                 let lockKey = `lock:${route}`
                 if (typeof apiFunction?.config?.preventMultiple === 'function')
                     lockKey += apiFunction?.config?.preventMultiple(body, info)
-                const lockAcquired = await DL.redis?.set(lockKey, requestId, 'NX', 'EX', 30)
-                if (!lockAcquired) {
+                releaseRequestLock = await acquireRequestLock({
+                    redis: DL.redis,
+                    key: lockKey,
+                    token: requestId
+                })
+                if (!releaseRequestLock) {
                     throw { status: 429, message: 'Too Many Requests' }
                 }
             }
@@ -260,7 +267,7 @@ export default function router(app, bootData) {
                 '/admin/login_otp': { max: 200, windowSec: 900 }
             }
             const authLimit = AUTH_ROUTE_LIMITS[route]
-            if (authLimit && DL.redis) {
+            if (authLimit && isRedisReady(DL.redis)) {
                 try {
                     const rlKey = `rl:${route}:${ip}`
                     const count = await DL.redis.incr(rlKey)
@@ -316,12 +323,8 @@ export default function router(app, bootData) {
 
             return res.send(errorRes)
         } finally {
-            if (apiFunction?.config?.preventMultiple) {
-                let lockKey = `lock:${route}`
-                if (typeof apiFunction?.config?.preventMultiple === 'function')
-                    lockKey += apiFunction?.config?.preventMultiple(body, info)
-                await DL.redis?.del(lockKey)
-            }
+            if (apiFunction?.config?.preventMultiple)
+                await releaseRequestLock?.()
             if (requestLog) {
                 if (actorId) {
                     requestLog.actor({

@@ -4,6 +4,7 @@
 //   annotate → cached wide base (with storeIds), inStock flags added per request
 //   filter   → cached wide base, store-filtered + sliced per request
 import { withDomainPrice } from '#server/utils/data/withDomainPrice.js'
+import { redisGet, redisSet } from '#server/utils/redisSafe.js'
 
 export default async function get(payload, { DL, _user, req, utils, platform }) {
     // Strict types: body values are client-controlled; objects slip past the
@@ -28,7 +29,7 @@ export default async function get(payload, { DL, _user, req, utils, platform }) 
         String(platform || '').includes('admin') ? products : withDomainPrice(products, domainId)
     const key = display.displayCacheKey(domainId, pagePath, mode)
     try {
-        const cached = await DL.redis?.get(key)
+        const cached = await redisGet(DL.redis, key)
         if (cached) return deriveView(JSON.parse(cached), mode, storeId, previewLimit, display, priceFor)
     } catch {}
 
@@ -94,7 +95,7 @@ export default async function get(payload, { DL, _user, req, utils, platform }) 
 
     const response = { blocks: withProducts }
     try {
-        await DL.redis?.set(key, JSON.stringify(response), 'EX', display.DISPLAY_CACHE_TTL_SEC)
+        await redisSet(DL.redis, key, JSON.stringify(response), 'EX', display.DISPLAY_CACHE_TTL_SEC)
     } catch {}
 
     return deriveView(response, mode, storeId, previewLimit, display, priceFor)

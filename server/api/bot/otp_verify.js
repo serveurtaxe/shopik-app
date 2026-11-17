@@ -1,4 +1,5 @@
 import { BOT_TOKEN_EXPIRY_MS } from '#common/constants.js'
+import { redisDel } from '#server/utils/redisSafe.js'
 
 /**
  * POST /api/bot/otp_verify
@@ -35,7 +36,7 @@ export default async function otp_verify(payload, { DL, utils }) {
         { id: user.id },
         { lastLogin: new Date(), [`tokens.bot`]: userToken }
     )
-    try { await DL.redis?.del(`user_auth:${user.id}`) } catch { }
+    try { await redisDel(DL.redis, `user_auth:${user.id}`) } catch { }
     try { await DL.Otp.deleteOne({ _id: storedOtp._id }) } catch { }
 
     return { userToken, firstName: user.name?.first || null }

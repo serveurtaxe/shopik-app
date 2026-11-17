@@ -3,6 +3,7 @@ import { invalidateUserStore } from '#server/utils/data/getUserStore.js'
 import getShippingConfig from '#server/utils/data/getShippingConfig.js'
 import { calcShipping } from '#common/functions/shipping.js'
 import { round2 } from '#common/functions/calcOrder/utils.js'
+import { redisDel } from '#server/utils/redisSafe.js'
 
 async function storeNameById(DL, storeId) {
     if (!storeId) return null
@@ -123,7 +124,7 @@ export default async function deliveryMethod(payload, { DL, utils, _user }) {
         changes: { oldData, newData }
     })
 
-    await DL.redis?.del(`user_auth:${_user.id}`)
+    await redisDel(DL.redis, `user_auth:${_user.id}`)
     await invalidateUserStore(DL, _user.id)
 
     return { user, order: updatedOrder }

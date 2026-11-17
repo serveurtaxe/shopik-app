@@ -54,17 +54,8 @@ async function handleFetchJob(job, { DL, external }) {
 
 export default async function startGs1FetchWorker({ DL, external, sizing }) {
     initBulkFlusher(DL)
-    const connection = getConnection()
-    try {
-        await Promise.race([
-            connection.ping(),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('Redis unreachable (timeout)')), 2000))
-        ])
-    } catch (e) {
-        log.warn('[GS1Fetch] Redis unavailable, worker not started:', e?.message || e)
-        return null
-    }
-
+    // No boot-time Redis gate: BullMQ retries its own connection for ever, so a
+    // worker started while Redis was down consumes as soon as Redis returns.
     const worker = new Worker(
         FETCH_QUEUE,
         async job => {

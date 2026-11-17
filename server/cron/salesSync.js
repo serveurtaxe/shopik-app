@@ -1,6 +1,6 @@
 import cron from 'node-cron'
 import log from '#server/utils/log.js'
-import { acquireLock } from '#server/utils/redisLock.js'
+import { acquireLock } from '#server/utils/cronLock.js'
 import importComaxSales from '#server/api/comax_sale/import.js'
 import syncComaxSales from '#server/api/comax_sale/sync.js'
 import { trimMemory } from '#server/utils/mem.js'
@@ -14,11 +14,11 @@ const LOCK_TTL_SECONDS = 60 * 60 * 2
 //    when ended) and refresh product saleIds — handled inside syncComaxSales.
 export async function runSalesSync(
     { DL, external },
-    { importFn = importComaxSales, syncFn = syncComaxSales } = {}
+    { importFn = importComaxSales, syncFn = syncComaxSales, lockModel } = {}
 ) {
     let release
     try {
-        release = await acquireLock(DL.redis, LOCK_KEY, LOCK_TTL_SECONDS)
+        release = await acquireLock(LOCK_KEY, LOCK_TTL_SECONDS, { Model: lockModel })
         if (!release) {
             log.warn('[SalesSync] Skipped — another instance holds the lock')
             return

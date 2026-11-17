@@ -2,6 +2,7 @@ import { CACHE_STRATEGIES } from '#common/constants.js'
 import uid from '#common/functions/uid.js'
 import get from '#common/functions/get.js'
 import seedCache from './cache/seed.js'
+import { trustCache } from './cache/reseed.js'
 import { fileURLToPath } from 'url'
 import mongoose from 'mongoose'
 import path from 'path'
@@ -455,7 +456,11 @@ export default async function createModels(redis) {
                         log.warn(`Cache init failed for ${model.modelName}:`, cacheInitErr?.message || cacheInitErr)
                     }
                 }
-                if (model.cacheStrategy === CACHE_STRATEGIES.HASHSET && redis?.hlen && model.cache) {
+                // Only seed when Redis is actually reachable. When it is not, the
+                // model stays suspect: reads use MongoDB and the cache is rebuilt
+                // in the background once Redis returns, instead of this process
+                // serving empty hashes until the next deploy.
+                if (model.cacheStrategy === CACHE_STRATEGIES.HASHSET && redis?.status === 'ready' && model.cache) {
                     try {
                         const [
                             currentHashCount,
@@ -471,11 +476,14 @@ export default async function createModels(redis) {
                                 // deleted/renamed docs in the hash forever.
                                 // Chunked so only one seed batch is in memory.
                                 const seeded = await seedCache(redis, model, { clear: true })
+                                trustCache(model)
                                 log.info(`Cache rebuilt for ${model.modelName}: ${seeded} docs`)
                             } catch (e) {
                                 log.error('Cache seeding error:', e)
                             }
-                        }
+                        } else
+                            // Verified against MongoDB — this hash can be trusted.
+                            trustCache(model)
                     } catch (seedErr) {
                         log.warn('Cache check warning:', seedErr?.message || seedErr)
                     }

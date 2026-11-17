@@ -1,5 +1,6 @@
 import { editAddress, isSameAddressLocation } from '#server/utils/data/userAddress.js'
 import { clearOrderAddress, updateOrderAddress } from '#server/api/order/address/update.js'
+import { redisDel } from '#server/utils/redisSafe.js'
 
 export default async function admin_edit(payload, { DL, external, utils, _admin }) {
     const { userId, addressId, ...address } = payload
@@ -14,7 +15,7 @@ export default async function admin_edit(payload, { DL, external, utils, _admin 
         { $set: { 'addresses.$': geocoded } },
         { select: DL.User.defaultSelect }
     )
-    await DL.redis?.del(`user_auth:${user.id}`)
+    await redisDel(DL.redis, `user_auth:${user.id}`)
 
     if (sameLocation && geocoded.active === existingAddr.active) return { user: updatedUser }
 

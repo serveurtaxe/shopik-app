@@ -1,5 +1,7 @@
 import { Queue } from 'bullmq'
 import Redis from 'ioredis'
+import { enqueueWithFallback } from '#server/utils/redisSafe.js'
+import { REDIS_CONNECT_TIMEOUT_MS, redisBackoffMs } from '#server/utils/redisBackoff.js'
 
 export const FETCH_QUEUE = 'gs1-fetch'
 export const PROCESS_QUEUE = 'gs1-process'
@@ -11,15 +13,16 @@ let processQueue
 export function getConnection() {
     if (!connection) {
         connection = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
-            connectTimeout: 2000,
+            connectTimeout: REDIS_CONNECT_TIMEOUT_MS,
             maxRetriesPerRequest: null,
             enableOfflineQueue: true,
             lazyConnect: true,
-            retryStrategy(times) {
-                if (times > 3) return null
-                return 1000
-            }
+            retryStrategy: redisBackoffMs
         })
+        // Same reason as in imageQueue: open it now so a worker that started
+        // while Redis was down picks it up when Redis returns.
+        if (connection.status === 'init' || connection.status === 'end')
+            connection.connect().catch(() => { })
     }
     return connection
 }
@@ -62,9 +65,12 @@ export async function addBulkInChunks(queue, jobs) {
 }
 
 // jobId dedupes re-enqueues of the same product code across overlapping runs.
+// Fail-soft: a down Redis reports the batch as skipped instead of failing the
+// run — the sync state in MongoDB still says these codes need looking up, so the
+// next run queues them again.
 export async function enqueueFetchJobs(jobs) {
-    if (!jobs?.length) return { enqueued: 0 }
-    await addBulkInChunks(getFetchQueue(), jobs.map(job => ({
+    if (!jobs?.length) return { enqueued: 0, skipped: 0 }
+    const queued = jobs.map(job => ({
         name: 'fetch-product',
         data: job,
         opts: {
@@ -74,13 +80,19 @@ export async function enqueueFetchJobs(jobs) {
             removeOnComplete: true,
             removeOnFail: false
         }
-    })))
-    return { enqueued: jobs.length }
+    }))
+
+    return enqueueWithFallback({
+        connection: getConnection(),
+        label: 'GS1FetchQueue',
+        jobs: queued,
+        add: () => addBulkInChunks(getFetchQueue(), queued)
+    })
 }
 
 export async function enqueueProcessJobs(jobs) {
-    if (!jobs?.length) return { enqueued: 0 }
-    await addBulkInChunks(getProcessQueue(), jobs.map(job => ({
+    if (!jobs?.length) return { enqueued: 0, skipped: 0 }
+    const queued = jobs.map(job => ({
         name: 'process-images',
         data: job,
         opts: {
@@ -90,8 +102,14 @@ export async function enqueueProcessJobs(jobs) {
             removeOnComplete: true,
             removeOnFail: false
         }
-    })))
-    return { enqueued: jobs.length }
+    }))
+
+    return enqueueWithFallback({
+        connection: getConnection(),
+        label: 'GS1ProcessQueue',
+        jobs: queued,
+        add: () => addBulkInChunks(getProcessQueue(), queued)
+    })
 }
 
 export default { getConnection, getFetchQueue, getProcessQueue, enqueueFetchJobs, enqueueProcessJobs }

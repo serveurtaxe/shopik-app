@@ -10,18 +10,11 @@ const QUEUE_NAME = 'image-processing'
 const hashUrl = url => createHash('sha1').update(url).digest('hex')
 
 export default async function startImageWorker({ DL }) {
-    const connection = getConnection()
-
-    try {
-        await Promise.race([
-            connection.ping(),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('Redis unreachable (timeout)')), 2000))
-        ])
-    } catch (e) {
-        log.warn('[ImageWorker] Redis unavailable, worker not started:', e?.message || e)
-        return null
-    }
-
+    // No boot-time Redis gate. A ping gate meant a container that started while
+    // Redis was down never had a worker — the jobs sat in the queue until a
+    // redeploy. BullMQ owns the connection (infinite retry curve, offline
+    // queue), so starting the worker now is safe: it begins consuming the
+    // moment Redis answers.
     const worker = new Worker(
         QUEUE_NAME,
         async job => {

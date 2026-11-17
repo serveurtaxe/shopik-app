@@ -1,6 +1,6 @@
 import cron from 'node-cron'
 import log from '#server/utils/log.js'
-import { acquireLock } from '#server/utils/redisLock.js'
+import { acquireLock } from '#server/utils/cronLock.js'
 import syncWindows from '#server/api/order_window_template/sync.js'
 
 const LOCK_KEY = 'window-sync:lock'
@@ -11,7 +11,7 @@ const LOCK_TTL_SECONDS = 60 * 60
 export async function runWindowSync({ DL }) {
     let release
     try {
-        release = await acquireLock(DL.redis, LOCK_KEY, LOCK_TTL_SECONDS)
+        release = await acquireLock(LOCK_KEY, LOCK_TTL_SECONDS)
         if (!release) {
             log.warn('[WindowSync] Skipped — another instance holds the lock')
             return

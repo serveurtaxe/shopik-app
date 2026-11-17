@@ -1,5 +1,6 @@
 import diff from '#common/functions/diff.js'
 import uid from '#common/functions/uid.js'
+import { redisDel } from '#server/utils/redisSafe.js'
 
 export default async function edit(payload, { DL, _user, external, utils }) {
     const name = utils.extractFields.getName(payload)
@@ -56,7 +57,7 @@ export default async function edit(payload, { DL, _user, external, utils }) {
     if (!savedUser)
         savedUser = _user
 
-    await DL.redis?.del(`user_auth:${_user.id}`)
+    await redisDel(DL.redis, `user_auth:${_user.id}`)
 
     if (phoneChanged)
         return { user: savedUser, phone: payload.phone, token }

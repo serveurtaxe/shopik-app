@@ -1,4 +1,5 @@
 import { USER_TOKEN_EXPIRY_MS, USER_TOKEN_COOKIE } from '#common/constants.js'
+import { redisDel } from '#server/utils/redisSafe.js'
 
 export default async function verify_phone({ otpToken, otp }, { DL, utils, platform, setCookie, _user }) {
     const storedOtp = await DL.Otp.readOne({
@@ -38,7 +39,7 @@ export default async function verify_phone({ otpToken, otp }, { DL, utils, platf
         { select: DL.User.defaultSelect }
     )
 
-    await DL.redis?.del(`user_auth:${user.id}`)
+    await redisDel(DL.redis, `user_auth:${user.id}`)
     setCookie(USER_TOKEN_COOKIE, token, USER_TOKEN_EXPIRY_MS)
     await DL.Otp.deleteOne({ _id: storedOtp._id })
 

@@ -16,7 +16,7 @@ export function withTiebreaker(Model, sort) {
 export default (Model) => async function read(filter = {}, select = { _id: 0 }, options = {}) {
     const sort = withTiebreaker(Model, options.sort)
 
-    if (Model.cacheStrategy === CACHE_STRATEGIES.HASHSET) {
+    if (Model.cacheStrategy === CACHE_STRATEGIES.HASHSET && Model.cache) {
         const cached = await Model.cache.read(filter, select, { ...options, sort })
         // null means Redis is unavailable — fall through to MongoDB
         if (cached !== null) return cached

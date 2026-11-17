@@ -1,5 +1,10 @@
 import crypto from 'crypto'
 import log from '#server/utils/log.js'
+import { scanDel } from '#server/utils/redisSafe.js'
+
+// Re-exported: page-cache invalidation callers (menu, category map, scripts)
+// import it from here.
+export { scanDel }
 
 export const DISPLAY_CACHE_TTL_SEC = 3600
 export const DEFAULT_BASE_LIMIT = 10
@@ -36,17 +41,6 @@ export const getBaseLimit = (DL, domainId) =>
 
 export const getPreviewLimit = (DL, domainId) =>
     getDisplayLimit(DL, domainId, PREVIEW_LIMIT_KEY, DEFAULT_PREVIEW_LIMIT)
-
-export async function scanDel(redis, pattern) {
-    let cursor = '0'
-    let deleted = 0
-    do {
-        const [next, keys] = await redis.scan(cursor, 'MATCH', pattern, 'COUNT', 500)
-        cursor = next
-        if (keys?.length) deleted += await redis.del(keys)
-    } while (cursor !== '0')
-    return deleted
-}
 
 // Invalidate every cached page a block can appear on.
 // Path placement → exact page. Category placement → the category page and all

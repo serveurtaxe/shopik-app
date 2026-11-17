@@ -1,4 +1,5 @@
 import diff from '#common/functions/diff.js'
+import { redisDel } from '#server/utils/redisSafe.js'
 
 export default async function update(payload, { DL, _admin }) {
     const { id } = payload
@@ -14,7 +15,7 @@ export default async function update(payload, { DL, _admin }) {
     const invalidatingFields = ['phone', 'blocked']
     for (const field of invalidatingFields) {
         if (update[field]) {
-            await DL.redis?.del(`user_auth:${id}`)
+            await redisDel(DL.redis, `user_auth:${id}`)
             update.tokens = {}
             break
         }

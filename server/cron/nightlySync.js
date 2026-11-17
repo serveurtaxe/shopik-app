@@ -1,6 +1,6 @@
 import cron from 'node-cron'
 import log from '#server/utils/log.js'
-import { acquireLock } from '#server/utils/redisLock.js'
+import { acquireLock } from '#server/utils/cronLock.js'
 import importComaxProducts from '#server/api/comax_product/import.js'
 import syncComax from '#server/api/comax_product/sync.js'
 import enqueueChangedImages from '#server/services/image/enqueue.js'
@@ -9,13 +9,16 @@ import { trimMemory } from '#server/utils/mem.js'
 
 const LOCK_KEY = 'nightly-sync:lock'
 const LOCK_TTL_SECONDS = 60 * 60 * 4
+const GOV_LOCK_KEY = 'gov-sync:lock'
+// importGovAddresses pages through ~150k data.gov.il rows with a delay per page.
+const GOV_LOCK_TTL_SECONDS = 60 * 60 * 2
 
 // Import → sync → image enqueue, under the same lock the scheduler takes.
 // Exported so the job can be run (and measured) outside the scheduler.
 export async function runNightlySync({ DL, external }) {
     let release
     try {
-        release = await acquireLock(DL.redis, LOCK_KEY, LOCK_TTL_SECONDS)
+        release = await acquireLock(LOCK_KEY, LOCK_TTL_SECONDS)
         if (!release) {
             log.warn('[NightlySync] Skipped — another instance holds the lock')
             return null
@@ -45,7 +48,7 @@ export async function runNightlySync({ DL, external }) {
 export async function runGovAddressSync({ DL }) {
     let release
     try {
-        release = await acquireLock(DL.redis)
+        release = await acquireLock(GOV_LOCK_KEY, GOV_LOCK_TTL_SECONDS)
         if (!release) return null
         log.warn('[GovSync] Started')
         await importGovAddresses({ DL })

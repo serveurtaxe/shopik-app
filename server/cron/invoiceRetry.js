@@ -1,6 +1,6 @@
 import cron from 'node-cron'
 import log from '#server/utils/log.js'
-import { acquireLock } from '#server/utils/redisLock.js'
+import { acquireLock } from '#server/utils/cronLock.js'
 import { retryInvoice } from '#server/utils/data/invoice.js'
 
 const LOCK_KEY = 'invoice-retry:lock'
@@ -30,7 +30,7 @@ async function loadFailedInvoices(DL) {
 export async function runInvoiceRetry({ DL, external, utils }) {
     let release
     try {
-        release = await acquireLock(DL.redis, LOCK_KEY, LOCK_TTL_SECONDS)
+        release = await acquireLock(LOCK_KEY, LOCK_TTL_SECONDS)
         if (!release) {
             log.warn('[InvoiceRetry] Skipped — another instance holds the lock')
             return

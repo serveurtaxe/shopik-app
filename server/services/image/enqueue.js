@@ -61,8 +61,14 @@ export default async function enqueueChangedImages(DL) {
             jobs.push({ productId: product.id, sourceUrl: comax.picUrl })
         }
 
-        if (jobs.length) await enqueueImageJobs(jobs)
-        enqueued += jobs.length
+        if (jobs.length) {
+            // Fail-soft: a down Redis reports `skipped` instead of throwing, and
+            // these products keep their incomplete main image in MongoDB, so the
+            // next sync run queues them again.
+            const { enqueued: queued, skipped } = await enqueueImageJobs(jobs)
+            enqueued += queued
+            if (skipped) log.warn(`[ImageQueue] ${skipped} job(s) deferred until Redis is reachable`)
+        }
 
         if (comaxProducts.length < BATCH) break
     }

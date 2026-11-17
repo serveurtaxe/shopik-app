@@ -1,7 +1,7 @@
 import cron from 'node-cron'
 import { HebrewCalendar, flags } from '@hebcal/core'
 import log from '#server/utils/log.js'
-import { acquireLock } from '#server/utils/redisLock.js'
+import { acquireLock } from '#server/utils/cronLock.js'
 import { trimMemory } from '#server/utils/mem.js'
 import { SPECIAL_DAY_EREV_START } from '#common/constants.js'
 import { overlapsSpecialDay } from '#common/functions/specialDay.js'
@@ -85,7 +85,7 @@ export default function startHolidaySeed(bootData) {
     cron.schedule(schedule, async () => {
         let release
         try {
-            release = await acquireLock(DL.redis, LOCK_KEY, LOCK_TTL_SECONDS)
+            release = await acquireLock(LOCK_KEY, LOCK_TTL_SECONDS)
             if (!release) {
                 log.warn('[HolidaySeed] Skipped — another instance holds the lock')
                 return

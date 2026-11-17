@@ -1,4 +1,5 @@
 import { clearOrderAddress } from '#server/api/order/address/update.js'
+import { redisDel } from '#server/utils/redisSafe.js'
 
 export default async function admin_remove(payload, { DL, utils, _admin }) {
     const { userId, addressId } = payload
@@ -11,7 +12,7 @@ export default async function admin_remove(payload, { DL, utils, _admin }) {
         { $pull: { addresses: { addressId } } },
         { select: DL.User.defaultSelect }
     )
-    await DL.redis?.del(`user_auth:${user.id}`)
+    await redisDel(DL.redis, `user_auth:${user.id}`)
 
     if (!removed?.active) return { user: updatedUser }
 

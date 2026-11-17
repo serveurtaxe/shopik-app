@@ -1,4 +1,5 @@
 import handleSelect from '#server/dl/handleSelect.js'
+import reseedInBackground, { hasVerifiedCache, isCacheSuspect } from '#server/dl/cache/reseed.js'
 import { CACHE_STRATEGIES } from '#common/constants.js'
 import safeJsonParse from '#common/functions/safeJsonParse.js'
 import get from '#common/functions/get.js'
@@ -68,6 +69,13 @@ export default function (redis, Model) {
         // If Redis is not connected, signal caller to fall back to MongoDB
         if (!redis || redis.status !== 'ready') return null
 
+        // A hash nothing has built in this process must not be read at all:
+        // an empty hash and an empty collection look identical from here.
+        if (isCacheSuspect(Model)) {
+            reseedInBackground(Model)
+            return null
+        }
+
         const { search, sort } = options
         const skip = Number(options.skip) || 0
         const limit = options.limit == null ? 30 : Number(options.limit)
@@ -82,10 +90,21 @@ export default function (redis, Model) {
         // once (150k gov_addresses → ~400MB RSS), HSCAN keeps one page live.
         const matched = []
         let cursor = '0'
+        let pages = 0
+        let unseededHash = false
         try {
             do {
                 const [next, page] = await redis.hscan(Model.cacheName, cursor, 'COUNT', SCAN_COUNT)
                 cursor = next
+                // An empty *first* page means the key is missing. Unless this
+                // process has already reconciled the hash with MongoDB (boot
+                // verify / seed / a rebuild), "empty" cannot be told apart from
+                // "never built": answer from MongoDB and rebuild in the background.
+                if (!pages++ && !page.length && !hasVerifiedCache(Model)) {
+                    unseededHash = true
+                    cursor = '0'
+                    break
+                }
                 // page = [field1, value1, field2, value2, ...]
                 for (let i = 0; i < page.length; i += 2) {
                     const doc = safeJsonParse(page[i + 1])
@@ -97,6 +116,14 @@ export default function (redis, Model) {
                 }
             } while (cursor !== '0')
         } catch {
+            // Redis broke mid-scan: the answer is incomplete either way, so
+            // let the caller use MongoDB and rebuild the hash afterwards.
+            reseedInBackground(Model)
+            return null
+        }
+
+        if (unseededHash) {
+            reseedInBackground(Model)
             return null
         }
 

@@ -1,5 +1,5 @@
 import { GUEST_CART_TOKEN_COOKIE } from '#common/constants.js'
-import log from '#server/utils/log.js'
+import { redisDel, redisGet, redisSet } from '#server/utils/redisSafe.js'
 
 const USER_STORE_TTL_SEC = 60 * 5
 
@@ -12,12 +12,12 @@ export default async function getUserStore(req, { DL, utils, _user }) {
     const user = _user || await utils.auth.getUser(req, { DL, utils }).catch(() => null)
     if (user) {
         const key = cacheKey(user.id)
-        const cached = await DL.redis?.get(key).catch(() => null)
+        const cached = await redisGet(DL.redis, key).catch(() => null)
         if (cached) return cached === 'null' ? null : cached
 
         const order = await DL.Order.readOne({ userId: user.id, status: 'cart', active: true }, { _id: 0, storeId: 1 })
         const storeId = order?.storeId ?? null
-        await DL.redis?.set(key, storeId ?? 'null', 'EX', USER_STORE_TTL_SEC).catch(() => null)
+        await redisSet(DL.redis, key, storeId ?? 'null', 'EX', USER_STORE_TTL_SEC).catch(() => null)
         return storeId
     }
 
@@ -31,12 +31,8 @@ export default async function getUserStore(req, { DL, utils, _user }) {
 }
 
 // A failed delete keeps the previous store for the whole TTL, so it is logged
-// rather than swallowed.
+// rather than swallowed (see redisDel).
 export async function invalidateUserStore(DL, userId) {
-    if (!userId || !DL.redis) return
-    try {
-        await DL.redis.del(cacheKey(userId))
-    } catch (e) {
-        log.warn('Cache[user_store] delete failed:', e?.message || e)
-    }
+    if (!userId) return
+    await redisDel(DL?.redis, cacheKey(userId))
 }

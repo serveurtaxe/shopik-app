@@ -75,7 +75,7 @@ export async function startRun(payload, { DL, external }) {
         { key: runId },
         { $set: { status: 'running', total: codes.length } }
     )
-    const { enqueued } = await enqueueFetchJobs(codes.map(productCode => ({
+    const { enqueued, skipped } = await enqueueFetchJobs(codes.map(productCode => ({
         productCode, runId, force: payload.force ?? false
     })))
 
@@ -85,7 +85,7 @@ export async function startRun(payload, { DL, external }) {
         { upsert: true }
     )
 
-    log.success(`[GS1] Run ${runId}: ${enqueued} products queued`)
+    log.success(`[GS1] Run ${runId}: ${enqueued} products queued${skipped ? ` (${skipped} skipped, Redis unavailable)` : ''}`)
     return { runId, total: codes.length, enqueued, from: fmtDate(from), to: fmtDate(to) }
 }
 

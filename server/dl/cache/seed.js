@@ -22,7 +22,12 @@ export default async function seedCache(redis, Model, { size, clear = false } = 
     if (Model?.cacheStrategy !== CACHE_STRATEGIES.HASHSET || !Model.cache?.add) return 0
 
     const chunkSize = resolveChunkSize(size)
-    if (clear && redis) await redis.del(Model.cacheName)
+    // Callers that only have the model (the reseed path) still get a full
+    // rebuild: the cache object knows how to drop its own hash.
+    if (clear) {
+        if (redis) await redis.del(Model.cacheName)
+        else await Model.cache.clear?.()
+    }
 
     let buf = []
     let seeded = 0

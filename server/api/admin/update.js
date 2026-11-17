@@ -1,4 +1,5 @@
 import diff from '#common/functions/diff.js'
+import { redisDel } from '#server/utils/redisSafe.js'
 
 export default async function update(payload, { DL, validators, utils }) {
 
@@ -26,7 +27,7 @@ export default async function update(payload, { DL, validators, utils }) {
 
     // storeIds/currentStoreId live in the cached auth payload (getAdmin) — drop it
     if (update.roleId || update.storeIds || 'currentStoreId' in update) {
-        await DL.redis?.del(`admin_auth:${id}`)
+        await redisDel(DL.redis, `admin_auth:${id}`)
     }
 
     if (update.idNum) {

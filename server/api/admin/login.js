@@ -1,3 +1,4 @@
+import { redisSet } from '#server/utils/redisSafe.js'
 import { ADMIN_TOKEN_EXPIRY_MS, ADMIN_TOKEN_COOKIE } from '#common/constants.js'
 
 export default async function login({ idNum, otpToken, otp }, { DL, utils, platform, setCookie, validators }) {
@@ -39,7 +40,7 @@ export default async function login({ idNum, otpToken, otp }, { DL, utils, platf
         currentStoreId: 1
     }).lean()
 
-    await DL.redis?.set(`admin_auth:${admin.id}`, JSON.stringify(updatedAdmin), 'EX', 60 * 60 * 24)
+    await redisSet(DL.redis, `admin_auth:${admin.id}`, JSON.stringify(updatedAdmin), 'EX', 60 * 60 * 24)
     await DL.Otp.deleteOne({ _id: storedOtp._id })
     setCookie(ADMIN_TOKEN_COOKIE, token, ADMIN_TOKEN_EXPIRY_MS)
     return true

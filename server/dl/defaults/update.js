@@ -1,4 +1,5 @@
 import { CACHE_STRATEGIES } from '#common/constants.js'
+import handleSelect from '#server/dl/handleSelect.js'
 import log from '#server/utils/log.js'
 
 export default Model => async function update(filter = {}, update, options = {}) {

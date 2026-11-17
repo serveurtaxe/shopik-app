@@ -1,5 +1,6 @@
 import { findByLocation } from '#server/external/supplyArea.js'
 import { updateOrderAddress } from '#server/api/order/address/update.js'
+import { redisDel } from '#server/utils/redisSafe.js'
 
 export default async function admin_active(payload, { DL, utils, _admin }) {
     const { userId, addressId } = payload
@@ -38,7 +39,7 @@ export default async function admin_active(payload, { DL, utils, _admin }) {
             updatePipeline: true
         }
     ).lean()
-    await DL.redis?.del(`user_auth:${user.id}`)
+    await redisDel(DL.redis, `user_auth:${user.id}`)
     // Direct Model write bypasses DL.updateOne, so invalidate the
     // User version-cache explicitly — otherwise user/details keeps
     // serving the pre-update doc from cache.

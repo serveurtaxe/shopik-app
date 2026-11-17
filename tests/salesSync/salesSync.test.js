@@ -2,35 +2,40 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { runSalesSync } from '../../server/cron/salesSync.js'
 
-// In-memory redis stub for acquireLock (set NX / get / del).
-function fakeRedis() {
-    const store = new Map()
-    return {
-        async set(key, value, ...args) {
-            if (args.includes('NX') && store.has(key)) return null
-            store.set(key, value)
-            return 'OK'
+// In-memory stand-in for the `cron_locks` collection: one row per key, and the
+// unique index on `key` is what makes "take it only if absent or expired" atomic.
+function fakeLockModel(row = null) {
+    const state = { row }
+    const Model = {
+        findOneAndUpdate(filter, update) {
+            return {
+                async lean() {
+                    const held = state.row?.key === filter.key &&
+                        !(state.row.expiresAt < filter.expiresAt.$lt)
+                    if (held)
+                        throw Object.assign(new Error('E11000: duplicate key'), { code: 11000 })
+                    state.row = { key: filter.key, ...update.$set }
+                    return { ...state.row }
+                }
+            }
         },
-        async get(key) {
-            return store.get(key) ?? null
-        },
-        async del(key) {
-            store.delete(key)
-            return 1
-        },
-        has(key) {
-            return store.has(key)
-        },
+        async deleteOne(filter) {
+            if (state.row?.key === filter.key && state.row?.token === filter.token)
+                state.row = null
+            return { deletedCount: 1 }
+        }
     }
+    return { Model, state }
 }
 
 describe('sales sync cron', () => {
     it('imports from Comax, then syncs sales+products, then releases the lock', async () => {
         const calls = []
-        const redis = fakeRedis()
+        const { Model, state } = fakeLockModel()
         const result = await runSalesSync(
-            { DL: { redis }, external: {} },
+            { DL: {}, external: {} },
             {
+                lockModel: Model,
                 importFn: async () => {
                     calls.push('import')
                     return { count: 3 }
@@ -48,16 +53,20 @@ describe('sales sync cron', () => {
         assert.equal(result.importResult.count, 3)
         assert.equal(result.syncResult.synced, 2)
         assert.equal(result.syncResult.saleUpdates.updatedProducts, 10)
-        assert.equal(redis.has('sales-sync:lock'), false)
+        assert.equal(state.row, null)
     })
 
     it('skips when another instance holds the lock (no import, no sync)', async () => {
         const calls = []
-        const redis = fakeRedis()
-        await redis.set('sales-sync:lock', 'other-instance', 'EX', 60, 'NX')
+        const { Model } = fakeLockModel({
+            key: 'sales-sync:lock',
+            token: 'other-instance',
+            expiresAt: new Date(Date.now() + 60_000)
+        })
         await runSalesSync(
-            { DL: { redis }, external: {} },
+            { DL: {}, external: {} },
             {
+                lockModel: Model,
                 importFn: async () => {
                     calls.push('import')
                 },
@@ -70,11 +79,12 @@ describe('sales sync cron', () => {
     })
 
     it('releases the lock and rethrows when a step fails', async () => {
-        const redis = fakeRedis()
+        const { Model, state } = fakeLockModel()
         await assert.rejects(
             runSalesSync(
-                { DL: { redis }, external: {} },
+                { DL: {}, external: {} },
                 {
+                    lockModel: Model,
                     importFn: async () => {
                         throw new Error('comax down')
                     },
@@ -83,6 +93,6 @@ describe('sales sync cron', () => {
             ),
             /comax down/
         )
-        assert.equal(redis.has('sales-sync:lock'), false)
+        assert.equal(state.row, null)
     })
 })

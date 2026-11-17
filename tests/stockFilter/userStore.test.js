@@ -6,9 +6,11 @@ import { resolveStockContext } from '../../server/utils/data/withStock.js'
 // Stock filtering reads the cart order's store on every storefront request, so the
 // resolved store is cached per user. The cache is only safe while every store write
 // invalidates it — these fakes stand in for Redis and the cart order.
+// `status: 'ready'` matters: a cache is only used while its client can answer.
 const fakeRedis = () => {
     const store = {}
     return {
+        status: 'ready',
         get: async (key) => store[key] ?? null,
         set: async (key, value) => { store[key] = value },
         del: async (key) => { delete store[key]; return 1 }

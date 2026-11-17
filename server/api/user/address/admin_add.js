@@ -1,5 +1,6 @@
 import { addAddress } from '#server/utils/data/userAddress.js'
 import { updateOrderAddress } from '#server/api/order/address/update.js'
+import { redisDel } from '#server/utils/redisSafe.js'
 
 export default async function admin_add(payload, { DL, external, utils, _admin }) {
     const { userId, ...address } = payload
@@ -13,7 +14,7 @@ export default async function admin_add(payload, { DL, external, utils, _admin }
         { $push: { addresses: geocoded } },
         { select: DL.User.defaultSelect }
     )
-    await DL.redis?.del(`user_auth:${user.id}`)
+    await redisDel(DL.redis, `user_auth:${user.id}`)
 
     if (!geocoded.active) return { user: updatedUser }
 

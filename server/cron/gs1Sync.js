@@ -1,6 +1,6 @@
 import cron from 'node-cron'
 import log from '#server/utils/log.js'
-import { acquireLock } from '#server/utils/redisLock.js'
+import { acquireLock } from '#server/utils/cronLock.js'
 import { startRun, finalizeRun } from '#server/services/gs1/sync.js'
 import { runEnrich, runImages } from '#server/services/gs1/enrich.js'
 import { getFetchQueue } from '#server/queues/gs1Queues.js'
@@ -28,7 +28,7 @@ async function waitFetchDrain(timeoutMs) {
 export async function runGs1Sync({ DL, external }) {
     let release
     try {
-        release = await acquireLock(DL.redis, LOCK_KEY, LOCK_TTL_SECONDS)
+        release = await acquireLock(LOCK_KEY, LOCK_TTL_SECONDS)
         if (!release) {
             log.warn('[Gs1Sync] Skipped — another instance holds the lock')
             return null

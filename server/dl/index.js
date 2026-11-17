@@ -171,7 +171,8 @@ export default async function createDL(__dirname) {
         const select = Object.fromEntries(sourceKeys.map(key => [key, 1]))
         select.id = 1
 
-        let sources = await Model.cache.get(sourceIds, select)
+        // Cache miss (no cache, Redis down, or an empty hash) → read from Mongo.
+        let sources = await Model.cache?.get(sourceIds, select)
         if (!sources?.length) {
             sources = await DL[modelName].read({ id: sourceIds }, { ...select, _id: 0 })
         }

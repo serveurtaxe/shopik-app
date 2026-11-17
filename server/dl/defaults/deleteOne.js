@@ -20,7 +20,7 @@ export default Model => async function deleteOne(filter = {}) {
     )
 
     if (cacheStrategy && res.deletedCount) {
-        await Model.cache.del(id)
+        await Model.cache?.del(id)
     }
 
     return res

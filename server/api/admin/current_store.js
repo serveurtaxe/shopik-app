@@ -16,7 +16,9 @@ export default async function current_store({ storeId }, { DL, _admin }) {
         throw { status: 400, message: 'store not found' }
 
     await DL.Admin.updateOne({ id: _admin.id }, { currentStoreId: storeId })
-    if (DL.redis) await DL.redis.del(`admin_auth:${_admin.id}`).catch(() => {})
+    // A skipped invalidation is harmless while Redis is down: getAdmin answers
+    // from MongoDB whenever Redis cannot answer.
+    await redisDel(DL.redis, `admin_auth:${_admin.id}`)
     return { currentStoreId: storeId }
 }
 
