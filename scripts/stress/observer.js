@@ -22,6 +22,7 @@ export class MongoObserver {
         this.window = null
         this.poller = null
         this.pollFails = 0
+        this.statusFails = 0
     }
 
     async connect() {
@@ -117,8 +118,10 @@ export class MongoObserver {
                 this.window.evictions += num(wt(status, 'evicted by application threads')) - (this.window.evictionsLast ?? 0)
                 this.window.evictionsLast = num(wt(status, 'evicted by application threads'))
             } catch {
-                this.hasServerStatus = false
-                this.note('serverStatus disabled after failure')
+                if (++this.statusFails >= 3) {
+                    this.hasServerStatus = false
+                    this.note('serverStatus disabled after repeated failures')
+                }
             }
         }
     }
@@ -209,7 +212,11 @@ function num(value) {
 }
 
 function wt(status, fragment) {
-    const metrics = status?.wiredTiger?.metrics || {}
-    const key = Object.keys(metrics).find(k => k.includes(fragment))
-    return key ? metrics[key] : undefined
+    // WiredTiger counters live under wiredTiger.transactions (bytes/dirty/evictions),
+    // block cache stats under wiredTiger.blockCache — .metrics is a different group.
+    for (const group of [status?.wiredTiger?.transactions, status?.wiredTiger?.blockCache, status?.wiredTiger?.metrics]) {
+        const key = Object.keys(group || {}).find(k => k.includes(fragment))
+        if (key) return group[key]
+    }
+    return undefined
 }
