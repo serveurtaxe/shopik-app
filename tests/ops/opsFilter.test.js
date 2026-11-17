@@ -226,9 +226,9 @@ describe('ops queue roles', () => {
         // so the flag is derived the same way the pipeline derives it.
         const closed = status => CLOSED_STATUSES.includes(status) ? 1 : 0
         const docs = [
-            { id: 'closed1', storeId: 's1', status: 'done', closedFirst: closed('done'), shipper: { adminId: 'd1' }, window: { endTimestamp: 1000 } },
-            { id: 'open1', storeId: 's1', status: 'shipped', closedFirst: closed('shipped'), shipper: { adminId: 'd1' }, window: { endTimestamp: 2000 } },
-            { id: 'open2', storeId: 's1', status: 'shipped', closedFirst: closed('shipped'), shipper: { adminId: 'd1' }, window: { endTimestamp: 3000 } }
+            { id: 'closed1', storeId: 's1', status: 'done', closedFirst: closed('done'), shipper: { adminId: 'd1' }, window: { endTimestamp: 1000 }, cartCount: 0, handledCount: 0 },
+            { id: 'open1', storeId: 's1', status: 'shipped', closedFirst: closed('shipped'), shipper: { adminId: 'd1' }, window: { endTimestamp: 2000 }, cartCount: 0, handledCount: 0 },
+            { id: 'open2', storeId: 's1', status: 'shipped', closedFirst: closed('shipped'), shipper: { adminId: 'd1' }, window: { endTimestamp: 3000 }, cartCount: 0, handledCount: 0 }
         ]
         const DL = {
             Order: { Model: { filterFields: new Set(['id']), schema: { path: () => ({ instance: 'String' }) }, aggregate: async () => docs } },
@@ -245,6 +245,9 @@ describe('ops queue roles', () => {
         assert.equal(rows[0].closedFirst, undefined)
         assert.equal(rows[0].mineFirst, undefined)
         assert.ok(rows[0].isMine)
+        // The queue row is a card row: counts instead of a cart, whatever the tab
+        assert.equal(rows[0].cart, undefined)
+        assert.ok('cartCount' in rows[0] && 'handledCount' in rows[0])
     })
 
     it('applies the role window on the queue read itself, not only on the count', async () => {
@@ -269,7 +272,7 @@ describe('ops queue roles', () => {
         assert.equal(match.$and[1].$or.length, 1)
     })
 
-    it('returns each ops cart grouped by category', async () => {
+    it('the by-id detail keeps the full cart grouped by category, the queue does not carry one', async () => {
         const docs = [{
             id: 'o1', storeId: 's1', status: 'paid', cart: [
                 { barcode: 'later-l3', category: { id: 'nc:9:904:9142' } },
@@ -290,12 +293,31 @@ describe('ops queue roles', () => {
         }
         const admin = makeAdmin({ id: 'a1', permissions: ['order:read'], currentStoreId: 's1' })
 
-        const rows = await list({ filter: {} }, { DL, _admin: admin })
+        const rows = await list({ filter: { id: 'o1' } }, { DL, _admin: admin })
 
         assert.deepEqual(
             rows[0].cart.map(item => item.barcode),
             ['first', 'later-l2', 'later-l3', 'uncategorized']
         )
+        // A detail row has the cart itself — no separate count fields on it.
+        assert.equal(rows[0].cartCount, undefined)
+
+        // The same read without an id is the queue: the cart is excluded from the
+        // projection and only its counts come through.
+        const queuePipeline = {}
+        const queueDL = {
+            ...DL,
+            Order: {
+                Model: {
+                    ...DL.Order.Model,
+                    aggregate: stages => { queuePipeline.stages = stages; return [] }
+                }
+            }
+        }
+        await list({ filter: {} }, { DL: queueDL, _admin: admin })
+        const project = queuePipeline.stages.find(s => s.$project).$project
+        assert.equal(project.cart, undefined)
+        assert.ok(project.cartCount && project.handledCount)
     })
 
     it('a tab asks for its view through the same rule the server uses, so a badge cannot count more than the tab shows', () => {
