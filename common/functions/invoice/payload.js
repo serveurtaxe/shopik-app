@@ -82,10 +82,12 @@ export function buildDocPayload({
     sendEmail = true,
     payment = null,
     parent,
-    idTransaction
+    idTransaction,
+    documentDiscount = 0
 } = {}) {
     const email = cleanText(customer.email || order.email, 120)
     const items = buildInvoiceItems(lines)
+    const orderDiscount = round2(Number(documentDiscount) || 0)
     const payload = {
         type: docType,
         lang: settings.language || 'he',
@@ -100,13 +102,17 @@ export function buildDocPayload({
     payload.show_items_including_vat = 1
 
     // 320 (invoice receipt) rejects the request without `price_total` and a
-    // payment row. Line totals are `amount * price - discount_price`, so their
-    // sum is the captured total — no recalculation, and it matches
-    // assertTotalsMatch by construction. Credit notes (330) must not carry
-    // either: price_total is positive-only and a credit is not a payment.
+    // payment row. Line totals are `amount * price - discount_price`; a
+    // document-level discount is subtracted once more. The result is the
+    // captured total — no recalculation, and it matches assertTotalsMatch by
+    // construction. Credit notes (330) must not carry either: price_total is
+    // positive-only and a credit is not a payment.
     if (docType === DOC_TYPE.INVOICE) {
         if (items.length)
-            payload.price_total = round2(items.reduce((sum, item) => sum + lineTotalOf(item), 0))
+            payload.price_total = round2(items.reduce((sum, item) => sum + lineTotalOf(item), 0) - orderDiscount)
+        // A single discount line (gross amount). Only used when every invoice
+        // line is taxable, because EZcount applies it to the taxable side.
+        if (orderDiscount > 0) payload.discount = orderDiscount.toFixed(2)
         // EZcount recalculates `amount * price` per line with its own rounding,
         // so a line landing on an exact half-cent can disagree with ours by one
         // agora. auto_balance lets the provider absorb that cent as a discount

@@ -275,6 +275,7 @@ export async function issueInvoice({
             items: lines.items,
             shippingLine: lines.shippingLine,
             roundingLine: lines.roundingLine,
+            documentDiscount: lines.documentDiscount,
             captured: charged
         })
     } catch (e) {
@@ -325,7 +326,8 @@ export async function issueInvoice({
         settings: config,
         sendEmail: config.sendEmail,
         payment: [buildPaymentRow({ amount: charged, settings: config })],
-        idTransaction: idempotencyKey
+        idTransaction: idempotencyKey,
+        documentDiscount: lines.documentDiscount
     })
 
     const itemSnapshot = items.map(({ productId, barcode, name, quantity, gross, price, discount, vat }) => ({

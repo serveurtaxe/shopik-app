@@ -242,6 +242,26 @@ describe('issueInvoice', () => {
         assert.ok(events.some(e => e.eventType === 'invoice_issued'))
     })
 
+    it('uses one document-level coupon line for an all-taxable basket', async () => {
+        const DL = makeFakeDL({ settings: ENABLED_SETTING })
+        const external = fakeExternal(OK_RESPONSE)
+        const order = orderFixture()
+        order.cart = [
+            { id: '1', barcode: 'T1', name: 'Tomatoes', finalAmount: 2, totalSum: 50, vat: true },
+            { id: '2', barcode: 'M1', name: 'Milk', finalAmount: 3, totalSum: 100, vat: true }
+        ]
+
+        const record = await issueInvoice({ DL, external, utils, order, captured: 155 })
+
+        assert.equal(record.status, 'issued')
+        const payload = external.calls[0].payload
+        // One coupon line instead of a discount on every item.
+        assert.equal(payload.discount, '15.00')
+        assert.equal(payload.item.some(i => 'discount_price' in i), false)
+        assert.deepEqual(payload.item.map(i => i.price), ['25.00', '33.33', '20.00', '0.01'])
+        assert.equal(payload.price_total, 155)
+    })
+
     it('does not create a second document for the same order', async () => {
         const DL = makeFakeDL({ settings: ENABLED_SETTING })
         const external = fakeExternal(OK_RESPONSE)

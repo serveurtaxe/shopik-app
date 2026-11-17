@@ -102,6 +102,20 @@ describe('buildDocPayload', () => {
         assert.equal(payload.price_total, 42)
     })
 
+    it('applies a document-level discount once on a 320 (single coupon line)', () => {
+        const payload = buildDocPayload({ order, lines, customer, documentDiscount: 15 })
+        assert.equal(payload.discount, '15.00')
+        // 45 + 90 + 20 - 15
+        assert.equal(payload.price_total, 140)
+        // The item rows keep their shelf prices with no per-line discount.
+        assert.equal(payload.item.some(i => 'discount_price' in i), false)
+    })
+
+    it('never carries a document discount on a credit note', () => {
+        const payload = buildDocPayload({ order, lines, customer, docType: DOC_TYPE.CREDIT, documentDiscount: 15 })
+        assert.equal('discount' in payload, false)
+    })
+
     it('does not send price_total on a credit note', () => {
         const payload = buildDocPayload({ order, lines, customer, docType: DOC_TYPE.CREDIT })
         assert.equal('price_total' in payload, false)

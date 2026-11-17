@@ -141,17 +141,29 @@ export function buildRoundingLine(drift = 0, { name = 'הפרשי עיגול' } 
  * The invoice body: served lines after coupon + shipping + rounding reconciliation.
  * `order.finalShipping` is written by captureOrder and is the amount charged.
  *
- * Each item keeps its pre-coupon `gross` and gets:
- *  - `price`: the pre-coupon unit price (the shelf price);
- *  - `discount`: the explicit per-line discount amount (EZcount `discount_price`);
- *  - `netGross`: what was actually charged for the line.
- * `price * quantity - discount` is the line total sent to EZcount.
+ * Coupon presentation:
+ *  - All invoiced lines taxable → one document-level discount (`documentDiscount`),
+ *    and the item rows keep their shelf prices untouched. EZcount's document
+ *    discount is applied to the taxable side, which is exactly right here.
+ *  - Mixed / fully exempt basket → per-line `discount` (EZcount `discount_price`).
+ *    A document-level discount would push the whole coupon onto the taxable
+ *    side (mixed) or compute negative VAT (all-exempt), so it must be avoided.
+ *
+ * Each item also keeps `netGross` (= gross - coupon share), which is what was
+ * actually charged for the line.
  */
 export function buildInvoiceLines({ order, settings = {} } = {}) {
+    const coupon = couponTotalOf(order?.coupons)
     const rawItems = allocateCoupon({
         items: collectInvoiceItems(order?.cart),
-        couponTotal: couponTotalOf(order?.coupons)
+        couponTotal: coupon
     })
+    // EZcount applies a document-level discount to the taxable side only, so
+    // this presentation is safe only when every invoiced line is taxable.
+    const allTaxable = rawItems.length > 0 && rawItems.every(item => item.vat !== false)
+    const grossTotal = round2(rawItems.reduce((acc, item) => acc + item.gross, 0))
+    const documentDiscount = allTaxable ? round2(Math.min(coupon, grossTotal)) : 0
+
     const items = rawItems.map(item => {
         const price = computeUnitPrice(item.gross, item.quantity)
         const quantity = Number(item.quantity) || 0
@@ -159,7 +171,9 @@ export function buildInvoiceLines({ order, settings = {} } = {}) {
         // Discount is capped at the line total so a row can never go negative.
         // A floor-priced row can land below netGross; that residual is picked
         // up by the rounding line instead of turning into a negative discount.
-        const discount = round2(Math.min(Math.max(lineTotal - item.netGross, 0), lineTotal))
+        const discount = documentDiscount > 0
+            ? 0
+            : round2(Math.min(Math.max(lineTotal - item.netGross, 0), lineTotal))
         return { ...item, price, discount }
     })
     const shipping = round2(Number(order?.finalShipping ?? order?.shipping ?? 0) || 0)
@@ -167,16 +181,17 @@ export function buildInvoiceLines({ order, settings = {} } = {}) {
 
     const lineTotalOf = item => round2(round2(Number(item.quantity) * Number(item.price)) - round2(Number(item.discount) || 0))
     const invoicedItemsGross = round2(items.reduce((acc, item) => acc + lineTotalOf(item), 0))
-    const totalWithoutRounding = round2(invoicedItemsGross + (shippingLine ? lineTotalOf(shippingLine) : 0))
+    const shippingTotal = shippingLine ? lineTotalOf(shippingLine) : 0
+    const totalWithoutRounding = round2(invoicedItemsGross + shippingTotal - documentDiscount)
     const targetTotal = round2(rawItems.reduce((acc, item) => acc + item.netGross, 0) + shipping)
     const drift = round2(targetTotal - totalWithoutRounding)
     const roundingLine = buildRoundingLine(drift, { name: settings.roundingLabel })
 
     const total = round2(totalWithoutRounding + (roundingLine?.gross || 0))
-    return { items, shippingLine, roundingLine, shipping, total, drift, coupon: couponTotalOf(order?.coupons) }
+    return { items, shippingLine, roundingLine, shipping, total, drift, coupon, documentDiscount }
 }
 
-export function invoiceTotal({ items = [], shippingLine, roundingLine } = {}) {
+export function invoiceTotal({ items = [], shippingLine, roundingLine, documentDiscount = 0 } = {}) {
     const lineTotal = (line) => {
         const q = Number(line.quantity ?? 1)
         const p = line.price != null ? Number(line.price) : round2(Number(line.gross) / q)
@@ -185,7 +200,7 @@ export function invoiceTotal({ items = [], shippingLine, roundingLine } = {}) {
     const itemsSum = round2(items.reduce((acc, item) => acc + lineTotal(item), 0))
     const ship = shippingLine ? lineTotal(shippingLine) : 0
     const round = roundingLine ? lineTotal(roundingLine) : 0
-    return round2(itemsSum + ship + round)
+    return round2(itemsSum + ship + round - (Number(documentDiscount) || 0))
 }
 
 /**
@@ -233,8 +248,8 @@ export function buildCreditLines({ refundItems = [], cart = [] } = {}) {
  * The document total must equal the captured amount. This is the only hard
  * assertion in the flow: a mismatch means the wrong rows would be invoiced.
  */
-export function assertTotalsMatch({ items = [], shippingLine, roundingLine, captured } = {}) {
-    const total = invoiceTotal({ items, shippingLine, roundingLine })
+export function assertTotalsMatch({ items = [], shippingLine, roundingLine, documentDiscount = 0, captured } = {}) {
+    const total = invoiceTotal({ items, shippingLine, roundingLine, documentDiscount })
     const charged = round2(Number(captured) || 0)
     if (Math.abs(total - charged) > INVOICE_EPS) {
         const error = new Error(`invoice total ${total} does not match captured ${charged}`)
