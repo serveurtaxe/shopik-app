@@ -27,7 +27,7 @@ export async function acquireLock(key, ttlSeconds, { Model = CronLock } = {}) {
         const taken = await Model.findOneAndUpdate(
             { key, expiresAt: { $lt: now } },
             { $set: { token, expiresAt } },
-            { upsert: true, new: true, setDefaultsOnInsert: true }
+            { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
         ).lean()
 
         if (!taken) return null
