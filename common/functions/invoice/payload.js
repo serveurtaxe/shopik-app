@@ -21,10 +21,8 @@ export function vatTypeOf(vat) {
  * One EZcount item row.
  *
  * `amount` is the actual item quantity (e.g. 2, 3, 1.35) and `price` is the
- * pre-coupon unit price the customer saw. When a coupon was spread over the
- * line, `discount_price` carries the explicit line-level discount amount
- * (EZcount computes the line as `amount * price - discount_price`), so the
- * document never prints a coupon-reduced unit price.
+ * pre-coupon unit price the customer saw. A coupon is sent as its own
+ * negative-price row (see invoice lines), never baked into the unit price.
  *
  * Rounding drifts across lines are reconciled with a dedicated rounding line so
  * the sum of line totals matches the charged total exactly.
@@ -34,27 +32,22 @@ export function buildInvoiceItem(line = {}) {
     const unitPrice = line.price != null
         ? Number(line.price)
         : (qty > 0 ? round2(Number(line.gross) / qty) : Number(line.gross) || 0)
-    const discount = round2(Number(line.discount) || 0)
-    const row = {
+    return {
         details: describeInvoiceLine(line),
         amount: String(qty),
         price: round2(unitPrice).toFixed(2),
         vat_type: vatTypeOf(line.vat)
     }
-    if (discount > 0) row.discount_price = discount.toFixed(2)
-    return row
 }
 
 export function lineTotalOf(item = {}) {
-    return round2(
-        round2(Number(item.amount ?? 1) * Number(item.price || 0)) -
-        round2(Number(item.discount_price) || 0)
-    )
+    return round2(Number(item.amount ?? 1) * Number(item.price || 0))
 }
 
 export function buildInvoiceItems(lines = []) {
     return (lines || [])
-        .filter(line => line && Number(line.gross) > 0)
+        // Keep negative coupon rows; drop only empty/skipped lines.
+        .filter(line => line && Number(line.gross) !== 0)
         .map(buildInvoiceItem)
 }
 
@@ -82,12 +75,10 @@ export function buildDocPayload({
     sendEmail = true,
     payment = null,
     parent,
-    idTransaction,
-    documentDiscount = 0
+    idTransaction
 } = {}) {
     const email = cleanText(customer.email || order.email, 120)
     const items = buildInvoiceItems(lines)
-    const orderDiscount = round2(Number(documentDiscount) || 0)
     const payload = {
         type: docType,
         lang: settings.language || 'he',
@@ -102,17 +93,13 @@ export function buildDocPayload({
     payload.show_items_including_vat = 1
 
     // 320 (invoice receipt) rejects the request without `price_total` and a
-    // payment row. Line totals are `amount * price - discount_price`; a
-    // document-level discount is subtracted once more. The result is the
-    // captured total — no recalculation, and it matches assertTotalsMatch by
-    // construction. Credit notes (330) must not carry either: price_total is
-    // positive-only and a credit is not a payment.
+    // payment row. Item rows include the negative coupon row(s), so their sum
+    // is the captured total — no recalculation, and it matches
+    // assertTotalsMatch by construction. Credit notes (330) must not carry
+    // either: price_total is positive-only and a credit is not a payment.
     if (docType === DOC_TYPE.INVOICE) {
         if (items.length)
-            payload.price_total = round2(items.reduce((sum, item) => sum + lineTotalOf(item), 0) - orderDiscount)
-        // A single discount line (gross amount). Only used when every invoice
-        // line is taxable, because EZcount applies it to the taxable side.
-        if (orderDiscount > 0) payload.discount = orderDiscount.toFixed(2)
+            payload.price_total = round2(items.reduce((sum, item) => sum + lineTotalOf(item), 0))
         // EZcount recalculates `amount * price` per line with its own rounding,
         // so a line landing on an exact half-cent can disagree with ours by one
         // agora. auto_balance lets the provider absorb that cent as a discount
