@@ -1,5 +1,6 @@
 import { runEnrich } from '#server/services/gs1/enrich.js'
 import { initBulkFlusher } from '#server/services/gs1/bulk.js'
+import { scanDel } from '#server/utils/redisSafe.js'
 
 // POST /api/gs1/alias {barcode, short, apply?, clear?}
 // Confirm the short product a GTIN belongs to. A manual mapping wins over
@@ -30,6 +31,10 @@ export default async function gs1Alias(payload, { DL, external }) {
         { barcode },
         { $set: set, $unset: { skipReason: '' } }
     )
+
+    // gs1/aliases answers its badge count from a short-TTL Redis key —
+    // the modal re-lists right after a confirm and must see the new total.
+    await scanDel(DL.redis, 'gs1:aliasCount:*')
 
     if (!payload?.apply) return { ok: true, barcode, short: clear ? '' : short }
 
