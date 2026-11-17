@@ -110,4 +110,20 @@ const comaxProductSchema = {
     salesLastDays: Number
 }
 
+export const meta = {
+    index: [
+        // The nightly sync updates batches by comaxId ($in) and the sale sync's $or
+        // probes comaxId/models.id — unindexed, each was a full collscan of the
+        // catalog per batch. storeIds covers the per-store distinct in the import.
+        { comaxId: 1 },
+        { 'models.id': 1 },
+        { storeIds: 1 },
+        // Admin filter options run distinct() over these; sales_window groups by
+        // departmentCode — all were full collection scans without an index.
+        { superDepartment: 1 },
+        { department: 1 },
+        { departmentCode: 1 }
+    ]
+}
+
 export default comaxProductSchema

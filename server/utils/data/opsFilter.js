@@ -17,9 +17,11 @@ export function todayStr() {
 export function opsSearchMatch(Model, filter, search) {
     if (!search?.length) return filter
 
+    // Anchored prefix (^abc): an unanchored regex forces a full scan of the queue's
+    // collection on every keystroke; anchored bounds can ride the existing indexes.
     const or = [...(Model.filterFields || [])]
         .filter(field => Model.schema.path(field)?.instance === 'String')
-        .map(field => ({ [field]: new RegExp(String(search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') }))
+        .map(field => ({ [field]: new RegExp('^' + String(search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') }))
 
     if (!or.length) return filter
     return { $and: [filter, { $or: or }] }
