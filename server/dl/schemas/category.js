@@ -28,6 +28,7 @@ export const meta = {
     cacheStrategy: CACHE_STRATEGIES.HASHSET,
     index: [
         { code: 1 },
+        { path: 1 },
         { parentId: 1, sortOrder: 1 }
     ]
 }
