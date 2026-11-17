@@ -409,10 +409,16 @@ async function createModelFromSchema(schemaPath) {
         })
 
         if (search?.length && Model.filterFields) {
-            for (const field of Model.filterFields) {
-                if (get(schema, `${field}.type`) === String) {
-                    if (!processed.$or) processed.$or = []
-                    processed.$or.push({ [field]: new RegExp(search) })
+            // Anchored + escaped: an unanchored regex can never use an index, so every
+            // admin list/count search was a collscan; unescaped input could also crash
+            // the query outright (e.g. a lone "(" → invalid RegExp).
+            const escaped = String(search).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+            if (escaped) {
+                for (const field of Model.filterFields) {
+                    if (get(schema, `${field}.type`) === String) {
+                        if (!processed.$or) processed.$or = []
+                        processed.$or.push({ [field]: new RegExp('^' + escaped) })
+                    }
                 }
             }
         }

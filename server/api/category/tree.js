@@ -61,7 +61,7 @@ export default async function tree(payload, { DL }) {
         DL.Product.Model.aggregate([
             { $match: activeFilter },
             { $group: { _id: '$comaxSubGroupCode', count: { $sum: 1 } } }
-        ]),
+        ], { allowDiskUse: true }),
         DL.Product.Model.countDocuments(activeFilter)
     ])
 

@@ -149,7 +149,7 @@ const productSchema = {
             amount: Number // weight in baseUnit, e.g. 10 (kg)
         }]
     },
-    saleIds: { type: [String], filter: true, index: true },
+    saleIds: { type: [String], filter: true },
     sortOrder: {
         type: Number,
         min: 0,
@@ -306,7 +306,10 @@ export const meta = {
         { storeIds: 1 },
         { status: 1, 'category.pathIds': 1 },
         { status: 1, comaxSubGroupCode: 1 },
-        { status: 1, 'prices.domainId': 1 }
+        { status: 1, 'prices.domainId': 1 },
+        // sale/sync's stale-saleIds sweep (distinct barcode where saleIds non-empty):
+        // sparse keeps the scan bounded to products that actually carry a sale.
+        [{ saleIds: 1 }, { sparse: true }]
     ]
 }
 

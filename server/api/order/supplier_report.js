@@ -24,7 +24,7 @@ export default async function supplierReport(payload, { DL }) {
                 saleTotal: { $sum: { $ifNull: ['$finalSumWithShipping', 0] } }
             }
         }
-    ])
+    ], { allowDiskUse: true })
     const docs = await DL.Order.Model.find(
         { ...match, 'comaxDoc.docNumber': { $exists: true, $ne: null } },
         { _id: 0, number: 1, storeId: 1, paidAt: 1, supplierTotal: 1, 'comaxDoc.docNumber': 1 }

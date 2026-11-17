@@ -37,4 +37,9 @@ const comaxDeliveryDocSchema = {
     error: String
 }
 
+export const meta = {
+    // The deliveryDocsSync cron polls due rows every 5 minutes.
+    index: [{ status: 1, nextAttemptAt: 1 }]
+}
+
 export default comaxDeliveryDocSchema
