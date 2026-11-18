@@ -35,6 +35,7 @@ function makeDL({
     const distinctFilters = []
     const modelBulkWrites = []
     let storeBarcodes = {}
+    let allBarcodes = []
 
     const DL = {
         CashRegister: {
@@ -51,6 +52,9 @@ function makeDL({
                 },
                 distinct: async (field, filter) => {
                     distinctFilters.push(filter)
+                    // No storeIds in the filter means the whole collection: that is
+                    // how the import asks "is this sold barcode a row at all".
+                    if (filter?.storeIds == null) return allBarcodes
                     return storeBarcodes[filter?.storeIds] || []
                 },
                 updateMany: async (filter, update) => {
@@ -101,7 +105,8 @@ function makeDL({
         zeroed,
         distinctFilters,
         modelBulkWrites,
-        setStoreBarcodes: map => { storeBarcodes = map }
+        setStoreBarcodes: map => { storeBarcodes = map },
+        setAllBarcodes: list => { allBarcodes = list }
     }
 }
 
@@ -215,16 +220,54 @@ describe('comax store feed import', () => {
         })
     })
 
-    it('only upserts sellable, non-archived items', async () => {
+    it('creates a row for an item the store carries without a price, and skips archived ones', async () => {
         const { DL, writes } = makeDL()
         const { external } = makeExternal({
             stores: { 84: [makeProduct(0), makeProduct(1, { price: 0 }), makeProduct(2, { archived: true })] },
             departments: { 13: [makeProduct(3)] }
         })
 
-        await importComaxProducts({}, { DL, external })
+        const result = await importComaxProducts({}, { DL, external })
 
-        assert.deepEqual(writes[0].upserts, [true, false, false])
+        // An unpriced item the feed carried is a Comax item with no entry in
+        // either price list: it belongs in the catalog so the report can show it.
+        // Archived items stay the backfill's rows, which are written flagged.
+        assert.deepEqual(writes[0].upserts, [true, true, false])
+        assert.equal(result.noPrice, 1)
+    })
+
+    it('clears the selling price for an item Comax carries without one', async () => {
+        const { DL, writes } = makeDL()
+        const { external } = makeExternal({
+            // No selling price and no delivery row. Left alone, the stored price
+            // from the last time it had one would survive the write.
+            stores: { 84: [makeProduct(0, { price: undefined, buyingPrice: undefined })] },
+            departments: { 13: [makeProduct(1)] }
+        })
+
+        const result = await importComaxProducts({}, { DL, external })
+
+        const update = updateFor(writes, '1000')
+        assert.equal(update.$set.price, 0)
+        assert.equal(update.$set.buyingPrice, undefined, 'no 255 row is not a verdict on the buying price')
+        assert.equal(result.noPrice, 1)
+    })
+
+    it('keeps the buying price of an item that has one and no selling price', async () => {
+        // 139232 מסטר נתחים צלעות בקר טרי חלק: Comax answers 42 in the 255 list and
+        // nothing in 1069. The report has to show both halves of that.
+        const { DL, writes } = makeDL()
+        const { external } = makeExternal({
+            stores: { 84: [makeProduct(0, { price: 0, buyingPrice: 42 })] },
+            departments: { 13: [makeProduct(1)] }
+        })
+
+        const result = await importComaxProducts({}, { DL, external })
+
+        const update = updateFor(writes, '1000')
+        assert.equal(update.$set.price, 0)
+        assert.equal(update.$set.buyingPrice, 42)
+        assert.equal(result.noPrice, 1)
     })
 
     it('preserves the stored buying price when the feed has no delivery row', async () => {
@@ -369,7 +412,10 @@ describe('comax store feed import', () => {
 
         const result = await importComaxProducts({}, { DL, external })
 
-        assert.deepEqual(distinctFilters, [{ storeIds: 'store-a' }])
+        // The import also reads the whole barcode set (that is how a price-less
+        // item is recognised as an existing row), so only the stock-scoped reads
+        // are what this step may issue.
+        assert.deepEqual(distinctFilters.filter(f => f?.storeIds), [{ storeIds: 'store-a' }])
         assert.equal(pulls.length, 1)
         assert.deepEqual(pulls[0].filter, { barcode: { $in: ['9999'] }, storeIds: 'store-a' })
         assert.deepEqual(pulls[0].update, { $pull: { storeIds: 'store-a' } })
@@ -626,6 +672,81 @@ describe('comax sales window', () => {
         assert.equal(pulls.length, 0)
         assert.deepEqual(modelBulkWrites[0].updateOne.filter, { barcode: '1000' })
         assert.ok(modelBulkWrites[0].updateOne.update.$max.lastSaleDate instanceof Date)
+    })
+
+    it('names a sold item that has no catalog row', async () => {
+        const { DL, setAllBarcodes } = makeDL({ registers: [reg('store-a', '84')], settings: SETTINGS })
+        setAllBarcodes(['1000'])
+        const { external } = makeExternal({
+            stores: { 84: [makeProduct(0)] },
+            departments: { 13: [makeProduct(1)] },
+            salesWindows: { 84: [row('1000', '13', daysAgo(10)), row('7290000000999', '13', daysAgo(4))] }
+        })
+
+        const result = await importComaxProducts({}, { DL, external })
+
+        // A barcode that sold and never became a row is invisible to the catalog
+        // report, and no feed is allowed to invent it: the import says so instead,
+        // because the catalog backfill is what can bring that item in.
+        assert.equal(result.soldWithoutRow, 1)
+    })
+
+    it('creates a row for a price-less department item that sold, not for one that did not', async () => {
+        const { DL, writes } = makeDL({ registers: [reg('store-a', '84')], settings: SETTINGS })
+        const { external } = makeExternal({
+            stores: { 84: [makeProduct(0)] },
+            departments: { 13: [makeProduct(1, { price: 0 }), makeProduct(2, { price: 0 })] },
+            salesWindows: { 84: [row('1001', '13', daysAgo(4))] }
+        })
+
+        const result = await importComaxProducts({}, { DL, external })
+
+        // 1001 sold, so it earns a row even though Comax has no price for it.
+        // 1002 came from a department feed, which asserts nothing about stock: Comax
+        // lists every item in the department, stocked or not, so one with no price in
+        // either list that sells nothing is noise and stays out of the catalog.
+        updateFor(writes, '1001')
+        assert.throws(() => updateFor(writes, '1002'), /was not written/)
+        assert.equal(result.noPrice, 1)
+        assert.equal(result.noPriceSkipped, 1)
+    })
+
+    it('creates a row for an item Comax prices for buying but has no selling price for', async () => {
+        const { DL, writes } = makeDL({ registers: [reg('store-a', '84')], settings: SETTINGS })
+        const { external } = makeExternal({
+            stores: { 84: [makeProduct(0)] },
+            departments: { 13: [makeProduct(1, { price: 0, buyingPrice: 42 })] },
+            salesWindows: { 84: [row('1000', '13', daysAgo(4))] }
+        })
+
+        const result = await importComaxProducts({}, { DL, external })
+
+        // 139232 מסטר נתחים צלעות בקר טרי חלק: the chain buys it at 42 and Comax has
+        // nothing to sell it for. That is a price-list gap worth a row even in a
+        // month it sells nothing.
+        assert.equal(updateFor(writes, '1001').$set.buyingPrice, 42)
+        assert.equal(result.noPrice, 1)
+        assert.equal(result.noPriceSkipped, 0)
+    })
+
+    it('keeps writing a price-less row that already exists even when nothing sells it', async () => {
+        const { DL, writes, setAllBarcodes } = makeDL({ registers: [reg('store-a', '84')], settings: SETTINGS })
+        setAllBarcodes(['1002'])
+        const { external } = makeExternal({
+            stores: { 84: [makeProduct(0)] },
+            departments: { 13: [makeProduct(1), makeProduct(2, { price: 0 })] },
+            salesWindows: { 84: [row('1001', '13', daysAgo(4))] }
+        })
+
+        const result = await importComaxProducts({}, { DL, external })
+
+        // Rows the catalog backfill or the buying price CSV created are the import's
+        // to keep refreshing: the gate must not let a quiet month drop them, because
+        // the whole point of them is that the report can name the missing price.
+        const update = updateFor(writes, '1002')
+        assert.equal(update.$set.price, 0)
+        assert.equal(result.noPrice, 1)
+        assert.equal(result.noPriceSkipped, 0)
     })
 
     it('removes the store id when the item did not sell inside its window', async () => {

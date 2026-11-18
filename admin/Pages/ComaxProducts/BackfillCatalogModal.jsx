@@ -15,7 +15,7 @@ const LIST_LIMIT = 20
 
 const COUNTS = [
     'codes', 'known', 'targets', 'processed', 'found',
-    'inserted', 'refreshed', 'existing', 'archived', 'withBuyingPrice', 'zeroPrice', 'errorCount'
+    'inserted', 'refreshed', 'existing', 'archived', 'noPriceList', 'withBuyingPrice', 'zeroPrice', 'errorCount'
 ]
 const SKIPS = ['notFound', 'noBarcode', 'idMismatch', 'duplicateBarcode']
 
@@ -196,6 +196,7 @@ export default function BackfillCatalogModal({ onDone }) {
                 <Stat TR={TR} label='backfill_refreshed' value={stats.refreshed} />
                 <Stat TR={TR} label='backfill_existing' value={stats.existing} />
                 <Stat TR={TR} label='backfill_archived' value={stats.archived} />
+                <Stat TR={TR} label='backfill_no_price_list' value={stats.noPriceList} />
                 <Stat TR={TR} label='backfill_buying_price' value={stats.withBuyingPrice} />
                 <Stat TR={TR} label='backfill_zero_price' value={stats.zeroPrice} />
                 <Stat TR={TR} label='backfill_errors' value={stats.errorCount} />

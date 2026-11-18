@@ -214,6 +214,36 @@ describe('catalog backfill writes', () => {
         assert.equal(calls[0].withOutArchive, false)
     })
 
+    it('writes an item Comax carries without a price-list entry', async () => {
+        // SelByPriceList is what brings the buying price, and Comax answers an
+        // empty body for an item with no entry in 1069/255. The butcher scale
+        // codes are this case: the item exists, it simply has no price yet.
+        const { DL, store } = fakeDL()
+        const { external, calls } = fakeComax({
+            43001: options => options.selByPriceList
+                ? null
+                : item('43001', { barcode: '43001', name: 'בקר טחון מחפוד', price: 0, buyingPrice: 0 })
+        })
+
+        const report = await backfillCatalog({ csv: csv('43001'), dryRun: false }, { DL, external })
+
+        assert.equal(report.inserted, 1, 'the item is real and belongs in the catalog')
+        assert.equal(report.noPriceList, 1)
+        assert.equal(report.zeroPrice, 1)
+        assert.equal(report.skipped.notFound, 0, 'an empty price-list answer is not "not found"')
+
+        const priced = calls.filter(call => call.selByPriceList)
+        // The run opens with one preflight lookup and retries the item three
+        // times, all of them price-list queries; the unfiltered look is the last.
+        assert.equal(priced.length, 4, 'preflight plus the retries all ask the price lists')
+        assert.equal(calls.length, priced.length + 1, 'and exactly one lookup goes around them')
+        assert.equal(calls[calls.length - 1].salesPriceArray, undefined)
+
+        const row = store.find(doc => doc.barcode === '43001')
+        assert.equal(row.buyingPrice, 0)
+        assert.ok(!row.archived, 'no price is not the same as archived in Comax')
+    })
+
     it('never writes an unknown, mismatched or barcode-less item', async () => {
         const { DL, store, writes } = fakeDL()
         const { external } = fakeComax({
