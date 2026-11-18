@@ -22,7 +22,7 @@ if (opts.discoverOnly) {
     const routes = await discoverRoutes({ only: opts.only, mutations: opts.mutations })
     console.log(`${routes.length} routes (${opts.mutations ? 'read + mutations' : 'read-only allow-list'}):\n`)
     for (const route of routes)
-        console.log(`  ${String(route.route).padEnd(40)} ${route.readOnly ? 'read ' : 'WRITE'} ${route.permissions.join(',')}`)
+        console.log(`  ${String(route.route).padEnd(40)} ${route.alsoRead ? 'read*' : route.readOnly ? 'read ' : 'WRITE'} ${route.permissions.join(',')}`)
     process.exit(0)
 }
 
@@ -49,7 +49,17 @@ async function newClient({ origin, platform }) {
 let observer
 
 try {
-    observer = new MongoObserver(opts.uri, { profileEnabled: opts.profile })
+    observer = new MongoObserver(opts.uri, {
+        profileEnabled: opts.profile,
+        slowMs: opts.slowMs,
+        probeEvery: opts.probeEvery,
+        // The ranking probe: an index-covered single-doc read (barcode_1), issued
+        // straight against mongod by the observer. See observer.js for why it is not
+        // an HTTP call.
+        probe: fixtures.productBarcodes.length
+            ? { collection: 'products', filter: { barcode: String(fixtures.productBarcodes[0]) }, projection: { _id: 0, barcode: 1 } }
+            : null
+    })
     const capabilities = await observer.connect()
     log(`observer capabilities: ${JSON.stringify(capabilities)}`)
 
@@ -84,7 +94,7 @@ try {
 
     const domainId = fixtures.domainId
     await sleep(1000) // let pools/plans settle before measuring the baseline
-    const baseline = await measureBaseline({ client: clients.admin, fixtures, seconds: 4, probeEvery: opts.probeEvery, domainId })
+    const baseline = await measureBaseline({ client: clients.admin, observer, fixtures, seconds: opts.baselineSeconds, probeEvery: opts.probeEvery, domainId })
     log(`baseline probe: ${JSON.stringify(baseline.kinds)} stats: ${JSON.stringify(baseline.stats)}`)
 
     const startedAt = new Date()
@@ -95,7 +105,7 @@ try {
         sequential = await runSequential({
             clients, fixtures, observer, routes,
             calls: opts.calls, concurrency: opts.concurrency,
-            probeEvery: opts.probeEvery, gap: opts.gap, domainId, log
+            probeEvery: opts.probeEvery, gap: opts.gap, minWindowMs: opts.minWindow, domainId, log
         })
     if (opts.mode === 'chaos' || opts.mode === 'both')
         chaos = await runChaos({

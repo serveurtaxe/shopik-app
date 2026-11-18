@@ -17,8 +17,11 @@ export function parseArgs(argv = process.argv.slice(2)) {
         calls: 30,
         concurrency: 10,
         chaosDuration: 60,
-        probeEvery: 400,
+        probeEvery: 150,
         gap: 2500,
+        baselineSeconds: 10,
+        minWindow: 3000,
+        slowMs: 20,
         only: null,
         mutations: false,
         idNum: null,
@@ -32,8 +35,9 @@ export function parseArgs(argv = process.argv.slice(2)) {
         discoverOnly: false
     }
     const flagsWithValues = new Set(['--target', '--mode', '--db-uri', '--base-url', '--calls', '--concurrency',
-        '--chaos-duration', '--probe-every', '--gap', '--only', '--id-num', '--user-phone', '--gate-password',
-        '--report-dir', '--admin-origin', '--storefront-origin'])
+        '--chaos-duration', '--probe-every', '--gap', '--baseline-seconds', '--min-window', '--slow-ms', '--only',
+        '--id-num', '--user-phone',
+        '--gate-password', '--report-dir', '--admin-origin', '--storefront-origin'])
     for (let i = 0; i < argv.length; i++) {
         const arg = argv[i]
         switch (arg) {
@@ -46,7 +50,8 @@ export function parseArgs(argv = process.argv.slice(2)) {
             const value = argv[++i]
             if (value == null) throw new Error(`${arg} requires a value`)
             const key = arg.slice(2).replace(/-([a-z])/g, (_, c) => c.toUpperCase())
-            opts[key] = key === 'calls' || key === 'concurrency' || key === 'chaosDuration' || key === 'probeEvery' || key === 'gap'
+            opts[key] = key === 'calls' || key === 'concurrency' || key === 'chaosDuration' || key === 'probeEvery'
+                || key === 'gap' || key === 'baselineSeconds' || key === 'minWindow' || key === 'slowMs'
                 ? Number(value)
                 : value
             continue
@@ -117,8 +122,14 @@ Usage:
   --calls <n>             calls per route in a sequential burst (default 30)
   --concurrency <c>       inflight requests (default 10)
   --chaos-duration <s>    chaos window seconds (default 60)
-  --probe-every <ms>      probe cadence during bursts (default 400)
+  --probe-every <ms>      probe cadence during bursts (default 250)
   --gap <ms>              cooldown between bursts (default 2500)
+  --baseline-seconds <s>  how long the no-load probe baseline runs (default 10; a
+                          short one gives a p50/p95 noisy enough to fake 2× impacts)
+  --min-window <ms>       every route is burst on repeat until its window lasts this
+                          long (default 3000) so the probe gets samples in every window
+  --slow-ms <ms>          profiler slowms: only operations at/over it are recorded
+                          (default 20; use 1 on a short --only run to see every read)
   --only <regex>          only run matching routes (e.g. --only "order/")
   --mutations             include write routes (default off)
   --id-num <n>            admin idNum for login (else prompted)

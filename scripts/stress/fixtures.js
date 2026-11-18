@@ -16,6 +16,8 @@ const COLLECTIONS = {
     admins: 'admins',
     users: 'users',
     otps: 'otps',
+    roles: 'roles',
+    payment_transactions: 'payment_transactions',
     gov_addresses: 'gov_addresses'
 }
 
@@ -44,14 +46,30 @@ export async function loadFixtures(uri, { idNum = null, userPhone = null } = {})
     if (!orders.length)
         orders = await col('orders').find({}, { projection: { _id: 0, id: 1, number: 1 } }).sort({ _id: -1 }).limit(10).toArray()
 
-    // A few ACTIVE products: barcodes for the probe and search fixtures, and a
-    // name word that real search traffic would actually type.
+    // A few ACTIVE products: barcodes for the probe and the search fast path, and
+    // the sub-group code category/products needs. comaxSubGroupCode rides along on
+    // the same 60-doc sample so no extra scan is needed to find a real code.
     const products = await col('products').find(
         { status: { $in: ['active', 'ACTIVE'] }, barcode: { $exists: true } },
-        { projection: { _id: 0, id: 1, barcode: 1, name: 1 } }
+        { projection: { _id: 0, id: 1, barcode: 1, comaxSubGroupCode: 1 } }
     ).limit(60).toArray()
-    const words = products.map(p => String(p.name || '').split(/\s+/).find(w => w.length >= 3)).filter(Boolean)
-    const searchTerm = words[0] || 'ח'
+    const subGroupCounts = new Map()
+    for (const p of products) {
+        if (!p.comaxSubGroupCode) continue
+        subGroupCounts.set(p.comaxSubGroupCode, (subGroupCounts.get(p.comaxSubGroupCode) || 0) + 1)
+    }
+    const subGroupCode = [...subGroupCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || null
+
+    // A point that is IN the service area by construction: an address a real
+    // delivery order was delivered to. (supply_area/lookup answers through a
+    // 2dsphere index, so an invented point would measure a guaranteed miss.)
+    const delivered = await col('orders').findOne(
+        { 'address.location.coordinates': { $size: 2 } },
+        { projection: { _id: 0, id: 1, 'address.location': 1 } }
+    )
+    const geoPoint = delivered?.address?.location?.coordinates?.length === 2
+        ? delivered.address.location.coordinates
+        : coordinates
 
     const categories = await col('categories').find({ active: true }, { projection: { _id: 0, id: 1, path: 1 } }).limit(5).toArray()
     const shipment = await col('shipments').findOne({}, { projection: { _id: 0, id: 1 } })
@@ -84,30 +102,57 @@ export async function loadFixtures(uri, { idNum = null, userPhone = null } = {})
 
     // --user-phone picks the shopper; otherwise the newest real cart order that
     // carries a storeId — which is what order/window/options needs to do any work
-    // at all (it returns [] straight away for a cart without a store).
+    // at all (it returns [] straight away for a cart without a store). Owners who
+    // ALSO have past orders are preferred: order/mine and order/status would
+    // otherwise read an empty result for a first-time shopper.
+    const newestOwnOrderNumber = async userId =>
+        (await col('orders').findOne({ userId, status: { $ne: 'cart' } }, { projection: { _id: 0, number: 1 }, sort: { time: -1 } }))?.number || null
+
     let customer = userPhone
         ? await col('users').findOne({ phone: userPhone }, { projection: { _id: 0, id: 1, phone: 1, active: 1 } })
         : null
     let customerCart = customer
         ? await col('orders').findOne({ userId: customer.id, status: 'cart', active: true }, { projection: { _id: 0, id: 1, storeId: 1 } })
         : null
+    let customerOrderNumber = customer ? await newestOwnOrderNumber(customer.id) : null
     if (!customer) {
-        for (const cart of await col('orders').find(
+        // Sample recent carts that carry a store, then ask in ONE query which of
+        // their owners also have non-cart orders. order/mine and order/status read
+        // that history, and the old one-lookup-per-cart loop stopped after 8 carts
+        // — it picked a first-time shopper when the repeat customers' carts were
+        // simply not among the very newest rows.
+        const carts = await col('orders').find(
             { status: 'cart', active: true, storeId: { $type: 'string' }, 'cart.0': { $exists: true } },
-            { projection: { _id: 0, id: 1, userId: 1, storeId: 1 }, sort: { updatedAt: -1 }, limit: 8 }
-        ).toArray()) {
-            const owner = await col('users').findOne({ id: cart.userId }, { projection: { _id: 0, id: 1, phone: 1, active: 1 } })
+            { projection: { _id: 0, id: 1, userId: 1, storeId: 1 }, sort: { updatedAt: -1 }, limit: 80 }
+        ).toArray()
+        const cartOwners = [...new Set(carts.map(c => c.userId).filter(Boolean))]
+        const hasHistory = new Set(cartOwners.length
+            ? await col('orders').distinct('userId', { userId: { $in: cartOwners }, status: { $ne: 'cart' } })
+            : [])
+        const ownerOf = cart =>
+            col('users').findOne({ id: cart.userId }, { projection: { _id: 0, id: 1, phone: 1, active: 1 } })
+        for (const cart of carts.filter(c => hasHistory.has(c.userId))) {
+            const owner = await ownerOf(cart)
             if (!owner?.phone || owner.active === false) continue
             customer = owner
             customerCart = cart
+            customerOrderNumber = await newestOwnOrderNumber(owner.id)
             break
         }
+        if (!customer) // nobody in the sample has history: fall back to any real cart owner
+            for (const cart of carts.filter(c => !hasHistory.has(c.userId)).slice(0, 8)) {
+                const owner = await ownerOf(cart)
+                if (!owner?.phone || owner.active === false) continue
+                customer = owner
+                customerCart = cart
+                break
+            }
     }
 
     // Real ids for the required:['id'] routes (400 without one) and the
     // readById routes (an undefined id silently reads an arbitrary first doc).
     const [apiKey, cashRegister, comaxProduct, comaxSale, coupon, displayBlock, carouselBlock,
-        logDoc, orderWindowTemplate, setting, sale, supplyArea] = await Promise.all([
+        logDoc, orderWindowTemplate, setting, sale, supplyArea, refundTxn, parentRole] = await Promise.all([
         col('api_keys').findOne({}, { projection: { _id: 0, id: 1 } }),
         col('cash_registers').findOne({}, { projection: { _id: 0, id: 1 } }),
         col('comax_products').findOne({}, { projection: { _id: 0, id: 1 } }),
@@ -121,7 +166,12 @@ export async function loadFixtures(uri, { idNum = null, userPhone = null } = {})
         col('order_window_templates').findOne({}, { projection: { _id: 0, id: 1 } }),
         col('settings').findOne({}, { projection: { _id: 0, id: 1 } }),
         col('sales').findOne({}, { projection: { _id: 0, id: 1 } }),
-        col('supply_areas').findOne({}, { projection: { _id: 0, id: 1 } })
+        col('supply_areas').findOne({}, { projection: { _id: 0, id: 1 } }),
+        // payment/refunds is only interesting on an order that was actually refunded.
+        col('payment_transactions').findOne({ kind: 'refund' }, { projection: { _id: 0, orderId: 1 } }),
+        // role/children needs a role that HAS children, else it reads an empty list.
+        // distinct over parentIds flattens the arrays into the ids that are parents.
+        col('roles').findOne({ id: { $in: await col('roles').distinct('parentIds', { parentIds: { $exists: true } }) } }, { projection: { _id: 0, id: 1 } })
     ])
 
     const sampled = {
@@ -146,9 +196,12 @@ export async function loadFixtures(uri, { idNum = null, userPhone = null } = {})
         storeIds: stores.map(s => s.id).filter(Boolean),
         currentStoreId: admin?.currentStoreId || stores[0]?.id || null,
         coordinates,
+        geoPoint,
+        subGroupCode,
+        refundOrderId: refundTxn?.orderId || null,
+        parentRoleId: parentRole?.id || null,
         productBarcodes: products.map(p => p.barcode).filter(Boolean),
         productIds: products.map(p => p.id).filter(Boolean),
-        searchTerm,
         categoryIds: categories.map(c => c.id).filter(Boolean),
         categoryPaths: categories.map(c => c.path).filter(Boolean),
         orders,
@@ -160,6 +213,7 @@ export async function loadFixtures(uri, { idNum = null, userPhone = null } = {})
         customerPhone: customer?.phone || null,
         customerCartId: customerCart?.id || null,
         customerCartStoreId: typeof customerCart?.storeId === 'string' ? customerCart.storeId : null,
+        customerOrderNumber: customerOrderNumber || null,
         pickerIdNum: picker?.idNum ? String(picker.idNum) : null,
         pickerPhone: picker?.phone || null,
         pickOrderId: pickOrder?.orderId || null,

@@ -54,7 +54,7 @@ async function adminOtp(client, fixtures, { idNum, phone, label, headless }) {
             throw new Error(`--headless-otp needs the ${label} (by --id-num) to exist in the stress DB.`)
         return headlessOtp(fixtures, phone)
     }
-    const issued = await client.call('admin/login_otp', { idNum }, { timeoutMs: 15_000 })
+    const issued = await client.call('admin/login_otp', { idNum }, { timeoutMs: 15_000, keepBody: true })
     if (!issued.ok)
         throw new Error(`login_otp failed (${issued.status} ${issued.kind}): ${issued.body?.message || '—'} — try --headless-otp if the SMS provider is unreachable in this environment.`)
     const otpToken = issued.body?.data?.token
@@ -68,7 +68,7 @@ export async function adminLogin(client, fixtures, { idNum, phone = null, label 
     if (phone) console.log(`[stress] login → ${label} phone ${maskPhone(phone)}`)
 
     const { otpToken, otp } = await adminOtp(client, fixtures, { idNum, phone, label, headless })
-    const logged = await client.call('admin/login', { idNum, otpToken, otp }, { timeoutMs: 15_000 })
+    const logged = await client.call('admin/login', { idNum, otpToken, otp }, { timeoutMs: 15_000, keepBody: true })
     if (!logged.ok)
         throw new Error(`${label} login failed (${logged.status} ${logged.kind}): ${logged.body?.message || 'no ADMIN_TOKEN_COOKIE issued'}`)
     return { ok: true }
@@ -89,7 +89,7 @@ export async function customerLogin(client, fixtures, { phone, headlessOtp: head
         otpToken = issued.otpToken
         otp = issued.otp
     } else {
-        const issued = await client.call('user/login_otp', { phone }, { timeoutMs: 15_000 })
+        const issued = await client.call('user/login_otp', { phone }, { timeoutMs: 15_000, keepBody: true })
         if (!issued.ok)
             throw new Error(`user/login_otp failed (${issued.status} ${issued.kind}): ${issued.body?.message || '—'} — try --headless-otp.`)
         otpToken = issued.body?.data?.token
@@ -97,7 +97,7 @@ export async function customerLogin(client, fixtures, { phone, headlessOtp: head
         otp = await ask('OTP code: ')
     }
 
-    const logged = await client.call('user/login', { phone, otpToken, otp }, { timeoutMs: 15_000 })
+    const logged = await client.call('user/login', { phone, otpToken, otp }, { timeoutMs: 15_000, keepBody: true })
     if (!logged.ok)
         throw new Error(`customer login failed (${logged.status} ${logged.kind}): ${logged.body?.message || 'no USER_TOKEN_COOKIE issued'}`)
     return true
