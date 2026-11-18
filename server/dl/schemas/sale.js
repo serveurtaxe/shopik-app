@@ -167,7 +167,11 @@ export const meta = {
         // on every onSale carousel request, and status had no index: the distinct
         // read every sale ever made (5847 docs for 902 ids). With {status, id} it
         // is covered — keys only, no document fetch.
-        { status: 1, id: 1 }
+        { status: 1, id: 1 },
+        // A status-scoped read sorted by updatedAt (Atlas: 6 460 docs examined for 30
+        // returned, in-memory sort every run). {status, id} can carry the filter or
+        // the id list, never the sort, so the planner read every sale ever made.
+        { status: 1, updatedAt: -1, id: 1 }
     ]
 }
 
