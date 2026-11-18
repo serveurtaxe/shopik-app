@@ -19,6 +19,7 @@ export function payloadFor(route, fixtures) {
         case 'display_block/get': return { path: fx.productPagePath }
         case 'display_block/id': return fx.displayBlockId ? { id: fx.displayBlockId } : null
         case 'domain/id': return fx.domainId ? { id: fx.domainId } : null
+        case 'log/id': return fx.logId ? { id: fx.logId } : null
         case 'order/details': return fx.orderId ? { id: fx.orderId } : null
         case 'order/id': return fx.orderId ? { id: fx.orderId } : null
         case 'order/timeline': return fx.orderId ? { orderId: fx.orderId } : null
