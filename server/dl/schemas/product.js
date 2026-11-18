@@ -74,7 +74,10 @@ const productSchema = {
         unique: true,
         required: true,
         trim: true,
-        filter: true
+        // 'exact': a barcode is a whole value, and the prefix form processFilter
+        // builds for a plain String filter turns a unique lookup into a scan of the
+        // whole barcode index (see dl/schemas/comax_product.js).
+        filter: 'exact'
     },
     scannableBarcodes: {
         type: [String],
@@ -213,7 +216,10 @@ const productSchema = {
     },
     // Raw Comax sub-group code. Kept next to the resolved category so the admin
     // can reassign a whole sub-group with one update and coverage stays cheap.
-    comaxSubGroupCode: { type: String, filter: true },
+    // filter: 'exact' — always looked up by whole code. The prefix form processFilter
+    // builds for a plain String filter made '1370' match '13701', and a
+    // case-insensitive regex can never use the {status, comaxSubGroupCode} index.
+    comaxSubGroupCode: { type: String, filter: 'exact' },
     images: {
         product: [{
             main: Boolean,
@@ -303,7 +309,12 @@ export const meta = {
     searchBoost,
     index: [
         { storeIds: 1, status: 1 },
-        { status: 1, 'category.pathIds': 1 },
+        // Carries defaultSort as its suffix: category pages filter by status +
+        // pathIds and sort by sortOrder/totalSalesUnits/id. With only the two
+        // filter keys the planner picked this index for selectivity and then
+        // blocked on an in-memory sort of every matching doc (823 ms, 694 docs).
+        // The {status, pathIds} prefix still covers distinct() and the menu reads.
+        { status: 1, 'category.pathIds': 1, sortOrder: -1, totalSalesUnits: -1, id: 1 },
         { status: 1, comaxSubGroupCode: 1 },
         { status: 1, 'prices.domainId': 1, sortOrder: -1, totalSalesUnits: -1, id: 1 },
         { status: 1, 'prices.domainId': 1, totalSalesUnits: -1, id: 1 },
