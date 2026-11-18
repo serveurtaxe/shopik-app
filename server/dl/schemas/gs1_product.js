@@ -36,7 +36,6 @@ const gs1ProductSchema = {
     // plus a second scan for the count, to return a 50-row page.
     aliasStatus: {
         type: String,
-        index: true,
         filter: 'exact'
     },
     aliasShort: {
