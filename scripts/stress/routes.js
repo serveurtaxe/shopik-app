@@ -25,6 +25,24 @@ const DENY_ROUTE_PREFIXES = ['bot/']
 // Auth/infrastructure routes are never part of load, even with --mutations.
 const NEVER_RUN = new Set(['login', 'login_otp', 'logout', 'register', 'send', 'resend'])
 
+// Read-shaped routes whose ACTION NAME says nothing (they are only reachable
+// through another feature's permissions). Listed one by one, with what they
+// really do, because widening READ_ACTIONS instead would silently admit every
+// same-named neighbour — including the write ones.
+const ALSO_READ = new Set([
+    'notifications/counts', // countDocuments per notification source
+    'order/mine', // Order.find over the shopper's past orders
+    'order/status', // Order.readOne by order number
+    'order/ops/pick_limits', // Order.readById + the domain's pick settings
+    'user/coupon', // getUserOrder + Coupon.read
+    'user/favorites', // the shopper's favorite ids
+    'category/products', // Product.read + countDocuments of one Comax sub-group
+    'display_block/categories', // Category.read over every category
+    'role/children', // Role.readById + Role.read({ parentIds })
+    'payment/refunds', // Order.readById + PaymentTransaction.read
+    'supply_area/lookup' // $geoIntersects over supply_areas
+])
+
 function walk(dir, prefix = '') {
     const out = []
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -43,7 +61,9 @@ export function isReadOnlyRoute(route) {
     if (READ_ACTIONS.has(action)) return true
     if (READ_SUFFIXES.some(suffix => action.endsWith(suffix))) return true
     if (READ_PREFIXES.some(prefix => action.startsWith(prefix))) return true
-    return false
+    // The named exceptions beat the heuristics: 'lookup'/'status'/'products' are
+    // not read-safe in general, so each one is admitted only by full route name.
+    return ALSO_READ.has(route)
 }
 
 export async function discoverRoutes({ only = null, mutations = false } = {}) {
@@ -66,6 +86,7 @@ export async function discoverRoutes({ only = null, mutations = false } = {}) {
         routes.push({
             route,
             readOnly,
+            alsoRead: ALSO_READ.has(route),
             permissions: [].concat(config.permissions || []),
             auth: config.auth || null,
             preventMultiple: Boolean(config.preventMultiple)

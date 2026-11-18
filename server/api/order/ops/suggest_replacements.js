@@ -66,7 +66,15 @@ export default async function suggest_replacements(payload, { DL, _admin }) {
             categoryPathIds = orig?.category?.pathIds || []
         } catch { }
     }
-    if (categoryId) baseFilter['category.id'] = categoryId
+    // Filter on category.pathIds, never on category.id: nothing indexes
+    // category.id, so the planner fell back to {status, prices.domainId,
+    // totalSalesUnits, id} and walked EVERY active product of the domain
+    // (6.8k-7.2k docs measured on the prod copy, to return 19-100 candidates).
+    // pathIds is indexed and stores the whole assigned path (the leaf id is its
+    // last element), so equality on the item's category id reads only that
+    // category — 20-110 docs for the identical result set — and anything mapped
+    // to a sub-category of it, which is a valid substitute too.
+    if (categoryId) baseFilter['category.pathIds'] = categoryId
     else if (categoryPathIds?.length) baseFilter['category.pathIds'] = { $in: categoryPathIds }
 
     let products = []

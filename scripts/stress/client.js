@@ -1,11 +1,16 @@
-// HTTP client for the running server: admin-platform headers, a tiny cookie jar,
-// and the router's envelope shape ({ requestId, data, status }) — errors arrive
-// with HTTP 200 + a body status, so classification must read the body.
+// HTTP client for the running server: one session per instance (admin or
+// storefront platform header + its own cookie jar), and the router's envelope
+// shape ({ requestId, data, status }) — errors arrive with HTTP 200 + a body
+// status, so classification must read the body.
 
 export class StressClient {
-    constructor({ baseUrl, origin }) {
+    constructor({ baseUrl, origin, platform = 'admin' }) {
         this.baseUrl = baseUrl.replace(/\/$/, '')
         this.origin = origin
+        // getPlatform() trusts an explicit header, and both session helpers
+        // reject a token whose tokens[platform] doesn't match the platform of
+        // the call — so every client states its platform once, up front.
+        this.platform = platform
         this.cookies = new Map()
     }
 
@@ -24,7 +29,7 @@ export class StressClient {
         }
     }
 
-    async call(routePath, payload = {}, { timeoutMs = 30_000, extraHeaders = {}, rawUrl = null } = {}) {
+    async call(routePath, payload = {}, { timeoutMs = 30_000, extraHeaders = {}, rawUrl = null, keepBody = false } = {}) {
         const url = rawUrl || `${this.baseUrl}/api/${routePath}`
         const start = Date.now()
         try {
@@ -32,7 +37,7 @@ export class StressClient {
                 method: 'POST',
                 headers: {
                     'content-type': 'application/json',
-                    platform: 'admin',
+                    platform: this.platform,
                     origin: this.origin,
                     cookie: this.cookieHeader(),
                     ...extraHeaders
@@ -46,9 +51,23 @@ export class StressClient {
             const text = await response.text()
             try { body = JSON.parse(text) } catch { body = null }
             const status = body?.status ?? response.status
-            return { ok: response.ok && status === 200, status, kind: classify(response, status, body), ms, body }
+            const kind = classify(response, status, body)
+            return {
+                ok: response.ok && status === 200,
+                status,
+                kind,
+                ms,
+                bytes: text.length,
+                items: dataItems(body),
+                // The parsed body is NOT returned (keepBody is for the login routes, which
+                // need the token out of it): a burst holds every response it counted, and
+                // routes like category/tree answer ~1MB each — retaining bodies OOMs a sweep.
+                error: kind === 'ok' ? null : String(body?.message || body?.error || kind).slice(0, 200),
+                body: keepBody ? body : null
+            }
         } catch (err) {
-            return { ok: false, status: 0, kind: err.name === 'AbortError' ? 'timeout' : 'network', ms: Date.now() - start, body: null }
+            const kind = err.name === 'AbortError' ? 'timeout' : 'network'
+            return { ok: false, status: 0, kind, ms: Date.now() - start, bytes: 0, items: null, error: kind, body: null }
         }
     }
 
@@ -74,4 +93,16 @@ function classify(response, status, body) {
     if (status === 429) return 'rate-limited'
     if (status >= 500) return 'server-error'
     return 'other'
+}
+
+// How much a call actually handed back. The envelope is { requestId, data, status },
+// so data is the payload: [] → 0, {} → 0 keys, a scalar/true → 1. null when the
+// body is not the envelope at all (a streamed file), which the report shows as '—'
+// rather than as an empty answer.
+function dataItems(body) {
+    const data = body?.data
+    if (data == null) return null
+    if (Array.isArray(data)) return data.length
+    if (typeof data === 'object') return Object.keys(data).length
+    return 1
 }

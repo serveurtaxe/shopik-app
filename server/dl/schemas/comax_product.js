@@ -126,7 +126,14 @@ export const meta = {
         // departmentCode — all were full collection scans without an index.
         { superDepartment: 1 },
         { department: 1 },
-        { departmentCode: 1 },
+        // sales_window groups the whole catalog by {code: departmentCode, name:
+        // department} with an isTrailingItem filter. Carrying exactly those three
+        // keys makes the group a COVERED index scan: docsExamined 0 / 21 512 keys /
+        // 4 ms instead of an IXSCAN+FETCH of all 21 514 documents / 52 ms
+        // (explain on the prod copy). The planner picks it over {departmentCode}
+        // even when both exist, but the old single-key index is now redundant —
+        // drop it once this is live: db.comax_products.dropIndex("departmentCode_1")
+        { departmentCode: 1, department: 1, isTrailingItem: 1 },
         // The category map reads a whole sub-group at a time: tree's $in over the
         // unassigned codes and the assign/apply metadata lookups scanned all 20 358
         // rows to return 101 (16 s).
