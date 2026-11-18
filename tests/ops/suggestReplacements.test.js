@@ -86,6 +86,18 @@ describe('suggest_replacements keeps cart products out of the candidates', () =>
         assert.deepEqual(res.products.map(p => p.id), ['p6', 'p7'])
     })
 
+    // The category filter has to sit on the indexed key: category.id is not in any
+    // index, so the planner used {status, prices.domainId, totalSalesUnits, id} and
+    // walked every active product of the domain (7 201 docs for 32 candidates on the
+    // prod copy). pathIds is indexed and its last element is the category id itself.
+    it('scopes candidates to the indexed category.pathIds, never to category.id', async () => {
+        const { call, calls } = harness({ reads: [[prod('p3', 'C')]] })
+        await call({ id: 'o1', barcode: 'A', limit: 3 })
+
+        assert.deepEqual(calls.reads[0].filter['category.pathIds'], 'cat1')
+        assert.equal(calls.reads[0].filter['category.id'], undefined)
+    })
+
     it('filters text search results too', async () => {
         const { call } = harness({
             searchResults: [prod('p1', 'A'), prod('p3', 'C')]
