@@ -726,7 +726,7 @@
         "backfill_gs1": "לבדוק גם ב-GS1 (תמונות וכשרות)",
         "backfill_codes": "קודים בקובץ",
         "backfill_known": "כבר במערכת",
-        "backfill_targets": "קודים שייבדאו",
+        "backfill_targets": "קודים שייבדקו",
         "backfill_found": "נמצאו בקומקס",
         "backfill_inserted": "נוספו",
         "backfill_refreshed": "רעננו",
