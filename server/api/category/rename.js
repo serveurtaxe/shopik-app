@@ -41,8 +41,16 @@ export default async function renameCategory({ id, name }, { DL }) {
 
         // Products carry the title of the category they are mapped to. Products
         // of a sub-category keep their own leaf title and are not matched here.
+        //
+        // category.id is not indexed, so this update alone walked the whole products
+        // collection (39 459 docs, 14 ms on the copy). category.pathIds IS indexed and
+        // every product's pathIds ends with its own category id, so pathIds picks the
+        // category and its whole subtree and category.id narrows it back to this one —
+        // the same set of docs, 2 198 keys / 2 198 docs / 2 ms. Verified over all
+        // 38 975 categorized products on the prod copy: category.id is a member of
+        // category.pathIds in every one of them.
         const res = await DL.Product.Model.updateMany(
-            { 'category.id': String(id) },
+            { 'category.pathIds': String(id), 'category.id': String(id) },
             { $set: { 'category.title': title } }
         )
         products = res?.modifiedCount ?? 0
