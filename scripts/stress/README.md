@@ -70,6 +70,8 @@ Read routes write one audit row per call (`action: '/user/read'`). A full sweep 
 ~40k calls, which is why `logs` went 32k → 319k after one afternoon of runs — and why
 `log/read` / `log/count` and every window that reads logs looks different on the second
 run. The tool itself never writes (that is what `--mutations` guards); the app does.
+`logs` has a 24 h TTL index (`createdAt_1`, `expireAfterSeconds: 86400`), so those rows
+expire on their own — deleting them only makes the next run match the dump immediately.
 Between runs, delete the locally written rows using the gap between the dump's newest
 log and the first local one:
 
