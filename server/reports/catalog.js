@@ -219,8 +219,8 @@ async function build(DL) {
         comax,
         products,
         categoryFlags,
-        gs1Barcodes,
-        gs1Checked,
+        gs1EveryBarcode,
+        gs1NoRecord,
         enforceBuyingPrice,
         salesWindow
     ] = await Promise.all([
@@ -244,16 +244,22 @@ async function build(DL) {
             { _id: 0, subGroupCode: 1, showOnSite: 1, requireKashrut: 1, categoryActive: 1 },
             { limit: 0 }
         ),
-        // A gs1_products doc is created only when GS1 answered, so "has a raw"
-        // is what "we have GS1 data for this barcode" means. The skipped docs
-        // that keep a raw (out-of-stock, no-product) count: GS1 does carry them.
-        DL.Gs1Product.Model.distinct('barcode', { raw: { $exists: true } }),
+        // "Has GS1 data" means a stored raw payload: a gs1_products doc is created only
+        // when GS1 answered, and the skipped docs that keep a raw (out-of-stock,
+        // no-product) count because GS1 does carry them. Filtering on `raw` alone has no
+        // index to serve it: a COLLSCAN of all 23 449 docs (~163 MB, Atlas's top hit for
+        // this collection) to build a 22 788-barcode set. The same set is the covered
+        // distinct over the unique barcode index (keys only, no docs) minus the rows the
+        // account holds no record for — and those are exactly the no-gs1-record rows the
+        // dated answer below reads. On the prod copy: 661 of 23 449 docs, all of them
+        // no-record rows, so one indexed read of 684 rows gives the difference.
+        DL.Gs1Product.Model.distinct('barcode', {}),
         // Lookups that came back empty for OUR account, with the date they were
-        // checked. Visibility changes over time, so this is a dated answer and
-        // not a verdict.
+        // checked, plus any raw a later re-check stored under the same skipReason.
+        // Visibility changes over time, so this is a dated answer and not a verdict.
         DL.Gs1Product.Model.find(
             { skipReason: 'no-gs1-record' },
-            { _id: 0, barcode: 1, syncedAt: 1, updatedAt: 1 }
+            { _id: 0, barcode: 1, syncedAt: 1, updatedAt: 1, raw: 1 }
         ).lean(),
         shouldEnforceBuyingPrice(DL),
         // The resolved config is the raw { defaultDays, rules }; the report asks
@@ -268,9 +274,15 @@ async function build(DL) {
         const key = normBarcode(product.barcode)
         if (!productByBarcode.has(key)) productByBarcode.set(key, product)
     }
-    const gs1Set = new Set(gs1Barcodes.map(normBarcode))
-    const gs1CheckedAt = new Map((gs1Checked || [])
-        .map(row => [normBarcode(row.barcode), toDate(row.updatedAt || row.syncedAt)]))
+    const gs1Set = new Set((gs1EveryBarcode || []).map(normBarcode))
+    const gs1CheckedAt = new Map()
+    for (const row of gs1NoRecord || []) {
+        const key = normBarcode(row.barcode)
+        // A no-record row that a later re-check filled in stays a GS1 answer; the ones
+        // still without a raw are the "לא" rows the barcode set must not claim.
+        if (!row.raw) gs1Set.delete(key)
+        gs1CheckedAt.set(key, toDate(row.updatedAt || row.syncedAt))
+    }
 
     const docless = new Set()
     for (const item of comax) {

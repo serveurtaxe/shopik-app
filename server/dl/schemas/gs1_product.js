@@ -60,7 +60,13 @@ export const meta = {
         // gs1/aliases page: {aliasStatus} equality + sort by barcode + limit —
         // one range serves filter and order (no FETCH, no in-memory sort) and
         // makes the route's count a covered key-scan of just the status prefix.
-        [{ aliasStatus: 1, barcode: 1 }]
+        [{ aliasStatus: 1, barcode: 1 }],
+        // The catalog report reads the `no-gs1-record` rows twice over: the dated
+        // "לא נבדק" answer and the barcodes GS1 does not hold. Unindexed, both were a
+        // COLLSCAN of all 23 449 docs — 7.3 kB each, ~163 MB of disk reads per report
+        // build, and the two top entries of Atlas's index advisor for this collection.
+        // Indexed: 684 docs, 1 ms.
+        { skipReason: 1 }
     ]
 }
 

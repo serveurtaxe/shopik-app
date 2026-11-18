@@ -15,6 +15,14 @@ const tree = () => [
 
 const updatesById = plan => new Map(plan.updates.map(update => [update.id, update]))
 
+// A direct product of the renamed category, a leaf under its sub-category (which
+// keeps its own title), and a product of a different branch.
+const productsFixture = () => [
+    { barcode: '1', category: { id: 'nc:216', title: 'פירות וירקות', pathIds: ['nc:216'] } },
+    { barcode: '2', category: { id: 'nc:216:2016:3001', title: 'תפוחים', pathIds: ['nc:216', 'nc:216:2016', 'nc:216:2016:3001'] } },
+    { barcode: '3', category: { id: 'nc:300', title: 'פירות', pathIds: ['nc:300'] } }
+]
+
 describe('category rename plan', () => {
     it('rewrites the path of every category below the renamed one', () => {
         const plan = buildRenamePlan({ categories: tree(), id: 'nc:216', name: 'פירות וירקות ארץ' })
@@ -87,7 +95,7 @@ describe('category rename plan', () => {
     })
 })
 
-function fakeDL(categories = tree()) {
+function fakeDL(categories = tree(), products = productsFixture()) {
     const categoryWrites = []
     const productWrites = []
     const cached = []
@@ -107,13 +115,20 @@ function fakeDL(categories = tree()) {
             Model: {
                 updateMany: async (filter, update) => {
                     productWrites.push({ filter, update })
-                    return { modifiedCount: 3 }
+                    // What MongoDB would match with this filter: category.pathIds is
+                    // the indexed selector (the category and everything below it),
+                    // category.id narrows it back to the category itself.
+                    const matched = products.filter(product =>
+                        (product.category.pathIds || []).includes(filter['category.pathIds']) &&
+                        product.category.id === filter['category.id'])
+                    matched.forEach(product => { product.category.title = update.$set['category.title'] })
+                    return { modifiedCount: matched.length }
                 }
             }
         }
     }
 
-    return { DL, categoryWrites, productWrites, cached }
+    return { DL, categoryWrites, productWrites, cached, products }
 }
 
 describe('category rename endpoint', () => {
@@ -144,14 +159,21 @@ describe('category rename endpoint', () => {
     })
 
     it('refreshes the title products denormalized, and only for this category', async () => {
-        const { DL, productWrites } = fakeDL()
+        const { DL, productWrites, products } = fakeDL()
         const res = await renameCategory({ id: 'nc:216', name: 'פירות וירקות ארץ' }, { DL })
 
-        assert.equal(res.products, 3)
+        assert.equal(res.products, 1)
         assert.deepEqual(productWrites, [{
-            filter: { 'category.id': 'nc:216' },
+            // pathIds carries the update on an index products actually has; category.id
+            // is what "mapped to this category" means, and it stays in the filter so the
+            // sub-category products are not swept in with it.
+            filter: { 'category.pathIds': 'nc:216', 'category.id': 'nc:216' },
             update: { $set: { 'category.title': 'פירות וירקות ארץ' } }
         }])
+
+        assert.equal(products.find(p => p.barcode === '1').category.title, 'פירות וירקות ארץ')
+        assert.equal(products.find(p => p.barcode === '2').category.title, 'תפוחים', 'a leaf keeps its own title')
+        assert.equal(products.find(p => p.barcode === '3').category.title, 'פירות', 'another branch is untouched')
     })
 
     it('skips every write when nothing changes', async () => {

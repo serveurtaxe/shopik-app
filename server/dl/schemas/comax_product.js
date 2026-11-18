@@ -137,7 +137,14 @@ export const meta = {
         // The category map reads a whole sub-group at a time: tree's $in over the
         // unassigned codes and the assign/apply metadata lookups scanned all 20 358
         // rows to return 101 (16 s).
-        { subGroupCode: 1 }
+        { subGroupCode: 1 },
+        // reports/version.js fingerprints the catalog with the newest comax updatedAt
+        // to decide whether a produced report file can be reused. With no index that
+        // probe read every row and blocking-sorted it: 21 514 docs / 9 ms on the copy,
+        // 24 401 docs / 141 ms and an in-memory sort on prod (Atlas's top comax hit).
+        // products already carries the same pair for the same probe ({updatedAt, id});
+        // the id tiebreaker also lets a DL read sorted by updatedAt stream from it.
+        { updatedAt: -1, id: 1 }
     ]
 }
 

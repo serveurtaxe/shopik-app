@@ -195,6 +195,41 @@ Run the suite once with the fix branch deployed and once with `main`, diff the
 `maxDocs` / `collscans` / `resp` columns for the routes the PR touched — they should
 fall to zero or to the payload the screen actually needs.
 
+## What the sweeps found, and what was done about it
+
+The sweep and Atlas's index advisor were both used, and they measure different halves of
+the workload: the sweep's hot reads are answered from Redis on prod and never reach
+mongod, so they never appear in the advisor; the advisor only sees the slow queries that
+do reach it — sync/report/admin paths, all at 0.04–0.38 queries/hour. Every fix below is
+listed with `explain("executionStats")` measured on the prod copy before and after.
+
+| read | before | after |
+|---|---|---|
+| `comax_product/sales_window` department group | IXSCAN+FETCH of 21 514 docs / 52 ms | covered scan: 21 512 keys, 0 docs / 4 ms |
+| `order/ops/suggest_replacements` product lookup | 6 802–7 201 docs per cart | 20–110 docs (`category.pathIds` is the key products index) |
+| `category/rename` product title update | COLLSCAN of 39 459 docs / 14 ms | 2 198 keys / 2 198 docs / 2 ms |
+| `reports/version.js` newest-comax-`updatedAt` probe | COLLSCAN + blocking sort of 21 514 docs | 1 key, 0 docs / 1 ms (`{updatedAt:-1, id:1}`) |
+| `reports/catalog.js` GS1 barcode set + dated check | 2 × COLLSCAN of 23 449 heavy docs (~163 MB) | covered `distinct` on the unique barcode index (0 docs) + 684 docs via `skipReason_1` |
+
+What was measured and deliberately not done:
+
+- **`gs1_products {createdAt}`** was the advisor's suggestion, but no query in this app
+  sorts `gs1_products` by `createdAt`; the two advisor entries on that collection are the
+  report's `skipReason` / `raw $exists` reads. A partial `{barcode:1}` index on
+  `raw: {$exists:true}` was created on the copy and measured: `distinct` will not use
+  partial indexes, and hinted into it still FETCHes 22 788 docs instead of scanning 23 449
+  — dropped, and the reads were reshaped onto `skipReason_1` instead.
+- **`products {status, category.id}`** plus the 6- and 7-key
+  `prices.domainId + storeIds + sortOrder…` compounds: the `category.id` scans were
+  `suggest_replacements` and `category/rename`, both fixed by filtering the indexed
+  `pathIds` instead. The wide compounds target reads doing 0.04–0.25 queries/hour on a
+  collection that already carries 14 indexes, and some list key directions no single
+  index can serve for the sort they are meant to fix.
+- **`menu/get`** (5 254 docs on a cache miss, 86 ms) and **`store/nearby`** (57 keys /
+  8 docs, 0.93 ms measured alone, `GEO_NEAR_2DSPHERE` over 4 stores): one menu miss per
+  store behind a 1 h cache, and a geo read that is already index-served. Neither earns a
+  new index on a collection the nightly import writes in bulk.
+
 ## Files
 
 ```
