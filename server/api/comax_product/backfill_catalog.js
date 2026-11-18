@@ -24,6 +24,14 @@ import { gtinOf } from '#server/services/gs1/gtin.js'
  * returns instead of starting the pipeline then. The nightly import clears the
  * flag when the item is un-archived and a store feed stocks it.
  *
+ * An item Comax carries WITHOUT a price-list entry is written too. The lookups
+ * filter on SelByPriceList (that is where the buying price comes from), and Comax
+ * answers an empty body for an item that has no entry in 1069 or 255 — the butcher
+ * scale codes 43001 בקר טחון מחפוד, 43209 צלעות מחפוד and the rest of that block.
+ * Those are real items with nothing missing except a price, so a second look
+ * without the filter stores them and the report shows them as חסר מחיר קנייה
+ * instead of pretending they do not exist.
+ *
  * Writes only create rows for anything the import owns: the update is
  * $setOnInsert, so an existing row — its price, its storeIds, an admin's edit —
  * is never touched, and a code that already matches a stored barcode or comaxId
@@ -201,6 +209,9 @@ export default async function backfillCatalog(payload = {}, { DL, external }) {
         // Written rows Comax reports as archived (seasonal). Stored and flagged,
         // never live while the flag is set.
         archived: 0,
+        // Found only when the price-list filter was lifted: real Comax items with
+        // no entry in 1069/255. They get a row so the report can show them.
+        noPriceList: 0,
         withBuyingPrice: 0,
         zeroPrice: 0,
         errors: [],
@@ -244,13 +255,12 @@ export default async function backfillCatalog(payload = {}, { DL, external }) {
     // call, includeZeroPrice keeps a zero-priced item readable instead of letting
     // it look "not found", and skipLog keeps a run of thousands of lookups from
     // writing a Log document each.
-    const readItem = code => external.comax.getItemById({
+    const readItem = (code, { byPriceList = true } = {}) => external.comax.getItemById({
         itemId: code,
         includeInternal: false,
         includeZeroPrice: true,
         withOutArchive: false,
-        selByPriceList: true,
-        salesPriceArray,
+        ...(byPriceList ? { selByPriceList: true, salesPriceArray } : {}),
         silent: true,
         skipLog: true,
         timeoutMs: COMAX_TIMEOUT_MS
@@ -337,6 +347,21 @@ export default async function backfillCatalog(payload = {}, { DL, external }) {
             }
         }
 
+        // An empty answer to a price-list query is Comax saying "this item has no
+        // entry in 1069 or 255", not "no such item". The butcher scale codes
+        // (43001 בקר טחון מחפוד, 43209 צלעות מחפוד and their block) are that case:
+        // the item exists, showInWeb is on, it just has no price in either list.
+        // Ask once more without the filter: those items get a row, which is the
+        // only way they can appear in the report as something to fix.
+        const inPriceList = product != null
+        if (!product) {
+            try {
+                product = await readItem(code, { byPriceList: false })
+            } catch (e) {
+                log.warn(`[Comax Backfill] ${code} price-list-free lookup failed:`, e?.message || e)
+            }
+        }
+
         report.processed++
         done++
 
@@ -363,6 +388,7 @@ export default async function backfillCatalog(payload = {}, { DL, external }) {
                 pending.push(row)
                 report.found++
                 if (row.archived) report.archived++
+                if (!inPriceList) report.noPriceList++
                 if (row.buyingPrice > 0) report.withBuyingPrice++
                 if (!(row.price > 0)) report.zeroPrice++
             }
@@ -387,6 +413,7 @@ export default async function backfillCatalog(payload = {}, { DL, external }) {
     const remaining = Math.max(0, targets.length - report.processed)
     console.log(`[Comax Backfill] done: ${report.processed}/${targets.length}, inserted ${report.inserted}, ` +
         `refreshed ${report.refreshed}, left as-is ${report.existing}, with buying price ${report.withBuyingPrice}, zero price ${report.zeroPrice}, ` +
+        `no price list ${report.noPriceList}, archived ${report.archived}, ` +
         `skipped ${JSON.stringify(report.skipped)}, errors ${report.errorCount}, remaining ${remaining}` +
         `${report.gs1 ? `, gs1 queued ${report.gs1.enqueued}` : ''}`)
 
