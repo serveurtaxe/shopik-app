@@ -39,6 +39,7 @@ Schemas use a subset of Mongoose type definitions:
     ```
 *   **Array Sub-Schema Spread:** Spread an array definition into nested fields.
 *   **Sensitive Data:** Use `select: false` on fields like tokens or payment info to exclude them from default queries.
+*   **Filterable fields:** `filter: true` exposes a field to `Model.processFilter`, which turns a plain String value into a case-insensitive **prefix** regex — fine for an admin column filter, wrong for a code (`'1370'` would match `'13701'`), and a case-insensitive regex can never use an index. Use `filter: 'exact'` for whole-value lookups; `id`/`*Id`/`*Ids`/`path` and enum strings are exact on their own.
 
 ## 4. Meta Object Configuration
 The `meta` object configures the model beyond raw schema fields. It supports these keys:
@@ -52,6 +53,10 @@ index: [
     { "nested.field": -1 }
 ]
 ```
+Sort keys go after the equality keys and in the order the query sorts in: an index ending
+`{ a: -1, b: -1 }` cannot serve `sort: { b: -1, a: -1 }`, and MongoDB then collscans and
+blocks on the sort. Extending an index with the sort suffix is cheaper than a second index
+over the same filter keys.
 
 ### Constants / Enums (`constants`)
 An object of named arrays used as `enum` values in schema fields. Accessible on the model via `Model.constants`.

@@ -1,14 +1,33 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import styles from './log.module.css'
 import render from '#common/functions/render.js'
+import apiReq from 'common/functions/apiReq'
 
 export default function Log({ log }) {
     const [copiedType, setCopiedType] = useState(null) // 'request' | 'response' | 'curl' | 'raw'
+    // The list ships rows without `data` (it is almost all of a log document), so
+    // the payload blocks ask log/id for the full document when a row is opened.
+    const [fullLog, setFullLog] = useState(null)
+    const [loadingData, setLoadingData] = useState(log?.data === undefined)
+
+    useEffect(() => {
+        if (!log?.id || log.data !== undefined) return
+        let alive = true
+        apiReq('log/id', { id: log.id })
+            .then(full => {
+                if (!alive) return
+                setFullLog(full)
+                setLoadingData(false)
+            })
+            .catch(() => { if (alive) setLoadingData(false) })
+        return () => { alive = false }
+    }, [log?.id, log?.data])
 
     if (!log) return null
 
-    const requestData = log.data?.request
-    const responseData = log.data?.response
+    const data = log.data ?? fullLog?.data
+    const requestData = data?.request
+    const responseData = data?.response
 
     const triggerCopyNotice = (type) => {
         setCopiedType(type)
@@ -71,6 +90,7 @@ export default function Log({ log }) {
                     <button
                         className={styles.secondaryBtn}
                         onClick={generateCurl}
+                        disabled={loadingData}
                         title="Copy as cURL command for Postman/Terminal"
                     >
                         {copiedType === 'curl' ? '✓ cURL Copied' : '📋 Copy cURL'}
@@ -78,7 +98,8 @@ export default function Log({ log }) {
 
                     <button
                         className={styles.secondaryBtn}
-                        onClick={() => copyToClipboard(log, 'raw')}
+                        onClick={() => copyToClipboard(fullLog ?? log, 'raw')}
+                        disabled={loadingData}
                     >
                         {copiedType === 'raw' ? '✓ Copied' : 'Copy Full Log'}
                     </button>
@@ -160,9 +181,11 @@ export default function Log({ log }) {
                     </div>
                     <pre className={styles.jsonViewer}>
                         <code>
-                            {requestData !== undefined
-                                ? JSON.stringify(requestData, null, 2)
-                                : 'No request data'}
+                            {loadingData
+                                ? 'Loading request data…'
+                                : requestData !== undefined
+                                    ? JSON.stringify(requestData, null, 2)
+                                    : 'No request data'}
                         </code>
                     </pre>
                 </div>
@@ -182,9 +205,11 @@ export default function Log({ log }) {
                     </div>
                     <pre className={styles.jsonViewer}>
                         <code>
-                            {responseData !== undefined
-                                ? JSON.stringify(responseData, null, 2)
-                                : 'No response data'}
+                            {loadingData
+                                ? 'Loading response data…'
+                                : responseData !== undefined
+                                    ? JSON.stringify(responseData, null, 2)
+                                    : 'No response data'}
                         </code>
                     </pre>
                 </div>

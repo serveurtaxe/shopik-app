@@ -74,7 +74,16 @@ export default async function suggest_replacements(payload, { DL, _admin }) {
         if (q) {
             products = await DL.Product.search(q, baseFilter, { limit: fetchLimit, select })
         } else {
-            products = await DL.Product.read(baseFilter, select, { limit: fetchLimit, sort: { totalSalesUnits: -1, sortOrder: -1 } })
+            // Sort keys have to match an index the collection actually owns:
+            // {totalSalesUnits, sortOrder} is neither the storefront order
+            // ({sortOrder, totalSalesUnits}) nor the {status, prices.domainId,
+            // totalSalesUnits, id} index, so the read ended in a blocking sort of
+            // every active product of the domain — 7 442 docs × 3.3 KB, the same
+            // 32 MB sort buffer that already killed the skip-paged sync. With only
+            // the tiebreaker the index answers the order (explain: no SORT stage).
+            // Sales ranking is what replacements are about; sortOrder (0-5) was a
+            // near-no-op tiebreak next to it.
+            products = await DL.Product.read(baseFilter, select, { limit: fetchLimit, sort: { totalSalesUnits: -1 } })
         }
     } catch (err) {
         products = []
