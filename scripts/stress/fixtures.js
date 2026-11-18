@@ -19,7 +19,7 @@ const COLLECTIONS = {
     gov_addresses: 'gov_addresses'
 }
 
-export async function loadFixtures(uri, { idNum = null } = {}) {
+export async function loadFixtures(uri, { idNum = null, userPhone = null } = {}) {
     const conn = await mongoose.createConnection(uri, {
         maxPoolSize: 5,
         serverSelectionTimeoutMS: 5000,
@@ -62,6 +62,48 @@ export async function loadFixtures(uri, { idNum = null } = {}) {
     if (idNum)
         admin = await col('admins').findOne({ $or: [{ idNum }, { idNum: String(idNum) }] }, { projection: { _id: 0, id: 1, phone: 1, currentStoreId: 1 } })
 
+    // Sessions beyond the admin, because two families of routes refuse to do any
+    // DB work for a super-admin burst:
+    // - order/ops/suggest_replacements answers 403 unless the caller IS the
+    //   order's picker → sample a real picking order and the admin picking it.
+    // - the storefront routes read _user → sample a real shopper with an open cart.
+    let pickOrder = null
+    let picker = null
+    for (const order of await col('orders').find(
+        { status: 'picking', 'picker.adminId': { $exists: true }, 'cart.0': { $exists: true } },
+        { projection: { _id: 0, id: 1, picker: 1, cart: 1 }, sort: { time: -1 }, limit: 5 }
+    ).toArray()) {
+        const candidate = await col('admins').findOne({ id: order.picker.adminId }, { projection: { _id: 0, id: 1, idNum: 1, phone: 1, active: 1 } })
+        if (!candidate?.idNum || !candidate.phone || candidate.active === false) continue
+        const item = order.cart.find(c => c.barcode && c.category?.id) || order.cart.find(c => c.barcode)
+        if (!item) continue
+        pickOrder = { orderId: order.id, barcode: item.barcode }
+        picker = candidate
+        break
+    }
+
+    // --user-phone picks the shopper; otherwise the newest real cart order that
+    // carries a storeId — which is what order/window/options needs to do any work
+    // at all (it returns [] straight away for a cart without a store).
+    let customer = userPhone
+        ? await col('users').findOne({ phone: userPhone }, { projection: { _id: 0, id: 1, phone: 1, active: 1 } })
+        : null
+    let customerCart = customer
+        ? await col('orders').findOne({ userId: customer.id, status: 'cart', active: true }, { projection: { _id: 0, id: 1, storeId: 1 } })
+        : null
+    if (!customer) {
+        for (const cart of await col('orders').find(
+            { status: 'cart', active: true, storeId: { $type: 'string' }, 'cart.0': { $exists: true } },
+            { projection: { _id: 0, id: 1, userId: 1, storeId: 1 }, sort: { updatedAt: -1 }, limit: 8 }
+        ).toArray()) {
+            const owner = await col('users').findOne({ id: cart.userId }, { projection: { _id: 0, id: 1, phone: 1, active: 1 } })
+            if (!owner?.phone || owner.active === false) continue
+            customer = owner
+            customerCart = cart
+            break
+        }
+    }
+
     // Real ids for the required:['id'] routes (400 without one) and the
     // readById routes (an undefined id silently reads an arbitrary first doc).
     const [apiKey, cashRegister, comaxProduct, comaxSale, coupon, displayBlock, carouselBlock,
@@ -82,7 +124,7 @@ export async function loadFixtures(uri, { idNum = null } = {}) {
         col('supply_areas').findOne({}, { projection: { _id: 0, id: 1 } })
     ])
 
-    return {
+    const sampled = {
         conn,
         db,
         otpCollection: col('otps'),
@@ -115,7 +157,25 @@ export async function loadFixtures(uri, { idNum = null } = {}) {
         userId: user?.id || null,
         address,
         adminPhone: admin?.phone || null,
+        customerPhone: customer?.phone || null,
+        customerCartId: customerCart?.id || null,
+        customerCartStoreId: typeof customerCart?.storeId === 'string' ? customerCart.storeId : null,
+        pickerIdNum: picker?.idNum ? String(picker.idNum) : null,
+        pickerPhone: picker?.phone || null,
+        pickOrderId: pickOrder?.orderId || null,
+        pickBarcode: pickOrder?.barcode || null,
         month: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
+        // The cart burst itself can be what creates the cart order (the app creates
+        // one on the first read for a shopper who has none) — re-sample after that
+        // read so a shopper who just got a store-backed cart is measured, not skipped.
+        async refreshCustomerCart() {
+            if (!customer) return null
+            const cart = await col('orders').findOne({ userId: customer.id, status: 'cart', active: true }, { projection: { _id: 0, id: 1, storeId: 1 } })
+            sampled.customerCartId = cart?.id || null
+            sampled.customerCartStoreId = typeof cart?.storeId === 'string' ? cart.storeId : null
+            return sampled.customerCartStoreId
+        },
         async close() { await conn.close() }
     }
+    return sampled
 }

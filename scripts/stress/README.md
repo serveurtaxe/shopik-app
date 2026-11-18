@@ -33,8 +33,17 @@ docker run -d --name shopik-stress-redis -p 6379:6379 redis
 DB=mongodb://localhost:27017/shopik_stress NO_NIGHT_SYNC=1 PORT=7777 npm start
 
 # 4. stress it
-node scripts/stress/run.js --target local --id-num <your admin idNum>
+node scripts/stress/run.js --target local --id-num <your admin idNum> --user-phone <a shopper phone>
 ```
+
+### Caveat: the copy converges to the branch's schema
+
+The app builds every index its models declare (mongoose `autoIndex`) the moment it
+connects, so after one run the restored copy carries the indexes of the branch you
+are testing, not the ones prod actually has. That is useful — it measures the state
+*after* a schema PR — but compare `listIndexes` between prod and the copy before
+trusting a latency number, and drop the branch's new keys when you want to measure
+prod as it is today.
 
 ## Recipe: test Atlas URI
 
@@ -52,14 +61,26 @@ The runner logs in with the **real app login flow** (no token forging):
 
 - interactive: prompts for `--id-num`, calls `admin/login_otp` (real SMS to the
   admin's phone), prompts for the code, captures `ADMIN_TOKEN_COOKIE`.
-- `--headless-otp` (unattended): reads/writes the OTP doc in the stress DB
+- `--headless-otp` (unattended): writes the OTP doc in the stress DB
   directly, skipping SMS entirely. Guarded the same way as everything else —
   impossible against a prod-looking URI.
 - If the target has `SITE_GATE_PASSWORD`, pass `--gate-password` (or
   `STRESS_GATE_PASSWORD`); the runner detects the gate and logs in once.
 
-The login is pinned to a sampled store (`admin/current_store`) — the ops queue
-routes answer empty without a `currentStoreId` and would measure nothing.
+The admin login is pinned to a sampled store (`admin/current_store`) — the ops
+queue routes answer empty without a `currentStoreId` and would measure nothing.
+
+Two route families refuse a super-admin burst, so the runner opens two more
+sessions (same headless-OTP trick, each with its own cookie jar):
+
+| session | sampled from | routes |
+|---|---|---|
+| picker | a real `status: 'picking'` order and the admin picking it | `order/ops/suggest_replacements` (403 unless the caller **is** the picker) |
+| shopper | `--user-phone <phone>`, else the newest real cart order that has a `storeId` | `order/cart/get`, `order/window/options` (`_user` is only populated for a non-admin platform, so this client says `platform: web` and sends the storefront Origin) |
+
+A shopper whose cart order has no `storeId` gets `order/window/options` skipped
+with that reason — the route returns `[]` before touching mongo, and a row that
+measures nothing would look like a cheap route.
 
 ## Modes
 
@@ -80,6 +101,9 @@ routes answer empty without a `currentStoreId` and would measure nothing.
 - `HEAVY-SCAN` ≥50k docs examined → index-backed but huge.
 - `bad-payload` rows: the route needs a payload the fixture table doesn't know
   — add it to `payloads.js` and rerun.
+- `skipped (…)` rows: the fixture or session the route needs is missing (a reason
+  is named). A route that never ran has no latency number — never read it as a
+  cheap route.
 
 JSON artifact: `reports/stress/<stamp>-<target>-<mode>.json`.
 
@@ -95,10 +119,10 @@ scripts/stress/
   run.js       entry + orchestration
   config.js    CLI/env parsing + production guard
   routes.js    route discovery mirroring server/router.js + read allow-list
-  payloads.js  per-route payload fixtures (add here when a row is bad-payload)
-  fixtures.js  raw-collection sampling from the stress DB
-  client.js    HTTP client (admin platform headers, cookie jar, envelope parsing)
-  auth.js      gate login + admin login (interactive / headless OTP)
+  payloads.js  per-route payload fixtures + which session each route needs
+  fixtures.js  raw-collection sampling from the stress DB (ids, cart, picking order)
+  client.js    HTTP client (one platform + one cookie jar per session, envelope parsing)
+  auth.js      gate login + admin / picker / shopper logins (interactive or headless OTP)
   observer.js  mongo probe: profiler, serverStatus WT deltas, currentOp
   load.js      sequential bursts + chaos + the probe loop
   report.js    console ranking + JSON writer

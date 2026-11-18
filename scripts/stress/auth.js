@@ -1,67 +1,106 @@
-// Access setup: optional site gate login, then the real admin login flow the
-// app itself uses (login_otp → login → ADMIN_TOKEN_COOKIE).
+// Access setup: optional site gate login, then the real login flows the app
+// itself uses — admin (ADMIN_TOKEN_COOKIE) for everything, plus the two sessions
+// a couple of routes insist on (the picker of an order, and the logged-in
+// customer behind the storefront routes).
 //
-// --headless-otp reads the OTP out of the stress DB's otps collection (or
-// writes one directly if the SMS provider is unreachable), so unattended runs
-// work. The guard in run.js already refused a prod-looking URI before this can
-// ever touch an otp collection.
+// --headless-otp writes the OTP doc into the stress DB's otps collection instead
+// of calling login_otp, so unattended runs never need SMS. The guard in run.js
+// already refused a prod-looking URI before this can ever touch an otp collection.
+//
+// Style/ASI note: keep statements from starting with `(` in this file — a previous
+// line that ends in `)` (a `throw`/`console.log` carrying a template literal)
+// continues as a call and silently swallows the parenthesised assignment.
 
 import readline from 'node:readline/promises'
 import { stdin as input, stdout as output } from 'node:process'
 import uid from '#common/functions/uid.js'
 import { maskPhone } from './util.js'
 
-export async function ensureGate(client, { gatePassword, interactive }) {
+let rl = null
+const ask = async question => {
+    if (!process.stdin.isTTY)
+        throw new Error(`Needs ${question} but stdin is not interactive — pass it as a flag.`)
+    rl ??= readline.createInterface({ input, output })
+    return (await rl.question(question)).trim()
+}
+
+export function closePrompt() {
+    rl?.close()
+    rl = null
+}
+
+export async function ensureGate(client, { gatePassword }) {
     const probe = await client.call('domain/count', {})
     if (probe.kind !== 'gate') return { gated: false }
-    let password = gatePassword
-    if (!password && interactive) {
-        const rl = readline.createInterface({ input, output })
-        password = (await rl.question('Site gate password: ')).trim()
-        rl.close()
-    }
+    const password = gatePassword || await ask('Site gate password: ')
     if (!password) throw new Error('Target is gated — pass --gate-password (or STRESS_GATE_PASSWORD).')
     const ok = await client.gateLogin(password)
     if (!ok) throw new Error('Gate login rejected (wrong password?).')
     return { gated: true }
 }
 
-export async function adminLogin(client, fixtures, { idNum, headlessOtp, interactive }) {
-    let rl = null
-    const ask = async question => {
-        if (!interactive) throw new Error(`Needs ${question} but stdin is not interactive — pass it as a flag.`)
-        rl ??= readline.createInterface({ input, output })
-        return (await rl.question(question)).trim()
+// login_otp would create this exact doc and then send the SMS — the login route
+// only needs the stored pair.
+async function headlessOtp(fixtures, phone) {
+    const otpToken = uid(16)
+    const otp = uid(6, true)
+    await fixtures.otpCollection.insertOne({ phone, token: otpToken, otp, attempts: 0, createdAt: new Date() })
+    return { otpToken, otp }
+}
+
+async function adminOtp(client, fixtures, { idNum, phone, label, headless }) {
+    if (headless) {
+        if (!phone)
+            throw new Error(`--headless-otp needs the ${label} (by --id-num) to exist in the stress DB.`)
+        return headlessOtp(fixtures, phone)
     }
+    const issued = await client.call('admin/login_otp', { idNum }, { timeoutMs: 15_000 })
+    if (!issued.ok)
+        throw new Error(`login_otp failed (${issued.status} ${issued.kind}): ${issued.body?.message || '—'} — try --headless-otp if the SMS provider is unreachable in this environment.`)
+    const otpToken = issued.body?.data?.token
+    if (!otpToken) throw new Error('login_otp returned no token.')
+    return { otpToken, otp: await ask('OTP code: ') }
+}
 
+export async function adminLogin(client, fixtures, { idNum, phone = null, label = 'admin', headlessOtp: headless }) {
     idNum = idNum || await ask('Admin ID number: ')
-    if (fixtures.adminPhone)
-        console.log(`[stress] login → admin phone ${maskPhone(fixtures.adminPhone)}`)
+    phone = phone || fixtures.adminPhone
+    if (phone) console.log(`[stress] login → ${label} phone ${maskPhone(phone)}`)
 
-    let otpToken, otp
+    const { otpToken, otp } = await adminOtp(client, fixtures, { idNum, phone, label, headless })
+    const logged = await client.call('admin/login', { idNum, otpToken, otp }, { timeoutMs: 15_000 })
+    if (!logged.ok)
+        throw new Error(`${label} login failed (${logged.status} ${logged.kind}): ${logged.body?.message || 'no ADMIN_TOKEN_COOKIE issued'}`)
+    return { ok: true }
+}
 
-    if (headlessOtp) {
-        if (!fixtures.adminPhone)
-            throw new Error('--headless-otp needs the admin (by --id-num) to exist in the stress DB.')
-        otpToken = uid(16)
-        otp = uid(6, true)
-        // Bypasses SMS: login_otp would create this exact doc and then send the
-        // SMS — the login route only needs the stored pair.
-        await fixtures.otpCollection.insertOne({ phone: fixtures.adminPhone, token: otpToken, otp, attempts: 0, createdAt: new Date() })
+// Storefront session: the router only populates _user for non-admin platforms,
+// and getUser rejects a token whose user.tokens[platform] doesn't match the
+// platform of the call — so this client says 'web' on the login and on every
+// burst (see StressClient.platform).
+export async function customerLogin(client, fixtures, { phone, headlessOtp: headless }) {
+    if (!phone) return false
+    console.log(`[stress] login → customer phone ${maskPhone(phone)}`)
+
+    let otpToken
+    let otp
+    if (headless) {
+        const issued = await headlessOtp(fixtures, phone)
+        otpToken = issued.otpToken
+        otp = issued.otp
     } else {
-        const issued = await client.call('admin/login_otp', { idNum }, { timeoutMs: 15_000 })
+        const issued = await client.call('user/login_otp', { phone }, { timeoutMs: 15_000 })
         if (!issued.ok)
-            throw new Error(`login_otp failed (${issued.status} ${issued.kind}): ${issued.body?.message || '—'} — try --headless-otp if the SMS provider is unreachable in this environment.`)
+            throw new Error(`user/login_otp failed (${issued.status} ${issued.kind}): ${issued.body?.message || '—'} — try --headless-otp.`)
         otpToken = issued.body?.data?.token
-        if (!otpToken) throw new Error('login_otp returned no token.')
+        if (!otpToken) throw new Error('user/login_otp returned no token.')
         otp = await ask('OTP code: ')
     }
 
-    const logged = await client.call('admin/login', { idNum, otpToken, otp }, { timeoutMs: 15_000 })
+    const logged = await client.call('user/login', { phone, otpToken, otp }, { timeoutMs: 15_000 })
     if (!logged.ok)
-        throw new Error(`login failed (${logged.status} ${logged.kind}): ${logged.body?.message || 'no ADMIN_TOKEN_COOKIE issued'}`)
-    rl?.close()
-    return { ok: true }
+        throw new Error(`customer login failed (${logged.status} ${logged.kind}): ${logged.body?.message || 'no USER_TOKEN_COOKIE issued'}`)
+    return true
 }
 
 // Ops-queue routes pin to the admin's currentStoreId — without a store they

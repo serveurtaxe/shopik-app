@@ -1,9 +1,27 @@
-// Payload templates: route → (fixtures) => payload | null (null = skip, the
-// fixture this route needs is missing). domainId is injected by the runner.
-// Anything not listed runs with {} — safe only for routes whose {} payload does
-// REAL work (read/filters/count routes). Routes with config.required or that
-// readById(x) MUST be listed: a missing id either 400s (bad-payload, zero DB
-// work) or silently reads an arbitrary first document (readById(undefined)).
+// Payload templates: route → (fixtures) => payload | { skip: reason } | null
+// (skip/null = don't run this route, the fixture it needs is missing). domainId is
+// injected by the runner. Anything not listed runs with {} — safe only for routes
+// whose {} payload does REAL work (read/filters/count routes). Routes with
+// config.required or that readById(x) MUST be listed: a missing id either 400s
+// (bad-payload, zero DB work) or silently reads an arbitrary first document
+// (readById(undefined)).
+
+// Which login each route must be fired with to do real work. Everything defaults
+// to the admin session; these two are the routes that refuse it:
+// - suggest_replacements answers 403 unless the caller IS the order's picker.
+// - the storefront routes read _user, which the router only populates for a
+//   non-admin platform holding USER_TOKEN_COOKIE.
+export const SESSIONS = {
+    picker: new Set(['order/ops/suggest_replacements']),
+    customer: new Set(['order/cart/get', 'order/window/options'])
+}
+export const CUSTOMER_PLATFORM = 'web'
+
+export function sessionFor(route) {
+    if (SESSIONS.picker.has(route)) return 'picker'
+    if (SESSIONS.customer.has(route)) return 'customer'
+    return 'admin'
+}
 
 export function payloadFor(route, fixtures) {
     const fx = fixtures
@@ -23,8 +41,17 @@ export function payloadFor(route, fixtures) {
         case 'order/details': return fx.orderId ? { id: fx.orderId } : null
         case 'order/id': return fx.orderId ? { id: fx.orderId } : null
         case 'order/timeline': return fx.orderId ? { orderId: fx.orderId } : null
+        case 'order/cart/get': return fx.customerPhone ? {} : { skip: 'no shopper with a phone in the stress DB (--user-phone)' }
         case 'order/ops/list': return { limit: 25 }
+        // The 400 the plain {} payload produced: the route needs a real order id
+        // plus a barcode that is IN that order's cart.
+        case 'order/ops/suggest_replacements': return fx.pickOrderId && fx.pickBarcode
+            ? { id: fx.pickOrderId, barcode: fx.pickBarcode, limit: 20 }
+            : { skip: 'no picking order whose picker can log in' }
         case 'order/supplier_report': return { month: fx.month }
+        case 'order/window/options': return fx.customerPhone && fx.customerCartStoreId
+            ? {}
+            : { skip: 'shopper cart has no storeId — the route returns [] before touching mongo' }
         case 'order_window/read': return fx.currentStoreId ? { storeId: fx.currentStoreId } : {}
         case 'order_window_template/id': return fx.orderWindowTemplateId ? { id: fx.orderWindowTemplateId } : null
         case 'product/get': return fx.productBarcodes.length ? { barcode: fx.productBarcodes[0] } : {}
@@ -41,10 +68,6 @@ export function payloadFor(route, fixtures) {
         case 'supply_area/id': return fx.supplyAreaId ? { id: fx.supplyAreaId } : null
         case 'user/details': return fx.userId ? { id: fx.userId } : null
         case 'user/id': return fx.userId ? { id: fx.userId } : null
-        // Storefront routes that read _user (the logged-in customer) — an admin
-        // session never populates _user and the routes 500, so skip them.
-        case 'order/cart/get': return null
-        case 'order/window/options': return null
         default: return {}
     }
 }

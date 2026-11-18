@@ -1,11 +1,16 @@
-// HTTP client for the running server: admin-platform headers, a tiny cookie jar,
-// and the router's envelope shape ({ requestId, data, status }) — errors arrive
-// with HTTP 200 + a body status, so classification must read the body.
+// HTTP client for the running server: one session per instance (admin or
+// storefront platform header + its own cookie jar), and the router's envelope
+// shape ({ requestId, data, status }) — errors arrive with HTTP 200 + a body
+// status, so classification must read the body.
 
 export class StressClient {
-    constructor({ baseUrl, origin }) {
+    constructor({ baseUrl, origin, platform = 'admin' }) {
         this.baseUrl = baseUrl.replace(/\/$/, '')
         this.origin = origin
+        // getPlatform() trusts an explicit header, and both session helpers
+        // reject a token whose tokens[platform] doesn't match the platform of
+        // the call — so every client states its platform once, up front.
+        this.platform = platform
         this.cookies = new Map()
     }
 
@@ -32,7 +37,7 @@ export class StressClient {
                 method: 'POST',
                 headers: {
                     'content-type': 'application/json',
-                    platform: 'admin',
+                    platform: this.platform,
                     origin: this.origin,
                     cookie: this.cookieHeader(),
                     ...extraHeaders

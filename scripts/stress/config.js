@@ -22,15 +22,18 @@ export function parseArgs(argv = process.argv.slice(2)) {
         only: null,
         mutations: false,
         idNum: null,
+        userPhone: null,
         headlessOtp: false,
         gatePassword: process.env.STRESS_GATE_PASSWORD || null,
         adminOrigin: null,
+        storefrontOrigin: null,
         reportDir: 'reports/stress',
         help: false,
         discoverOnly: false
     }
     const flagsWithValues = new Set(['--target', '--mode', '--db-uri', '--base-url', '--calls', '--concurrency',
-        '--chaos-duration', '--probe-every', '--gap', '--only', '--id-num', '--gate-password', '--report-dir', '--admin-origin'])
+        '--chaos-duration', '--probe-every', '--gap', '--only', '--id-num', '--user-phone', '--gate-password',
+        '--report-dir', '--admin-origin', '--storefront-origin'])
     for (let i = 0; i < argv.length; i++) {
         const arg = argv[i]
         switch (arg) {
@@ -67,6 +70,9 @@ export function parseArgs(argv = process.argv.slice(2)) {
         const port = new URL(opts.baseUrl).port || (new URL(opts.baseUrl).protocol === 'https:' ? '443' : '80')
         opts.adminOrigin = `http://admin.localhost:${port}`
     }
+    // Storefront traffic gets its domain from the Origin host (resolveDomainId),
+    // so the customer session is fired with the plain site origin, not admin.*.
+    opts.storefrontOrigin = opts.storefrontOrigin || opts.baseUrl
 
     // Profiling only on the local target unless explicitly justified: shared
     // Atlas tiers pay for every profiled op.
@@ -116,6 +122,10 @@ Usage:
   --only <regex>          only run matching routes (e.g. --only "order/")
   --mutations             include write routes (default off)
   --id-num <n>            admin idNum for login (else prompted)
+  --user-phone <phone>    shopper to log in as for the storefront routes; without it a
+                          real cart-order-with-store owner is sampled from the stress DB
+  --storefront-origin <url> Origin header for storefront calls (domain resolution),
+                          default --base-url
   --headless-otp          read the OTP from the stress DB instead of prompting (never with a prod-looking URI)
   --gate-password <p>     SITE_GATE_PASSWORD of the target server (or env STRESS_GATE_PASSWORD)
   --report-dir <dir>      default reports/stress
