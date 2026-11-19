@@ -14,7 +14,7 @@ export function buildMeta({ settings, initData, page, notFound, url, host } = {}
     const image = notFound
         ? ''
         : (initData?.image
-            || getSettingFileUrl(seo.ogImage, 'full')
+            || getSettingFileUrl(seo.ogImage, 'l')
             || getPwaIconUrl(appearance.appIcon, PWA_ICON_FILES.icon512)
             || getSettingFileUrl(appearance.logo))
     // Cards show "siteName | page name" (mirrors the document <title>).
