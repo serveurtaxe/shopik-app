@@ -39,7 +39,7 @@ describe('buildMeta', () => {
         const meta = buildMeta({ settings, initData: {}, page: { title: 'Home', description: 'route desc' }, url: '/', host: 'store-b.com' })
         assert.equal(meta.title, 'Shopik | Home')
         assert.equal(meta.description, 'Store-wide description')
-        assert.equal(meta.image, 'https://files.shopik.co.il/images/settings/d1/ogImage/v1/full.webp')
+        assert.equal(meta.image, 'https://files.shopik.co.il/images/settings/d1/ogImage/v1/l.webp')
         assert.equal(meta.type, 'website')
     })
 
