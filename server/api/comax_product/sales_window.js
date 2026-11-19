@@ -6,12 +6,17 @@ import { resolveSalesWindow } from './salesWindow.js'
  * Read from the catalog rather than the Category collection: categories only
  * contain departments that have an ACTIVE product, and a department kept out
  * by the current rules is exactly the one an admin may want to configure.
+ *
+ * The group is a covered scan over {departmentCode, department, isTrailingItem}
+ * (see dl/schemas/comax_product.js): it never fetches a document, so the cost
+ * stays in the index no matter how big the catalog gets, and the ~100 group
+ * keys it produces can't spill — no allowDiskUse needed.
  */
 export async function listDepartments(DL) {
     const rows = await DL.ComaxProduct.Model.aggregate([
         { $match: { departmentCode: { $nin: [null, ''] }, isTrailingItem: { $ne: true } } },
         { $group: { _id: { code: '$departmentCode', name: '$department' }, products: { $sum: 1 } } }
-    ], { allowDiskUse: true })
+    ])
 
     return rows
         .map(row => ({

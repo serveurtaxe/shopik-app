@@ -66,7 +66,15 @@ export default async function suggest_replacements(payload, { DL, _admin }) {
             categoryPathIds = orig?.category?.pathIds || []
         } catch { }
     }
-    if (categoryId) baseFilter['category.id'] = categoryId
+    // Filter on category.pathIds, never on category.id: nothing indexes
+    // category.id, so the planner fell back to {status, prices.domainId,
+    // totalSalesUnits, id} and walked EVERY active product of the domain
+    // (6.8k-7.2k docs measured on the prod copy, to return 19-100 candidates).
+    // pathIds is indexed and stores the whole assigned path (the leaf id is its
+    // last element), so equality on the item's category id reads only that
+    // category — 20-110 docs for the identical result set — and anything mapped
+    // to a sub-category of it, which is a valid substitute too.
+    if (categoryId) baseFilter['category.pathIds'] = categoryId
     else if (categoryPathIds?.length) baseFilter['category.pathIds'] = { $in: categoryPathIds }
 
     let products = []
@@ -74,7 +82,16 @@ export default async function suggest_replacements(payload, { DL, _admin }) {
         if (q) {
             products = await DL.Product.search(q, baseFilter, { limit: fetchLimit, select })
         } else {
-            products = await DL.Product.read(baseFilter, select, { limit: fetchLimit, sort: { totalSalesUnits: -1, sortOrder: -1 } })
+            // Sort keys have to match an index the collection actually owns:
+            // {totalSalesUnits, sortOrder} is neither the storefront order
+            // ({sortOrder, totalSalesUnits}) nor the {status, prices.domainId,
+            // totalSalesUnits, id} index, so the read ended in a blocking sort of
+            // every active product of the domain — 7 442 docs × 3.3 KB, the same
+            // 32 MB sort buffer that already killed the skip-paged sync. With only
+            // the tiebreaker the index answers the order (explain: no SORT stage).
+            // Sales ranking is what replacements are about; sortOrder (0-5) was a
+            // near-no-op tiebreak next to it.
+            products = await DL.Product.read(baseFilter, select, { limit: fetchLimit, sort: { totalSalesUnits: -1 } })
         }
     } catch (err) {
         products = []

@@ -1,3 +1,4 @@
+import { redisDel } from '#server/utils/redisSafe.js'
 import storeScope, { assertStoreVisible } from '#server/utils/data/storeScope.js'
 
 export default async function current_store({ storeId }, { DL, _admin }) {

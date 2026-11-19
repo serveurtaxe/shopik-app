@@ -36,6 +36,10 @@ import { shouldEnforceBuyingPrice } from '#server/api/comax_product/syncRules.js
  * different thing from an item Comax itself has archived: those rows are not in
  * this report at all.
  *
+ * "ללא מחיר בקומקס" is that gap as a filter: Comax carries the item without a
+ * selling price of its own, so there is nothing to put on the site. It is כן even
+ * for a row whose site price was set by hand — that price is not Comax's.
+ *
  * "מכר", "תאריך מכירה אחרונה" and the stale-sales reason make the sales window
  * visible: an item that has not sold inside its department's window loses its
  * stores and therefore drops off the site on the next import. The units are the
@@ -66,6 +70,7 @@ const BASE_COLUMNS = [
     { text: 'האם ב GS1', width: 14, align: 'center' },
     { text: 'מחיר קנייה', width: 13, align: 'left', money: true },
     { text: 'מחיר מכירה', width: 13, align: 'left', money: true },
+    { text: 'ללא מחיר בקומקס', width: 16, align: 'center' },
     { text: 'האם יש תמונה', width: 14, align: 'center' },
     { text: 'מכר', width: 12, align: 'center' },
     { text: 'תאריך מכירה אחרונה', width: 16, align: 'center' },
@@ -115,6 +120,10 @@ function kashrutText(kashrut) {
 }
 
 const yesNo = value => value ? YES : NO
+// 0, null and an absent field are the same answer to the reader: no price. An
+// item Comax carries without an entry in 1069/255 arrives with 0 in both columns,
+// and a cell reading 0 next to 'חסר מחיר' only muddles it.
+const moneyOrNull = value => value > 0 ? value : null
 
 function toDate(value) {
     if (!value) return null
@@ -210,8 +219,8 @@ async function build(DL) {
         comax,
         products,
         categoryFlags,
-        gs1Barcodes,
-        gs1Checked,
+        gs1EveryBarcode,
+        gs1NoRecord,
         enforceBuyingPrice,
         salesWindow
     ] = await Promise.all([
@@ -235,16 +244,22 @@ async function build(DL) {
             { _id: 0, subGroupCode: 1, showOnSite: 1, requireKashrut: 1, categoryActive: 1 },
             { limit: 0 }
         ),
-        // A gs1_products doc is created only when GS1 answered, so "has a raw"
-        // is what "we have GS1 data for this barcode" means. The skipped docs
-        // that keep a raw (out-of-stock, no-product) count: GS1 does carry them.
-        DL.Gs1Product.Model.distinct('barcode', { raw: { $exists: true } }),
+        // "Has GS1 data" means a stored raw payload: a gs1_products doc is created only
+        // when GS1 answered, and the skipped docs that keep a raw (out-of-stock,
+        // no-product) count because GS1 does carry them. Filtering on `raw` alone has no
+        // index to serve it: a COLLSCAN of all 23 449 docs (~163 MB, Atlas's top hit for
+        // this collection) to build a 22 788-barcode set. The same set is the covered
+        // distinct over the unique barcode index (keys only, no docs) minus the rows the
+        // account holds no record for — and those are exactly the no-gs1-record rows the
+        // dated answer below reads. On the prod copy: 661 of 23 449 docs, all of them
+        // no-record rows, so one indexed read of 684 rows gives the difference.
+        DL.Gs1Product.Model.distinct('barcode', {}),
         // Lookups that came back empty for OUR account, with the date they were
-        // checked. Visibility changes over time, so this is a dated answer and
-        // not a verdict.
+        // checked, plus any raw a later re-check stored under the same skipReason.
+        // Visibility changes over time, so this is a dated answer and not a verdict.
         DL.Gs1Product.Model.find(
             { skipReason: 'no-gs1-record' },
-            { _id: 0, barcode: 1, syncedAt: 1, updatedAt: 1 }
+            { _id: 0, barcode: 1, syncedAt: 1, updatedAt: 1, raw: 1 }
         ).lean(),
         shouldEnforceBuyingPrice(DL),
         // The resolved config is the raw { defaultDays, rules }; the report asks
@@ -259,9 +274,15 @@ async function build(DL) {
         const key = normBarcode(product.barcode)
         if (!productByBarcode.has(key)) productByBarcode.set(key, product)
     }
-    const gs1Set = new Set(gs1Barcodes.map(normBarcode))
-    const gs1CheckedAt = new Map((gs1Checked || [])
-        .map(row => [normBarcode(row.barcode), toDate(row.updatedAt || row.syncedAt)]))
+    const gs1Set = new Set((gs1EveryBarcode || []).map(normBarcode))
+    const gs1CheckedAt = new Map()
+    for (const row of gs1NoRecord || []) {
+        const key = normBarcode(row.barcode)
+        // A no-record row that a later re-check filled in stays a GS1 answer; the ones
+        // still without a raw are the "לא" rows the barcode set must not claim.
+        if (!row.raw) gs1Set.delete(key)
+        gs1CheckedAt.set(key, toDate(row.updatedAt || row.syncedAt))
+    }
 
     const docless = new Set()
     for (const item of comax) {
@@ -340,8 +361,13 @@ async function build(DL) {
             // A dated check means we asked GS1 and our account does not carry
             // the barcode — a different answer from never having looked.
             inGs1: !inGs1 && checkedAt ? `${NO} (נבדק ${formatDate(checkedAt)})` : yesNo(inGs1),
-            buyingPrice: item.buyingPrice ?? null,
-            salePrice: product?.prices?.find(price => price?.domainId === defaultDomain?.id)?.price ?? item.price ?? null,
+            buyingPrice: moneyOrNull(item.buyingPrice),
+            salePrice: moneyOrNull(product?.prices?.find(price => price?.domainId === defaultDomain?.id)?.price ?? item.price),
+            // Filterable answer to "why is this row not on the site": Comax has no
+            // selling price for the item at all, so nothing here can invent one. It
+            // says כן even when the site shows a price of its own — that price is not
+            // from Comax. The buying-price half is named in the reason column.
+            noComaxPrice: yesNo(!(item.price > 0)),
             // "Is there an image" means "is there image material to load": a
             // stored product image, a Comax picUrl the image worker can fetch, or
             // GS1 media assets waiting in the dump.
@@ -384,6 +410,7 @@ async function build(DL) {
             row.inGs1,
             row.buyingPrice,
             row.salePrice,
+            row.noComaxPrice,
             row.hasImage,
             row.unitsSold,
             row.lastSaleDate,

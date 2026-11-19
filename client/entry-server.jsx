@@ -56,6 +56,7 @@ export async function render({ url, data, ctx }) {
     appTitle={siteName}
     meta={meta}
     glassix={glassix}
+    gtmId={data?.settings?.seo?.gtmId}
   />)
 
   const themeEntries = Object.entries(data?.settings?.theme || {})

@@ -3,6 +3,7 @@ import { applyCalcToCart } from '#common/functions/calcOrder/cart.js'
 import { findReplacement, isReplacedLine } from '#common/functions/cartReplacements.js'
 import { withSortedCart } from '#server/utils/data/sortCartByCategory.js'
 import { round2, round3 } from '#common/functions/calcOrder/utils.js'
+import log from '#server/utils/log.js'
 
 export default async function pick_complete(payload, { DL, _admin, utils }) {
     const { id } = payload
@@ -40,8 +41,20 @@ export default async function pick_complete(payload, { DL, _admin, utils }) {
     const allSaleIds = [...new Set(cartClone.flatMap(c => c.saleIds || []))]
     let salesMap = {}
     if (allSaleIds.length) {
-        const sales = await DL.Sale.read({ id: { $in: allSaleIds } })
+        // `read` pages at 30 docs unless told otherwise, so an order with more
+        // distinct sale ids than that lost the tail of the list here. The engine
+        // treats a sale it never received as "no sale" and prices the line at the
+        // regular rate — a silent overcharge (order 100336: 3 of 33 sales, +68.50).
+        const sales = await DL.Sale.read(
+            { id: { $in: allSaleIds } },
+            DL.Sale.defaultSelect,
+            { limit: 0 }
+        )
         salesMap = Object.fromEntries((sales || []).map(s => [s.id, s]))
+
+        const unresolved = allSaleIds.filter(saleId => !salesMap[saleId])
+        if (unresolved.length)
+            log.warn(`pick_complete: ${unresolved.length} unresolved sale id(s) for order ${id}: ${unresolved.join(', ')}`)
     }
 
     let calcResult

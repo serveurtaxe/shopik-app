@@ -282,12 +282,12 @@ const orderSchema = {
     window: windowSchema,
     pickBy: Date,
     shipBy: Date,
-    phone: String,
+    phone: { type: String, filter: true },
     secondPhone: String,
     email: String,
     name: {
-        first: String,
-        last: String
+        first: { type: String, filter: true },
+        last: { type: String, filter: true }
     },
     status: {
         type: String,

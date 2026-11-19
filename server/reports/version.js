@@ -12,7 +12,11 @@ import { SALES_WINDOW_KEY } from '#server/api/comax_product/salesWindow.js'
 //    of its own — "סטטוס לפי כללי האתר" (פעיל / מוסתר / ארכיון באתר) — and the
 //    price rules say in the reason that the archive is ours, which is not the
 //    same as Comax archiving the item.
-export const REPORT_FORMAT_VERSION = 3
+//
+// 4: "ללא מחיר בקומקס", the filterable price gap. The import stopped asking Comax
+//    to select by price list, so items it carries without a price-list entry became
+//    rows; 0 and an absent price now both render as an empty cell.
+export const REPORT_FORMAT_VERSION = 4
 
 /**
  * Cheap fingerprint of everything the catalog report is built from.

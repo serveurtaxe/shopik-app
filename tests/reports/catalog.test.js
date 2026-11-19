@@ -87,35 +87,41 @@ const productRow = (overrides = {}) => ({
     ...overrides
 })
 
-// Column order is part of the report contract: [0..20] fixed, then one column
+// Column order is part of the report contract: [0..21] fixed, then one column
 // per active store in the same order the stores were read.
 const row = values => ({
     superDepartment: values[0], department: values[1], group: values[2], subGroup: values[3],
     categoryShown: values[4], categoryRequires: values[5], barcode: values[6], name: values[7],
     supplier: values[8], kashrut: values[9], kashrutValid: values[10], vat: values[11],
-    inGs1: values[12], buyingPrice: values[13], salePrice: values[14], hasImage: values[15],
-    unitsSold: values[16], lastSaleDate: values[17], existsOnSite: values[18],
-    siteStatus: values[19], reason: values[20],
-    stores: values.slice(21)
+    inGs1: values[12], buyingPrice: values[13], salePrice: values[14], noComaxPrice: values[15],
+    hasImage: values[16], unitsSold: values[17], lastSaleDate: values[18], existsOnSite: values[19],
+    siteStatus: values[20], reason: values[21],
+    stores: values.slice(22)
 })
 
 describe('catalog report', () => {
     it('adds one availability column per active store', async () => {
         const { columns } = await catalog.build(fakeDL({ comax: [comaxRow()] }))
 
-        assert.equal(columns.length, 23)
+        assert.equal(columns.length, 24)
         assert.deepEqual(columns.slice(4, 6).map(column => column.text), [
             'קטגוריה מוצגת באתר',
             'קטגוריה דורשת כשרות'
         ])
-        assert.deepEqual(columns.slice(16, 21).map(column => column.text), [
+        assert.deepEqual(columns.slice(13, 16).map(column => column.text), [
+            'מחיר קנייה',
+            'מחיר מכירה',
+            'ללא מחיר בקומקס'
+        ])
+        assert.deepEqual(columns.slice(16, 22).map(column => column.text), [
+            'האם יש תמונה',
             'מכר',
             'תאריך מכירה אחרונה',
             'קיים באתר',
             'סטטוס לפי כללי האתר',
             'סיבת אי הצגה באתר'
         ])
-        assert.deepEqual(columns.slice(21).map(column => column.text), [
+        assert.deepEqual(columns.slice(22).map(column => column.text), [
             'האם בסניף נטו בת ים',
             'האם בסניף נטו ביתר עלית'
         ])
@@ -147,7 +153,9 @@ describe('catalog report', () => {
 
         assert.equal(rows[0][6], '0007290000000015')
         assert.equal(rows[0][7], 'שם אתר')
-        assert.equal(rows[0][15], 'כן')
+        // The price-gap column sits between the two prices and the image flag.
+        assert.equal(rows[0][15], 'לא')
+        assert.equal(rows[0][16], 'כן')
     })
 
     it('renders kashrut, VAT, GS1 and image flags', async () => {
@@ -287,7 +295,7 @@ describe('catalog report', () => {
             comax: [comaxRow({ storeIds: ['store-beitar'] })]
         }))
 
-        assert.deepEqual(rows[0].slice(21), ['לא', 'כן'])
+        assert.deepEqual(rows[0].slice(22), ['לא', 'כן'])
     })
 
     it('sorts by category and puts rows with no category last', async () => {
@@ -373,6 +381,38 @@ describe('catalog report', () => {
 
         assert.equal(reportRow.siteStatus, 'ארכיון באתר')
         assert.match(reportRow.reason, /^ארכיון באתר: חסר מחיר קנייה/)
+    })
+
+    it('leaves both price columns empty for an item Comax carries without a price list', async () => {
+        // The import writes 0 and null for these rows so a stale price cannot
+        // survive the write. In the sheet 0 and an absent field must read the same
+        // way: an empty cell, next to a reason that names both missing prices.
+        const { rows } = await catalog.build(fakeDL({
+            comax: [comaxRow({ barcode: '43001', price: 0, buyingPrice: null, storeIds: [] })],
+            products: []
+        }))
+        const reportRow = row(rows[0])
+
+        assert.equal(reportRow.buyingPrice, null)
+        assert.equal(reportRow.salePrice, null)
+        assert.equal(reportRow.noComaxPrice, 'כן')
+        assert.equal(reportRow.siteStatus, 'ארכיון באתר')
+        assert.match(reportRow.reason, /חסר מחיר מכירה בקומקס/)
+        assert.match(reportRow.reason, /חסר מחיר קנייה/)
+    })
+
+    it('says the selling price is not Comax when the site has one and Comax does not', async () => {
+        // A price typed into the admin stays on the site, and the sheet has to say
+        // plainly that Comax has nothing behind it: that row is a price-list gap,
+        // not a priced item.
+        const { rows } = await catalog.build(fakeDL({
+            comax: [comaxRow({ barcode: '43001', price: 0, buyingPrice: 20, storeIds: [] })],
+            products: [productRow({ barcode: '43001' })]
+        }))
+        const reportRow = row(rows[0])
+
+        assert.equal(reportRow.salePrice, 12.9)
+        assert.equal(reportRow.noComaxPrice, 'כן')
     })
 
     it('shows the ladder status for active and hidden rows as well', async () => {

@@ -17,20 +17,27 @@ export function parseArgs(argv = process.argv.slice(2)) {
         calls: 30,
         concurrency: 10,
         chaosDuration: 60,
-        probeEvery: 400,
+        probeEvery: 150,
         gap: 2500,
+        baselineSeconds: 10,
+        minWindow: 3000,
+        slowMs: 20,
         only: null,
         mutations: false,
         idNum: null,
+        userPhone: null,
         headlessOtp: false,
         gatePassword: process.env.STRESS_GATE_PASSWORD || null,
         adminOrigin: null,
+        storefrontOrigin: null,
         reportDir: 'reports/stress',
         help: false,
         discoverOnly: false
     }
     const flagsWithValues = new Set(['--target', '--mode', '--db-uri', '--base-url', '--calls', '--concurrency',
-        '--chaos-duration', '--probe-every', '--gap', '--only', '--id-num', '--gate-password', '--report-dir', '--admin-origin'])
+        '--chaos-duration', '--probe-every', '--gap', '--baseline-seconds', '--min-window', '--slow-ms', '--only',
+        '--id-num', '--user-phone',
+        '--gate-password', '--report-dir', '--admin-origin', '--storefront-origin'])
     for (let i = 0; i < argv.length; i++) {
         const arg = argv[i]
         switch (arg) {
@@ -43,7 +50,8 @@ export function parseArgs(argv = process.argv.slice(2)) {
             const value = argv[++i]
             if (value == null) throw new Error(`${arg} requires a value`)
             const key = arg.slice(2).replace(/-([a-z])/g, (_, c) => c.toUpperCase())
-            opts[key] = key === 'calls' || key === 'concurrency' || key === 'chaosDuration' || key === 'probeEvery' || key === 'gap'
+            opts[key] = key === 'calls' || key === 'concurrency' || key === 'chaosDuration' || key === 'probeEvery'
+                || key === 'gap' || key === 'baselineSeconds' || key === 'minWindow' || key === 'slowMs'
                 ? Number(value)
                 : value
             continue
@@ -67,6 +75,9 @@ export function parseArgs(argv = process.argv.slice(2)) {
         const port = new URL(opts.baseUrl).port || (new URL(opts.baseUrl).protocol === 'https:' ? '443' : '80')
         opts.adminOrigin = `http://admin.localhost:${port}`
     }
+    // Storefront traffic gets its domain from the Origin host (resolveDomainId),
+    // so the customer session is fired with the plain site origin, not admin.*.
+    opts.storefrontOrigin = opts.storefrontOrigin || opts.baseUrl
 
     // Profiling only on the local target unless explicitly justified: shared
     // Atlas tiers pay for every profiled op.
@@ -111,11 +122,21 @@ Usage:
   --calls <n>             calls per route in a sequential burst (default 30)
   --concurrency <c>       inflight requests (default 10)
   --chaos-duration <s>    chaos window seconds (default 60)
-  --probe-every <ms>      probe cadence during bursts (default 400)
+  --probe-every <ms>      probe cadence during bursts (default 250)
   --gap <ms>              cooldown between bursts (default 2500)
+  --baseline-seconds <s>  how long the no-load probe baseline runs (default 10; a
+                          short one gives a p50/p95 noisy enough to fake 2× impacts)
+  --min-window <ms>       every route is burst on repeat until its window lasts this
+                          long (default 3000) so the probe gets samples in every window
+  --slow-ms <ms>          profiler slowms: only operations at/over it are recorded
+                          (default 20; use 1 on a short --only run to see every read)
   --only <regex>          only run matching routes (e.g. --only "order/")
   --mutations             include write routes (default off)
   --id-num <n>            admin idNum for login (else prompted)
+  --user-phone <phone>    shopper to log in as for the storefront routes; without it a
+                          real cart-order-with-store owner is sampled from the stress DB
+  --storefront-origin <url> Origin header for storefront calls (domain resolution),
+                          default --base-url
   --headless-otp          read the OTP from the stress DB instead of prompting (never with a prod-looking URI)
   --gate-password <p>     SITE_GATE_PASSWORD of the target server (or env STRESS_GATE_PASSWORD)
   --report-dir <dir>      default reports/stress
