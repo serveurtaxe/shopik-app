@@ -15,9 +15,12 @@ export function InfoRow({ icon, label, children }) {
     </Flex>
 }
 
-export default function InfoCard({ title, children, className = '' }) {
+export default function InfoCard({ title, children, className = '', action = null }) {
     return <Card className={classNames(styles.detailsCard, className)}>
-        {title && <Text size='h3' bold className={styles.cardTitle}>{title}</Text>}
+        {(title || action) && <Flex gap={8} alignItems='center' justifyContent='space-between' className={styles.cardTitle}>
+            {title && <Text size='h3' bold>{title}</Text>}
+            {action}
+        </Flex>}
         <Flex col gap={22}>
             {children}
         </Flex>

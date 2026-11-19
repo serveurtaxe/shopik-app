@@ -1,0 +1,116 @@
+.table {
+    width: 100%;
+    border-collapse: collapse;
+
+    th {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        text-align: start;
+        padding: 10px 8px;
+        white-space: nowrap;
+        font-weight: 600;
+        background: var(--bg-primary);
+        border-bottom: 1px solid var(--border-secondary);
+    }
+
+    td {
+        padding: 10px 8px;
+        border-bottom: 1px solid var(--border-secondary);
+        vertical-align: middle;
+    }
+
+    tbody tr {
+        transition: background 0.15s;
+
+        &:nth-child(even) {
+            background: var(--bg-secondary);
+        }
+
+        &:hover {
+            background: var(--bg-secondary-hover);
+        }
+    }
+
+    tfoot td {
+        position: sticky;
+        bottom: 0;
+        z-index: 2;
+        padding: 12px 8px;
+        border-top: 1px solid var(--border-primary);
+        border-bottom: none;
+        background: var(--bg-primary);
+    }
+}
+
+.num {
+    white-space: nowrap;
+}
+
+/* A row thumbnail: the CDN only serves s (120px), so the picture is scaled
+   down here instead of asking for a size that does not exist. */
+.thumb.thumb {
+    width: 40px;
+    flex-shrink: 0;
+}
+
+.thumb.thumb img,
+.thumb.thumb>div {
+    width: 40px !important;
+    height: 40px !important;
+    border-radius: var(--radius-lg);
+}
+
+.productCell {
+    min-width: 220px;
+    max-width: 380px;
+}
+
+.productInfo {
+    min-width: 0;
+}
+
+.replaceTag {
+    color: var(--text-error-primary);
+    white-space: nowrap;
+}
+
+.missing {
+    color: var(--text-error-primary);
+}
+
+.green {
+    color: var(--text-success-primary);
+}
+
+.yellow {
+    color: var(--text-warning-primary);
+}
+
+.red {
+    color: var(--text-error-primary);
+}
+
+.saleTag {
+    color: var(--product-price-sale-color, var(--menu-sales-border));
+}
+
+.salePrice {
+    color: var(--product-price-sale-color, var(--menu-sales-border));
+}
+
+.saved {
+    color: var(--product-price-sale-color, var(--menu-sales-border));
+}
+
+.total {
+    color: var(--text-brand-primary);
+}
+
+.totalDiscounted {
+    color: var(--product-price-sale-color, var(--menu-sales-border));
+}
+
+.refunded {
+    color: var(--text-error-primary);
+}

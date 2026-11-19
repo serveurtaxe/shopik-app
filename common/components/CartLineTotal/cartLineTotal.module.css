@@ -1,0 +1,17 @@
+.lineTotal {
+    border-top: 1px dashed var(--border-secondary);
+    padding-top: 6px;
+    margin-top: 2px;
+}
+
+.notCharged {
+    padding-top: 2px;
+}
+
+.saleIcon {
+    color: var(--fg-brand-secondary);
+}
+
+.saleName {
+    color: var(--fg-brand-secondary);
+}

@@ -1,6 +1,5 @@
 .payDate {
     padding: 0px 5px;
-    padding-bottom: 15px;
 }
 
 /* ===== status section ===== */
@@ -195,6 +194,11 @@
     background: var(--bg-brand-secondary);
     color: var(--fg-brand-secondary);
     border-radius: var(--radius-full);
+}
+
+.viewToggle {
+    margin-inline-start: auto;
+    flex-shrink: 0;
 }
 
 .sumPill {
