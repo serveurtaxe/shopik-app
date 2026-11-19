@@ -3,9 +3,9 @@ import apiReq from 'common/functions/apiReq'
 import render from 'common/functions/render'
 import { useText } from 'common/texts/TextProvider'
 import Button from 'common/components/Button'
-import Card from 'common/components/Card'
 import Flex from 'common/components/Flex'
 import Text from 'common/components/Text'
+import InfoCard from 'components/Detail/InfoCard'
 import styles from './order.module.css'
 
 const coin = value => render({ type: 'coin', value })
@@ -58,12 +58,10 @@ export default function InvoiceSection({ order, onChanged }) {
         }
     }
 
-    return <Card className={styles.productsCard}>
-        <Flex gap={8} alignItems='center' className={styles.productsCardHeader}>
-            <Text size='h3' bold className={styles.productsCardTitle}>invoice_details</Text>
-            {statusKey ? <Text size='m' bold className={styles.sumPill}>{statusKey}</Text> : null}
-        </Flex>
-
+    return <InfoCard
+        title={'invoice_details'}
+        action={statusKey ? <Text size='m' bold className={styles.sumPill}>{statusKey}</Text> : null}
+    >
         <Flex col gap={8}>
             {notPaid && !invoice.url && <Text size='m' mode='sub'>{'invoice_not_issued'}</Text>}
 
@@ -115,5 +113,5 @@ export default function InvoiceSection({ order, onChanged }) {
                 </Flex>)}
             </Flex>}
         </Flex>
-    </Card>
+    </InfoCard>
 }

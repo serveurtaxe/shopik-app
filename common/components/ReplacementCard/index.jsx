@@ -4,6 +4,7 @@ import Text from 'common/components/Text'
 import Icon from 'common/components/Icon'
 import TR from 'common/texts/TR.js'
 import { PickPill, pickStatus } from 'common/components/ProductInline'
+import CartLineTotal from 'common/components/CartLineTotal'
 import { formatPrice, ProductImage, ProductPrice, ProductUnitInfo } from 'common/components/Product'
 import styles from './replacementCard.module.css'
 
@@ -16,7 +17,7 @@ import styles from './replacementCard.module.css'
  * and the order products list — so they cannot disagree about the same cart.
  * `onClick` is optional: only the screens that can work on a product pass it.
  */
-export default function ReplacementCard({ original = {}, replacer = {}, onClick }) {
+export default function ReplacementCard({ original = {}, replacer = {}, onClick, showLineTotals = false }) {
     const status = pickStatus(replacer)
 
     // Same sizes as a regular pick row (name 14px, unit info and barcode 12px),
@@ -26,6 +27,7 @@ export default function ReplacementCard({ original = {}, replacer = {}, onClick 
             <Text size="m" bold>
                 {original.name || TR('ops_product_name_fallback')}{original.price != null ? ` - ₪${formatPrice(original.price)}` : ''}
             </Text>
+            {showLineTotals && <CartLineTotal line={original} />}
             {original.barcode && <Flex alignItems="center" gap={4} justifyContent="end">
                 <Text size="s" mode="sub">{original.barcode}</Text>
                 <Icon name="barcode" size={12} />
@@ -42,6 +44,7 @@ export default function ReplacementCard({ original = {}, replacer = {}, onClick 
                     <Icon name="barcode" size={12} />
                 </Flex>}
                 <PickPill product={replacer} status={status} />
+                {showLineTotals && <CartLineTotal line={replacer} />}
             </Flex>
         </Flex>
     </Flex>

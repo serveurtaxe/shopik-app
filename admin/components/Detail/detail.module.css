@@ -1,94 +1,92 @@
-.page {
-    gap: 15px;
-    height: 100%;
-    overflow: auto;
-}
+  .page {
+      padding-bottom: 20px;
+  }
 
-.backButton {
-    padding: 0 !important;
+  .backButton {
+      padding: 0 !important;
 
-    svg {
-        height: 24px;
-        width: 24px;
-    }
-}
+      svg {
+          height: 24px;
+          width: 24px;
+      }
+  }
 
-.header {
-    padding: 0 5px 10px 5px;
-}
+  .header {
+      padding: 0 5px 10px 5px;
+  }
 
-.labelChip {
-    border-radius: var(--radius-full);
-    padding: 4px 10px;
-    white-space: nowrap;
-    border: 1px solid var(--fg-brand-secondary);
-}
+  .labelChip {
+      border-radius: var(--radius-full);
+      padding: 4px 10px;
+      white-space: nowrap;
+      border: 1px solid var(--fg-brand-secondary);
+  }
 
-/* ===== two-column content ===== */
+  /* ===== two-column content ===== */
 
-.content {
-    align-items: flex-start;
-}
+  .content {
+      align-items: flex-start;
+  }
 
-.mainColumn {
-    min-width: 0;
-}
+  .mainColumn {
+      min-width: 0;
+  }
 
-.sidebar {
-    width: 360px;
-    flex-shrink: 0;
-}
+  .sidebar {
+      width: 360px;
+      flex-shrink: 0;
+  }
 
-@media (max-width: 900px) {
-    .content {
-        flex-direction: column-reverse;
-    }
+  @media (max-width: 900px) {
+      .content {
+          flex-direction: column-reverse;
+      }
 
-    .sidebar {
-        width: 100%;
-    }
-}
+      .sidebar {
+          width: 100%;
+      }
+  }
 
-/* ===== sidebar info cards ===== */
+  /* ===== sidebar info cards ===== */
 
-.detailsCard {
-    padding: 20px;
-}
+  .detailsCard {
+      padding: 20px;
+  }
 
-.cardTitle {
-    margin-bottom: 24px;
-    font-weight: 700 !important;
-}
+  .cardTitle {
+      margin-bottom: 24px;
+      font-weight: 700 !important;
+  }
 
-.infoIcon {
-    color: var(--fg-brand-secondary);
-    margin-top: 3px;
-    flex-shrink: 0;
-}
+  .infoIcon {
+      color: var(--fg-brand-secondary);
+      margin-top: 3px;
+      flex-shrink: 0;
+  }
 
-/* ===== stats strip ===== */
+  /* ===== stats strip ===== */
 
-.statsStrip {
-    background: var(--bg-primary);
-    width: 100%;
-    padding: 16px 20px;
-}
+  .statsStrip {
+      background: var(--bg-primary);
+      width: 100%;
+      padding: 16px 20px;
+  }
 
-.statItem {
-    min-width: 0;
-}
+  .statItem {
+      min-width: 0;
+  }
 
-.statIcon {
-    color: var(--fg-brand-secondary);
-    flex-shrink: 0;
-}
+  .statIcon {
+      color: var(--fg-brand-secondary);
+      flex-shrink: 0;
+  }
 
-/* ===== actions bar ===== */
+  /* ===== actions bar ===== */
 
-.actionsBar {
-    padding: 0 5px;
-}
+  .actionsBar {
+      padding: 0 5px;
+  }
 
-.actionBtn {
-    width: 120px !important;
-}
+  .actionBtn {
+      width: 120px !important;
+  }

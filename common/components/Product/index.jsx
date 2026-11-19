@@ -129,13 +129,13 @@ export function ProductSaleBadge({ product, sales, size = 'm' }) {
     </Flex>
 }
 
-export function ProductImage({ product, size = 'm', sales, hideSaleBadge = false }) {
+export function ProductImage({ product, size = 'm', sales, hideSaleBadge = false, className = '' }) {
     const [failed, setFailed] = useState(false)
     useEffect(() => { setFailed(false) }, [product?.id, size])
     const src = product?.id ? getProductImageUrl(product.id, size, '', mainImageHash(product)) : ''
     const saleBadge = hideSaleBadge ? null : <ProductSaleBadge product={product} sales={sales} size={size} />
     if (failed || !src) {
-        return <div className={classNames(styles.productImageWrapper, styles[size])}>
+        return <div className={classNames(styles.productImageWrapper, styles[size], className)}>
             <Flex
                 center
                 className={classNames(styles.productImage, styles[size], styles.productImageFallback)}
@@ -146,7 +146,7 @@ export function ProductImage({ product, size = 'm', sales, hideSaleBadge = false
         </div>
     }
 
-    return <div className={classNames(styles.productImageWrapper, styles[size])}>
+    return <div className={classNames(styles.productImageWrapper, styles[size], className)}>
         <Image
             className={classNames(styles.productImage, styles[size])}
             src={src} alt={product.name} loading="eager" onError={() => setFailed(true)} />

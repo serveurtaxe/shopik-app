@@ -8,6 +8,7 @@ import Text from 'common/components/Text'
 import Icon from 'common/components/Icon'
 import { useState } from 'react'
 import { getProductState } from '#common/functions/productState.js'
+import CartLineTotal from 'common/components/CartLineTotal'
 
 // Pick state of an admin product row: what was ordered against what was supplied.
 // Empty until the final amount is entered. Plain keys so each component can resolve
@@ -54,6 +55,7 @@ export default function ProductInline({
     icon,
     saleTotalAmount,
     priceMode = 'unit',
+    showLineTotals = false,
     maxAmount = 0,
     ...props
 }) {
@@ -74,6 +76,7 @@ export default function ProductInline({
                     <Icon name="barcode" size={12} />
                 </Flex>}
                 <PickPill product={product} status={status} />
+                {showLineTotals && <CartLineTotal line={product} />}
                 {product.picking?.recommendations && <Flex alignItems="center" gap={6} className={styles.noteRow}>
                     <Icon name="note" size={12} />
                     <Text size="xs">{product.picking.recommendations}</Text>

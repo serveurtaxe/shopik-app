@@ -197,6 +197,11 @@
     border-radius: var(--radius-full);
 }
 
+.viewToggle {
+    margin-inline-start: auto;
+    flex-shrink: 0;
+}
+
 .sumPill {
     margin-top: 4px;
     padding: 2px 10px;

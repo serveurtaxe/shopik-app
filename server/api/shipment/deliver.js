@@ -75,7 +75,16 @@ export default async function deliver(payload, { DL, _admin, external, utils }) 
     }
 
     const at = new Date()
-    await DL.Order.Model.updateOne({ id: orderId }, { $set: { status: 'done', deliveryProof: { url, at } } })
+    // Who closed the order (handed it over) — the order keeps the deliverer
+    // even when a manager closes it on behalf of the shipment's shipper.
+    const adminName = `${_admin.name?.first ?? ''} ${_admin.name?.last ?? ''}`.trim()
+    await DL.Order.Model.updateOne({ id: orderId }, {
+        $set: {
+            status: 'done',
+            deliveryProof: { url, at },
+            orderFinalizer: { adminId: _admin.id, name: adminName }
+        }
+    })
 
     try { await DL.Owner.updateOne({ orderId, type: 'shipping', status: 'active' }, { status: 'done', end: at }) } catch {}
 
