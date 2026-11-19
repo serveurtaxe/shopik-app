@@ -30,10 +30,10 @@ export default function DetailPage({
         else navigate(-1)
     })
     return <Flex col gap={15} className={`${styles.page} ${className}`}>
-        <Flex gap={10} alignItems='flex-start'>
+        <Flex gap={10} alignItems='center'>
             <Button icon='back' mode='text' onClick={goBack} className={styles.backButton} />
-            <Flex gap={4} justifyContent='space-between' grow>
-                <Flex col gap={4} className={styles.header}>
+            <Flex gap={4} justifyContent='space-between' alignItems='center' grow>
+                <Flex col gap={4} className={styles.header} >
                     <Flex gap={10} alignItems='center' wrap>
                         {title}
                         {(labels || []).map((label, i) => <LabelChip key={i} label={label} />)}
