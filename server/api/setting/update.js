@@ -8,6 +8,12 @@ export default async function update(payload, { DL, _admin }) {
         throw { status: 400, message: 'setting does not exist' }
 
     const update = diff(setting, payload)
+    // Pixel size is captured by setting/upload_file. A manual value edit has
+    // no size, so clear the stale one rather than emit wrong og:image hints.
+    if (update.value !== undefined) {
+        update.width = null
+        update.height = null
+    }
     if (update.domainId) {
         const domain = await DL.Domain.readById(update.domainId)
         if (!domain)
