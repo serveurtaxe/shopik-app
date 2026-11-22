@@ -1,3 +1,15 @@
+// Barcode index that also answers for scan aliases: an order line may still
+// name a barcode the alias import folded into this product, and the product is
+// where its image/unit/category live.
+function barcodeIndex(products = []) {
+    const byBarcode = new Map()
+    for (const product of products || []) {
+        if (product.barcode) byBarcode.set(product.barcode, product)
+        for (const alias of product.scannableBarcodes || []) byBarcode.set(String(alias), product)
+    }
+    return byBarcode
+}
+
 export default async function enrichCart(order, DL) {
     if (!order?.cart?.length || !DL?.Product?.Model) return order
     const needsEnrich = []
@@ -16,16 +28,19 @@ export default async function enrichCart(order, DL) {
     }
     if (!needsEnrich.length) return order
 
-    // fetch products by id or barcode
+    // Fetch products by id or barcode. A line whose barcode is now a scan alias
+    // (`scannableBarcodes`) belongs to the product that owns it: that is where
+    // its image/unit/category live, since the alias doc was folded away.
     const or = []
     if (ids.length) or.push({ id: { $in: ids } })
-    if (barcodes.length) or.push({ barcode: { $in: barcodes } })
+    if (barcodes.length) or.push({ barcode: { $in: barcodes } }, { scannableBarcodes: { $in: barcodes } })
     const query = or.length === 1 ? or[0] : { $or: or }
 
     const products = await DL.Product.Model.find(query, {
         _id: 0,
         id: 1,
         barcode: 1,
+        scannableBarcodes: 1,
         images: 1,
         label: 1,
         producer: 1,
@@ -37,7 +52,7 @@ export default async function enrichCart(order, DL) {
     }).lean()
 
     const byId = new Map(products.map(p => [p.id, p]))
-    const byBarcode = new Map(products.map(p => [p.barcode, p]))
+    const byBarcode = barcodeIndex(products)
 
     for (const idx of needsEnrich) {
         const item = order.cart[idx]
@@ -83,13 +98,13 @@ export async function enrichOrders(orders, DL) {
     if (!needMap.length) return orders
     const or = []
     if (allIds.size) or.push({ id: { $in: Array.from(allIds) } })
-    if (allBarcodes.size) or.push({ barcode: { $in: Array.from(allBarcodes) } })
+    if (allBarcodes.size) or.push({ barcode: { $in: Array.from(allBarcodes) } }, { scannableBarcodes: { $in: Array.from(allBarcodes) } })
     const query = or.length === 1 ? or[0] : { $or: or }
     const products = await DL.Product.Model.find(query, {
-        _id: 0, id: 1, barcode: 1, images: 1, label: 1, producer: 1, netContentText: 1, category: 1, storageType: 1, picking: 1, unit: 1
+        _id: 0, id: 1, barcode: 1, scannableBarcodes: 1, images: 1, label: 1, producer: 1, netContentText: 1, category: 1, storageType: 1, picking: 1, unit: 1
     }).lean()
     const byId = new Map(products.map(p => [p.id, p]))
-    const byBarcode = new Map(products.map(p => [p.barcode, p]))
+    const byBarcode = barcodeIndex(products)
     for (const order of orders) {
         if (!order?.cart?.length) continue
         for (const item of order.cart) {

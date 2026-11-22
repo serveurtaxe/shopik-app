@@ -158,6 +158,24 @@ describe('catalog report', () => {
         assert.equal(rows[0][16], 'כן')
     })
 
+    it('reads a Comax row for a scan alias as the product that owns it', async () => {
+        const { rows } = await catalog.build(fakeDL({
+            // The alias still has its Comax row, but its product doc was folded
+            // into the owner by the barcode-alias import.
+            comax: [comaxRow({ barcode: '7290000000099' })],
+            products: [productRow({ barcode: '7290000000015', scannableBarcodes: ['7290000000099'] })]
+        }))
+
+        assert.equal(rows.length, 1)
+        assert.equal(rows[0][6], '7290000000099')
+        assert.equal(rows[0][7], 'שם אתר')
+        assert.equal(rows[0][16], 'כן', 'the family image is the catalog image')
+        // Active through the owner, not "hidden, no doc".
+        assert.equal(rows[0][19], 'כן')
+        assert.equal(rows[0][20], 'פעיל')
+        assert.equal(rows[0][21], '')
+    })
+
     it('renders kashrut, VAT, GS1 and image flags', async () => {
         const { rows } = await catalog.build(fakeDL({
             comax: [comaxRow()],
