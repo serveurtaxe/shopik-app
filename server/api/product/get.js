@@ -30,11 +30,21 @@ export default async function get(payload, { DL, _user, _admin, req, utils, plat
 
     if (barcode) {
         const sel = wantAnnotate ? { ...DL.Product.defaultSelectOne, storeIds: 1 } : DL.Product.defaultSelectOne
-        const product = await DL.Product.readOne({
+        let product = await DL.Product.readOne({
             barcode,
             status: statusFilter,
             ...domainPriceFilter
         }, sel)
+        // A scan alias has no doc of its own by design (the alias import folds it
+        // into the product that owns it), so an exact hit is not the only way a
+        // barcode resolves.
+        if (!product) {
+            product = await DL.Product.Model.findOne({
+                scannableBarcodes: barcode,
+                status: statusFilter,
+                ...domainPriceFilter
+            }, sel).lean()
+        }
         products = product && hasDomainPrice(product) ? [product] : []
         if (wantAnnotate) products = utils.data.withStock.annotateInStock(products, storeId, mode)
     } else if (id) {

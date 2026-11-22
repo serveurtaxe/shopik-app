@@ -7,10 +7,13 @@
  * are summed per item across all warehouse rows, then written to the matching
  * `Product` by barcode.
  *
- * Only products whose barcode matches a report item are touched; everything else
- * keeps its current value. Items with no matching product are ignored (internal
- * SKUs, delisted goods). Items are stored as numbers by Excel, so the file may
- * have lost a leading zero — both sides are normalized before comparing.
+ * Only products whose barcode (or one of whose `scannableBarcodes`) matches a
+ * report item are touched; everything else keeps its current value. A barcode
+ * family is one product, so its report rows are summed into the owner instead
+ * of splitting the total across docs that no longer exist. Items with no
+ * matching product are ignored (internal SKUs, delisted goods). Items are
+ * stored as numbers by Excel, so the file may have lost a leading zero — both
+ * sides are normalized before comparing.
  *
  * Usage: node server/scripts/runBackfillProductSalesUnits.js --file <report.xlsx>
  *          [--dry-run] [--limit N]
@@ -61,6 +64,54 @@ export function aggregateUnits(xml) {
     return totals
 }
 
+/**
+ * Report items -> owning products, summed per family.
+ *
+ * A barcode family is one product: the report still has a row per barcode the
+ * supplier sells under, and those rows must land on the owner rather than on
+ * docs the alias import already removed. A product's own barcode wins, then
+ * its aliases — the same precedence the alias index uses. Two products claiming
+ * the same alias is ambiguous: the first one read keeps it and the collision is
+ * counted (the import that created the alias makes this a report, not a write).
+ *
+ * @returns {{
+ *   byOwner: Map<string, { product: object, units: number }>,
+ *   unmatchedItems: number,
+ *   duplicates: number
+ * }}
+ */
+export function resolveFamilyTotals(products = [], totals = new Map()) {
+    const byNorm = new Map()
+    let duplicates = 0
+
+    for (const product of products || []) {
+        if (product?.barcode == null) continue
+        const norm = normBarcode(product.barcode)
+        if (byNorm.has(norm)) { duplicates++; continue }
+        byNorm.set(norm, product)
+    }
+    for (const product of products || []) {
+        if (product?.barcode == null) continue
+        for (const alias of product.scannableBarcodes || []) {
+            const norm = normBarcode(alias)
+            if (byNorm.has(norm)) { duplicates++; continue }
+            byNorm.set(norm, product)
+        }
+    }
+
+    const byOwner = new Map()
+    let unmatchedItems = 0
+    for (const [norm, units] of totals) {
+        const product = byNorm.get(norm)
+        if (!product) { unmatchedItems++; continue }
+        const entry = byOwner.get(product.barcode) || { product, units: 0 }
+        entry.units += units
+        byOwner.set(product.barcode, entry)
+    }
+
+    return { byOwner, unmatchedItems, duplicates }
+}
+
 export default async function backfillProductSalesUnits(
     { DL } = {},
     { file, dryRun = false, limit = 0 } = {}
@@ -73,39 +124,30 @@ export default async function backfillProductSalesUnits(
     console.log(`[salesUnits] report items: ${totals.size}`)
 
     const products = await DL.Product.read(
-        {}, { _id: 0, barcode: 1, totalSalesUnits: 1 }, { limit: 0 }
+        {}, { _id: 0, barcode: 1, scannableBarcodes: 1, totalSalesUnits: 1 }, { limit: 0 }
     )
-    const byNorm = new Map()
-    let duplicates = 0
-    for (const p of products || []) {
-        if (p?.barcode == null) continue
-        const n = normBarcode(p.barcode)
-        if (byNorm.has(n)) { duplicates++; continue }
-        byNorm.set(n, p)
-    }
+
+    const { byOwner: totalsByOwner, unmatchedItems, duplicates } = resolveFamilyTotals(products, totals)
 
     const cap = Number(limit) || 0
     const updates = []
-    let unmatchedItems = 0
     let unchanged = 0
-    for (const [norm, units] of totals) {
-        const p = byNorm.get(norm)
-        if (!p) { unmatchedItems++; continue }
+    for (const { product, units } of totalsByOwner.values()) {
         const value = Math.round(units * 1000) / 1000
-        if (p.totalSalesUnits === value) { unchanged++; continue }
-        updates.push({ barcode: p.barcode, totalSalesUnits: value })
+        if (product.totalSalesUnits === value) { unchanged++; continue }
+        updates.push({ barcode: product.barcode, totalSalesUnits: value })
         if (cap && updates.length >= cap) break
     }
 
     console.log(`[salesUnits] products: ${products?.length ?? 0} (dup normBarcode: ${duplicates})`)
-    console.log(`[salesUnits] matched items: ${totals.size - unmatchedItems}, unmatched: ${unmatchedItems}, unchanged: ${unchanged}, toWrite: ${updates.length}`)
+    console.log(`[salesUnits] matched items: ${totals.size - unmatchedItems}, unmatched: ${unmatchedItems}, family owners: ${totalsByOwner.size}, unchanged: ${unchanged}, toWrite: ${updates.length}`)
 
     if (dryRun) {
         const top = [...totals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5)
         console.log(`[salesUnits] top report items: ${JSON.stringify(top)}`)
         console.log(`[salesUnits] sample updates: ${JSON.stringify(updates.slice(0, 5))}`)
         console.log('[salesUnits] DRY RUN — no writes')
-        return { reportItems: totals.size, unmatchedItems, unchanged, updated: 0 }
+        return { reportItems: totals.size, unmatchedItems, familyOwners: totalsByOwner.size, unchanged, updated: 0 }
     }
 
     if (updates.length) {
@@ -117,5 +159,5 @@ export default async function backfillProductSalesUnits(
         })
         console.log(`[salesUnits] done — modified ${res?.modifiedCount ?? 0}`)
     }
-    return { reportItems: totals.size, unmatchedItems, unchanged, updated: updates.length }
+    return { reportItems: totals.size, unmatchedItems, familyOwners: totalsByOwner.size, unchanged, updated: updates.length }
 }

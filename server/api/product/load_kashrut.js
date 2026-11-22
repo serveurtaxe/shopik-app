@@ -141,14 +141,19 @@ export default async function loadKashrut(payload, { DL }) {
     const productByBarcode = new Map()
     for (let i = 0; i < barcodes.length; i += READ_CHUNK) {
         const chunk = barcodes.slice(i, i + READ_CHUNK)
+        // The report is keyed by barcode; a row for a scan alias belongs to the
+        // product that owns that barcode.
         const found = await DL.Product.read(
-            { barcode: { $in: chunk } },
-            { _id: 0, barcode: 1, kashrut: 1 },
+            { $or: [{ barcode: { $in: chunk } }, { scannableBarcodes: { $in: chunk } }] },
+            { _id: 0, barcode: 1, scannableBarcodes: 1, kashrut: 1 },
             { limit: 0 }
         )
-        for (const product of found || [])
-            if (product?.barcode && !productByBarcode.has(product.barcode))
-                productByBarcode.set(product.barcode, product)
+        for (const product of found || []) {
+            if (!product?.barcode) continue
+            if (!productByBarcode.has(product.barcode)) productByBarcode.set(product.barcode, product)
+            for (const alias of product.scannableBarcodes || [])
+                if (!productByBarcode.has(String(alias))) productByBarcode.set(String(alias), product)
+        }
     }
 
     const unmatched = []
@@ -164,7 +169,9 @@ export default async function loadKashrut(payload, { DL }) {
         const plan = planKashrutUpdate(product.kashrut, codes)
         if (plan.legacy) legacyConverted++
         if (!plan.changed) { unchanged++; continue }
-        updates.push({ barcode, kashrut: plan.kashrut })
+        // Always the product's own barcode: a row can name a scan alias, and a
+        // $set keyed by the alias would match no document.
+        updates.push({ barcode: product.barcode, kashrut: plan.kashrut })
     }
 
     const report = {

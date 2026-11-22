@@ -27,9 +27,13 @@ export default async function upload_images_check(payload, { DL }) {
 
     const products = []
     for (let i = 0; i < barcodes.length; i += READ_CHUNK) {
+        const chunk = barcodes.slice(i, i + READ_CHUNK)
+        // A scan alias has no doc of its own: the file name may carry the alias
+        // barcode (the sheet's image column does), and the image belongs to the
+        // product that owns it.
         const found = await DL.Product.read(
-            { barcode: { $in: barcodes.slice(i, i + READ_CHUNK) } },
-            { _id: 0, barcode: 1, id: 1, name: 1, images: 1 },
+            { $or: [{ barcode: { $in: chunk } }, { scannableBarcodes: { $in: chunk } }] },
+            { _id: 0, barcode: 1, scannableBarcodes: 1, id: 1, name: 1, images: 1 },
             { limit: 0 }
         )
         products.push(...(found || []))
