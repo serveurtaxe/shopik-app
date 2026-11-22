@@ -1,5 +1,6 @@
 import { round2 } from '../calcOrder/utils.js'
 import { cleanText, describeInvoiceLine } from './format.js'
+import { orderReference } from './notes.js'
 
 // EZcount document types (see the API docs; configurable in the Setting).
 export const DOC_TYPE = {
@@ -11,6 +12,39 @@ export const DOC_TYPE = {
 export const VAT_TYPE = {
     TAXABLE: 'INC',
     EXEMPT: 'NON'
+}
+
+// EZcount credit-card companies (`cc_type`). Unknown brands use 0
+// ("not in this list") and are still labelled by `cc_type_name`.
+const CARD_TYPE_CODES = {
+    isracard: 1,
+    isracart: 1,
+    visa: 2,
+    diners: 3,
+    amex: 4,
+    'american express': 4,
+    americanexpress: 4,
+    'leumi card': 6,
+    leumicard: 6,
+    mastercard: 99,
+    'master card': 99
+}
+
+// EZcount `cc_deal_type`: a regular charge or an installment plan.
+export const CARD_DEAL_TYPE = {
+    REGULAR: 1,
+    PAYMENTS: 2
+}
+
+export function cardTypeCode(company) {
+    const key = String(company ?? '').trim().toLowerCase()
+    return CARD_TYPE_CODES[key] ?? 0
+}
+
+function normalizePayments(value) {
+    const n = Number(value)
+    if (!Number.isFinite(n) || n < 1) return 1
+    return Math.min(36, Math.trunc(n))
 }
 
 export function vatTypeOf(vat) {
@@ -62,8 +96,10 @@ function customerName(customer = {}, order = {}) {
 /**
  * The EZcount `createDoc` body (credentials are added by the client).
  *
- * Only document fields are ever sent — never card or payment fields, so the
- * provider can never settle a charge.
+ * Only document fields are ever sent. Card rows carry display metadata
+ * (company, last 4 digits, installment count) for the printed "payment
+ * details" section — never a token, CVV or full number, so the provider can
+ * never settle a charge from this payload.
  */
 export function buildDocPayload({
     order = {},
@@ -85,6 +121,10 @@ export function buildDocPayload({
         customer_name: customerName(customer, order),
         item: items
     }
+
+    // Printed next to the document title on every document type.
+    const description = orderReference(order.number)
+    if (description) payload.description = cleanText(description, 120)
 
     // Display-only flag: item prices already carry the exact charged gross
     // (vat_type INC), but EZcount prints them before VAT unless asked otherwise.
@@ -137,12 +177,13 @@ export function buildDocPayload({
 /**
  * One payment row for an invoice receipt (320).
  *
- * EZcount requires card fields (brand, last 4, deal type) for payment_type 3,
- * but our capture flow never stores them, so the supported default is 9
- * ("other") with a free-text name. Switching to 3 means persisting the card
- * metadata at capture time first.
+ * `payment_type: 3` (credit card) is the only type that prints the card
+ * company, last 4 digits and installment count in the document's payment
+ * details. EZcount requires `cc_type`/`cc_number`/`cc_num_of_payments` for it,
+ * so a charge without that metadata falls back to `9` ("other") with a
+ * free-text name instead of failing the whole document.
  */
-export function buildPaymentRow({ amount, settings = {}, date = new Date() } = {}) {
+export function buildPaymentRow({ amount, settings = {}, date = new Date(), card = null } = {}) {
     const type = Number(settings.paymentType) || 9
     const day = String(date.getDate()).padStart(2, '0')
     const month = String(date.getMonth() + 1).padStart(2, '0')
@@ -151,6 +192,23 @@ export function buildPaymentRow({ amount, settings = {}, date = new Date() } = {
         payment_sum: round2(Number(amount) || 0),
         date: `${day}/${month}/${date.getFullYear()}`
     }
-    if (type === 9) row.other_payment_type_name = cleanText(settings.paymentName, 40) || 'כרטיס אשראי'
+
+    const last4 = String(card?.last4 ?? '').replace(/\D/g, '').slice(-4)
+    if (type === 3 && last4.length === 4) {
+        const installments = normalizePayments(card?.installments)
+        const company = cleanText(card?.company, 40)
+        row.cc_type = cardTypeCode(company)
+        row.cc_type_name = company || 'כרטיס אשראי'
+        // Keep the digits as a string so a leading zero (`0123`) survives.
+        row.cc_number = last4
+        row.cc_deal_type = installments > 1 ? CARD_DEAL_TYPE.PAYMENTS : CARD_DEAL_TYPE.REGULAR
+        row.cc_num_of_payments = installments
+        // 0 renders "תשלומים: N" instead of "תשלום N / N".
+        row.cc_payment_num = 0
+        return row
+    }
+
+    row.payment_type = 9
+    row.other_payment_type_name = cleanText(settings.paymentName, 40) || 'כרטיס אשראי'
     return row
 }

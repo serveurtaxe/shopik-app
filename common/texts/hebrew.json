@@ -1013,7 +1013,7 @@
         "invoice_note_missing": "לא סופק: [name]",
         "invoice_note_coupon": "קופון [name]: הנחה [amount] ₪",
         "invoice_note_coupon_plain": "קופון: הנחה [amount] ₪",
-        "invoice_note_summary": "פרטים מלאים בהזמנה [number]",
+        "invoice_note_order": "הזמנה [number]",
         "manual_refund_amount": "סכום שזוכה בפועל",
         "manual_refund_confirm": "רישום הזיכוי",
         "manual_refund_hint": "לאחר ביצוע הזיכוי מול חברת הסליקה, רשמו כאן את הסכום",

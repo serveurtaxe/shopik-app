@@ -6,7 +6,7 @@ import {
     assertTotalsMatch,
     INVOICE_EPS
 } from '#common/functions/invoice/lines.js'
-import { buildInvoiceNotes } from '#common/functions/invoice/notes.js'
+import { buildInvoiceNotes, orderReference } from '#common/functions/invoice/notes.js'
 import { buildDocPayload, buildPaymentRow, DOC_TYPE } from '#common/functions/invoice/payload.js'
 import { readVatSummary } from '#common/functions/invoice/summary.js'
 import { cleanText } from '#common/functions/invoice/format.js'
@@ -27,7 +27,7 @@ export const DEFAULT_SETTINGS = {
     autoIssue: true,
     sendEmail: true,
     shadowMode: false,
-    paymentType: 9,
+    paymentType: 3,
     paymentName: 'כרטיס אשראי',
     invoiceNotes: { replaced: true, missing: true, coupon: true },
     crnThreshold: 5000
@@ -191,6 +191,19 @@ function invoiceFields(record) {
     }
 }
 
+/**
+ * Card metadata the customer saw at checkout, for the document's printed
+ * payment details. Display-only: no token/card number ever reaches EZcount.
+ */
+function cardDetails(order) {
+    const payment = order?.payment || {}
+    return {
+        last4: payment.last4digits,
+        company: payment.cardCompany,
+        installments: payment.payments
+    }
+}
+
 async function markCaptureTransactions({ DL, order, record }) {
     try {
         await DL.PaymentTransaction.Model.updateMany(
@@ -312,12 +325,14 @@ export async function issueInvoice({
         ...(lines.shippingLine ? [lines.shippingLine] : []),
         ...(lines.roundingLine ? [lines.roundingLine] : [])
     ]
-    const notes = buildInvoiceNotes({
-        cart: order.cart,
-        coupons: order.coupons,
-        orderNumber: order.number,
-        include: config.invoiceNotes
-    })
+    const notes = [
+        orderReference(order.number),
+        buildInvoiceNotes({
+            cart: order.cart,
+            coupons: order.coupons,
+            include: config.invoiceNotes
+        })
+    ].filter(Boolean).join('\n')
     const payload = buildDocPayload({
         order,
         lines: items,
@@ -326,7 +341,7 @@ export async function issueInvoice({
         notes,
         settings: config,
         sendEmail: config.sendEmail,
-        payment: [buildPaymentRow({ amount: charged, settings: config })],
+        payment: [buildPaymentRow({ amount: charged, settings: config, card: cardDetails(order) })],
         idTransaction: idempotencyKey
     })
 
@@ -505,6 +520,7 @@ export async function issueCreditNote({
 
     const customer = await resolveInvoiceCustomer({ DL, order, user })
     const notes = [
+        orderReference(order.number),
         `זיכוי לחשבונית ${invoice.docNumber || ''}`.trim(),
         reason ? `סיבה: ${cleanText(reason, 120)}` : ''
     ].filter(Boolean).join('\n')
