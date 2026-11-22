@@ -11,6 +11,7 @@ import Main from 'layout/Main'
 import Footer from 'layout/Footer'
 import CartProvider from 'layout/Cart/CartProvider'
 import GlassixWidget from 'features/Glassix'
+import VeeAccessibility from 'features/Vee'
 import ProductOverlay from 'layout/ProductOverlay'
 import pages from './pages'
 import styles from './App.module.css'
@@ -55,6 +56,7 @@ export default function App({ data = {} }) {
 
     return <AppDataContext value={{ ...appData, refreshMenu }}>
         <GlassixWidget />
+        <VeeAccessibility />
         <TextProvider>
             <Lists sdLists={appData.lists}>
                 <OrderProvider>

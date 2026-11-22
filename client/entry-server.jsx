@@ -5,6 +5,7 @@ import TR from '#common/texts/TR.js'
 import { getSettingFileUrl } from '#common/functions/settingFileUrl.js'
 import { buildMeta } from '#common/functions/buildMeta.js'
 import { resolveGlassixConfig } from '#common/functions/glassix.js'
+import { resolveVeeConfig } from '#common/functions/vee.js'
 import { getPwaIconUrl, PWA_ICON_FILES } from '#common/functions/pwaIconUrl.js'
 import pages from './pages'
 import App from './App'
@@ -44,6 +45,9 @@ export async function render({ url, data, ctx }) {
   // fully-filled, enabled glassix config, so the head never preconnects to
   // Glassix for a store that does not load the widget.
   const glassix = resolveGlassixConfig(data.settings)
+  // Same gate the Vee widget component uses (production + enabled + sitekey),
+  // so the head never preconnects for a store that does not load the widget.
+  const vee = resolveVeeConfig(data.settings, data.env)
 
   let head = renderToString(<Head
     title={meta.title || (notFound ? `${siteName} | ${TR('page_not_found')}` : siteName)}
@@ -56,6 +60,7 @@ export async function render({ url, data, ctx }) {
     appTitle={siteName}
     meta={meta}
     glassix={glassix}
+    vee={vee}
     gtmId={data?.settings?.seo?.gtmId}
   />)
 

@@ -11,6 +11,7 @@ export default function Head({
     appTitle,
     meta,
     glassix,
+    vee,
     gtmId
 }) {
     const appleIcon = appleTouchIcon || favicon
@@ -44,6 +45,12 @@ export default function Head({
             DNS/TLS handshake in the gap that deferral leaves open. */}
         {glassix && GLASSIX_ORIGINS.map(origin =>
             <link key={origin} rel="preconnect" href={origin} />)}
+        {/* Same gate as the widget itself: a production run plus an enabled,
+            fully-filled integrations.vee setting (common/functions/vee.js).
+            The script is fetched after `load`, so this only pays for the
+            DNS/TLS handshake in the gap that deferral leaves open; a store
+            without Vee never opens a socket to them. */}
+        {vee && <link rel="preconnect" href={vee.access} />}
         {/* GTM – async script loaded via SSR when the admin has set a GTM ID
             in Settings > SEO. The async attribute keeps it non-render-blocking.
             dns-prefetch warms the connection early without hurting Lighthouse. */}
