@@ -1,14 +1,12 @@
-import HorizontalScroll from 'common/components/HorizontalScroll'
 import Address from 'pages/Account/Addresses/Address'
-import classNames from 'common/functions/classNames'
 import styles from './windowOptions.module.css'
 import Loader from 'common/components/Loader'
+import WindowPicker from 'common/components/WindowPicker'
 import useApi from 'common/functions/useApi'
 import apiReq from 'common/functions/apiReq'
 import { useEffect, useState } from 'react'
 import { useOrder } from '../OrderProvider'
 import { useAppData } from 'App'
-import Text from 'common/components/Text'
 import Flex from 'common/components/Flex'
 import { useUser } from 'features/User'
 
@@ -25,15 +23,7 @@ export default function WindowOptions({ onChangeStore, onChangeAddress, hideAddr
     useEffect(() => { callReq() }, [order.storeId])
 
     const [windowLoading, setWindowLoading] = useState(null)
-    const [activeDay, setActiveDay] = useState(null)
-
     const activeWindow = order?.window
-
-    useEffect(() => {
-        if (data && !activeDay) {
-            setActiveDay(data.find(d => d.windows.some(w => w.id === activeWindow?.id)) || data[0])
-        }
-    }, [data, activeWindow])
 
     if (loading) return <Loader />
 
@@ -61,42 +51,11 @@ export default function WindowOptions({ onChangeStore, onChangeAddress, hideAddr
                 active={false}
                 action={onChangeAddress ? { text: 'change', onClick: onChangeAddress } : undefined}
             />)}
-        <Text bold>choose day</Text>
-
-        <HorizontalScroll items={data?.map(day => (
-            <Flex
-                key={`${day.dayOfMonth}-${day.month}`}
-                className={classNames(styles.day, [styles.active, activeDay?.dayOfMonth === day.dayOfMonth])}
-                onClick={() => setActiveDay(day)}
-                data-active={day === activeDay || undefined}
-                gap={5} col center
-            >
-                <Text bold>{`day-${day.dayOfWeek}-short`}</Text>
-                <div>
-                    <Text size="s">{day.dayOfMonth} </Text>
-                    <Text size="s">{`month-${day.month}-short`}</Text>
-                </div>
-            </Flex>
-        ))} />
-
-        <Text bold>choose window</Text>
-        <Flex col gap={10}>
-            {activeDay?.windows?.map(window => {
-                const isSelected = window.id === activeWindow?.id
-                return (
-                    <Flex
-                        key={window.id}
-                        className={classNames(styles.time, [styles.active, isSelected], [styles.disabled, window.disabled])}
-                        onClick={() => onChoose(window)}
-                        gap={10} justifyContent="space-between" alignItems="center"
-                    >
-                        <Text bold>{window.end}:00 - {window.start}:00</Text>
-                        {windowLoading === window.id ? <Loader size={14} /> : (
-                            <Text mode="sub">{isSelected ? 'chosen window' : window.note || 'available'}</Text>
-                        )}
-                    </Flex>
-                )
-            })}
-        </Flex>
+        <WindowPicker
+            days={data}
+            activeWindowId={activeWindow?.id}
+            loadingId={windowLoading}
+            onSelect={onChoose}
+        />
     </Flex>
 }
