@@ -51,15 +51,15 @@ export default function Order() {
             onChanged={refresh}
         />}
         sidebar={<>
-            <OrderDetailsCard order={order} />
+            <OrderDetailsCard order={order} onChanged={refresh} />
             <PaymentDetailsCard order={order} onChanged={refresh} />
+            <InvoiceSection order={order} onChanged={refresh} />
         </>}
     >
         <OrderStatusSection order={order} />
         {refundMode
             ? <RefundSection order={order} onDone={async () => { await refresh(); setRefundMode(false) }} onExit={() => setRefundMode(false)} />
             : <ProductsSection order={order} />}
-        <InvoiceSection order={order} onChanged={refresh} />
         {Number(order.refundedTotal || 0) > 0 && <RefundsSection order={order} />}
     </DetailPage>
 }

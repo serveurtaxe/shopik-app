@@ -40,6 +40,10 @@ const productSchema = {
         searchFuzzy: 3,
         filter: true
     },
+    // Set when a human chose the name (admin edit or the barcode-alias import).
+    // Comax and GS1 keep enriching every other field but never overwrite a
+    // locked name — supplier copy changes the catalog without asking.
+    nameLocked: { type: Boolean, default: false },
     description: String,
     regulatoryInfo: String,
     prices: {

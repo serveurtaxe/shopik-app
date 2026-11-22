@@ -40,9 +40,9 @@
 /* ============================================================
    Table (common/components/Table)
    ============================================================ */
-body {
+/* body {
     background-color: var(--bg-primary);
-}
+} */
 
 body .Table_ {
     max-height: calc(100dvh - var(--admin-header-height) - 115px);
@@ -70,6 +70,7 @@ body .DataTable_ .Table_ {
 }
 
 @media screen and (max-width: 650px) {
+
     body .DataManager_ .Table_,
     body .DataTable_ .Table_ {
         max-height: none !important;

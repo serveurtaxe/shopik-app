@@ -160,6 +160,7 @@ const orderFixture = () => ({
     email: 'dana@example.com',
     deliveryMethod: 'delivery',
     finalShipping: 20,
+    payment: { last4digits: '1234', cardCompany: 'Visa', payments: 2 },
     coupons: [{ code: 'SAVE10', name: 'SAVE10', discount: 15 }],
     cart: [
         { id: '1', barcode: 'T1', name: 'Tomatoes', finalAmount: 2, totalSum: 50, vat: false, unit: { baseUnit: 'kg' } },
@@ -221,7 +222,16 @@ describe('issueInvoice', () => {
         assert.equal(payload.dont_send_email, 'false')
         assert.equal(payload.customer_email, 'dana@example.com')
         assert.equal(payload.price_total, 155)
+        // Order reference + card details for the printed payment section.
+        assert.equal(payload.description, 'הזמנה 12345')
+        assert.ok(payload.comment.startsWith('הזמנה 12345'))
         assert.equal(payload.payment[0].payment_sum, 155)
+        assert.equal(payload.payment[0].payment_type, 3)
+        assert.equal(payload.payment[0].cc_type, 2)
+        assert.equal(payload.payment[0].cc_type_name, 'Visa')
+        assert.equal(payload.payment[0].cc_number, '1234')
+        assert.equal(payload.payment[0].cc_deal_type, 2)
+        assert.equal(payload.payment[0].cc_num_of_payments, 2)
         assert.equal(payload.show_items_including_vat, 1)
         assert.deepEqual(payload.item.map(i => i.vat_type), ['NON', 'INC', 'INC', 'NON', 'INC', 'INC'])
         assert.deepEqual(payload.item.map(i => i.amount), ['2', '3', '1', '1', '1', '1'])

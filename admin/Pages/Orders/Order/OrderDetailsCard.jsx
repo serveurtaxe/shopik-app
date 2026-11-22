@@ -2,11 +2,14 @@ import { useNavigate } from 'react-router'
 import Flex from 'common/components/Flex'
 import Text from 'common/components/Text'
 import Icon from 'common/components/Icon'
+import render from 'common/functions/render'
+import { canChangeOrderWindow } from 'common/functions/orderWindow'
 import { useText } from 'common/texts/TextProvider'
 import { DeliveryMethodTag, formatFullAddress, formatWindow } from 'Pages/Ops/orderUtils'
 import InfoCard, { InfoRow } from 'components/Detail/InfoCard'
+import OrderWindowChanger from './OrderWindowChanger'
 
-export default function OrderDetailsCard({ order }) {
+export default function OrderDetailsCard({ order, onChanged }) {
     const navigate = useNavigate()
     const { TR } = useText()
     const windowTime = formatWindow(order.window)
@@ -32,8 +35,11 @@ export default function OrderDetailsCard({ order }) {
             </Text>}
             {order.address.comment && <Text size='m' mode='sub'>{order.address.comment}</Text>}
         </InfoRow>}
-        <InfoRow icon='time' label='order_window'>
-            <Text size='m'>{windowTime.dayText}</Text>
+        <InfoRow icon='time' label='order_window' grow>
+            <Flex gap={8} alignItems='center' justifyContent='space-between'>
+                <Text size='m'>{windowTime.dayText}</Text>
+                {canChangeOrderWindow(order) && <OrderWindowChanger order={order} onChanged={onChanged} />}
+            </Flex>
             <DeliveryMethodTag deliveryMethod={order.deliveryMethod} />
         </InfoRow>
         {(order.replaceProducts || order.replaceProductsNoCall || order.leaveOrderAtDoor) && <InfoRow icon='replace' label='replace_and_missing'>
@@ -46,12 +52,18 @@ export default function OrderDetailsCard({ order }) {
         </InfoRow>}
         {order.picker?.name && <InfoRow icon='user' label='picked_by'>
             <Text size='m'>{order.picker.name}</Text>
+            {order.pickStart && <Text size='s' mode='sub'>{`${TR('pick_started_at')}: ${render({ type: 'datetime', value: order.pickStart })}`}</Text>}
+            {order.pickEnd && <Text size='s' mode='sub'>{`${TR('pick_finished_at')}: ${render({ type: 'datetime', value: order.pickEnd })}`}</Text>}
         </InfoRow>}
         {order.pickFinalizer?.name && <InfoRow icon='check' label='packed_by'>
             <Text size='m'>{order.pickFinalizer.name}</Text>
         </InfoRow>}
         {order.shipper?.name && <InfoRow icon='truck' label='shipped_by'>
             <Text size='m'>{order.shipper.name}</Text>
+        </InfoRow>}
+        {order.orderFinalizer?.name && <InfoRow icon='check' label='delivered_by'>
+            <Text size='m'>{order.orderFinalizer.name}</Text>
+            {order.deliveryProof?.at && <Text size='s' mode='sub'>{`${TR('delivered_at')}: ${render({ type: 'datetime', value: order.deliveryProof.at })}`}</Text>}
         </InfoRow>}
         {order.cancelReason && <InfoRow icon='x' label='cancel_reason'>
             <Text size='m' mode='error'>{order.cancelReason}</Text>

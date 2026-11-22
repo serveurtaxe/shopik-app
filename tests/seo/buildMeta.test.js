@@ -15,6 +15,10 @@ const settings = {
         siteName: 'Shopik',
         logo: 'images/settings/d1/logo/v1',
         appIcon: 'images/settings/d1/appIcon/v1'
+    },
+    // Captured by upload_file, exposed separately by getSettings.
+    __imageSize: {
+        'seo.ogImage': { width: 1200, height: 630 }
     }
 }
 
@@ -30,6 +34,10 @@ describe('buildMeta', () => {
         assert.equal(meta.title, 'Shopik | Product name')
         assert.equal(meta.description, 'Store-wide description')
         assert.equal(meta.image, 'https://files/x.webp')
+        assert.equal(meta.imageType, 'image/webp')
+        // Per-page images have no recorded size, so hints are omitted.
+        assert.equal(meta.imageWidth, '')
+        assert.equal(meta.imageHeight, '')
         assert.equal(meta.type, 'product')
         assert.equal(meta.url, 'https://store-b.com/product/123')
         assert.equal(meta.siteName, 'Shopik')
@@ -39,8 +47,22 @@ describe('buildMeta', () => {
         const meta = buildMeta({ settings, initData: {}, page: { title: 'Home', description: 'route desc' }, url: '/', host: 'store-b.com' })
         assert.equal(meta.title, 'Shopik | Home')
         assert.equal(meta.description, 'Store-wide description')
-        assert.equal(meta.image, 'https://files.shopik.co.il/images/settings/d1/ogImage/v1/full.webp')
+        assert.equal(meta.image, 'https://files.shopik.co.il/images/settings/d1/ogImage/v1/l.webp')
+        assert.equal(meta.imageType, 'image/webp')
+        assert.equal(meta.imageWidth, 1200)
+        assert.equal(meta.imageHeight, 630)
         assert.equal(meta.type, 'website')
+    })
+
+    it('an ogImage value pointing at an exact variant file is used as-is', () => {
+        const meta = buildMeta({
+            settings: { ...settings, seo: { ...settings.seo, ogImage: 'images/settings/d1/ogImage/v1/full.webp' } },
+            initData: {},
+            page: { title: 'Home' },
+            url: '/',
+            host: 'store-b.com'
+        })
+        assert.equal(meta.image, 'https://files.shopik.co.il/images/settings/d1/ogImage/v1/full.webp')
     })
 
     it('an unset seoDescription emits nothing, not the page description', () => {
@@ -51,6 +73,8 @@ describe('buildMeta', () => {
     it('image falls back to appIcon (512) when ogImage is unset', () => {
         const meta = buildMeta({ settings: { appearance: settings.appearance }, initData: {}, page: {}, url: '/', host: 'x.com' })
         assert.equal(meta.image, 'https://files.shopik.co.il/images/settings/d1/appIcon/v1/512.png')
+        assert.equal(meta.imageType, 'image/png')
+        assert.equal(meta.imageWidth, '')
         assert.equal(meta.twitterCard, 'summary_large_image')
     })
 

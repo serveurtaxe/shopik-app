@@ -8,6 +8,7 @@ import {
 } from './syncRules.js'
 import { deriveStatus, retailPrice } from './status.js'
 import { loadCategoryLookup, productCategoryFor } from '#server/services/categoryMap/index.js'
+import { buildFamilyUpdate, familyBarcodes, readAliasIndex, readDeletedLabels, readFamilyOwners } from '#server/services/productFamily.js'
 import { invalidateMenu } from '#server/utils/data/getMenu.js'
 import enqueueChangedImages from '#server/services/image/enqueue.js'
 import log from '#server/utils/log.js'
@@ -66,7 +67,9 @@ export function buildProduct(comax, DL, defaultDomainId, existing, enforceBuying
 
     return {
         barcode: comax.barcode,
-        name: comax.webName || comax.name,
+        // A locked name was chosen by a human (admin edit or the barcode-alias
+        // import); Comax may change everything else but not that.
+        ...(existing?.nameLocked ? {} : { name: comax.webName || comax.name }),
         description: comax.description,
         producer: comax.manufacturer,
         category,
@@ -94,6 +97,86 @@ function mergePrices(existingPrices, defaultDomainId, comaxPrice) {
     const kept = (existingPrices || []).filter(p => p?.domainId && p.domainId !== defaultDomainId)
     if (comaxPrice != null) kept.push({ domainId: defaultDomainId, price: comaxPrice })
     return kept
+}
+
+/**
+ * Second pass over products that carry aliases (`scannableBarcodes`).
+ *
+ * The main loop builds each product from its own Comax row only, and skips
+ * alias rows entirely (they must never become products). That leaves three
+ * things the family owns: stock is the union over all its barcodes, sales are
+ * the sum over all its barcodes, and the status ladder must see the union —
+ * otherwise a product whose own barcode left Comax stays hidden even though a
+ * sibling barcode is on the shelf.
+ *
+ * Only products with aliases are read, in barcode keyset pages, and only the
+ * family fields are written; price/name/images are never touched here.
+ */
+export async function syncProductFamilies({
+    DL,
+    select,
+    defaultDomainId,
+    categoryLookup,
+    enforceBuyingPrice,
+    batchSize
+}) {
+    const BATCH = Number(batchSize || process.env.COMAX_SYNC_BATCH || 1000)
+    let afterBarcode = null
+    let owners = 0
+    let updated = 0
+
+    while (true) {
+        const ownerProducts = await readFamilyOwners(DL, { afterBarcode, limit: BATCH })
+        if (!ownerProducts?.length) break
+
+        const barcodes = [...new Set(ownerProducts.flatMap(familyBarcodes))]
+        const comaxRows = barcodes.length
+            ? await DL.ComaxProduct.read({ barcode: { $in: barcodes } }, select, { limit: 0 })
+            : []
+        const rowsByBarcode = new Map((comaxRows || []).map(row => [row.barcode, row]))
+
+        // A brand lives on each barcode's own doc; the aliases' docs were
+        // folded into the owner, so their last label is in the snapshot. The
+        // family may only keep a label all of them share.
+        const deletedLabels = await readDeletedLabels(DL, barcodes)
+
+        const updates = []
+        for (const owner of ownerProducts) {
+            const familyRows = familyBarcodes(owner)
+                .map(barcode => rowsByBarcode.get(barcode))
+                .filter(Boolean)
+            const memberLabels = familyBarcodes(owner)
+                .filter(barcode => barcode !== owner.barcode)
+                .map(barcode => deletedLabels.get(barcode) ?? '')
+            const plan = buildFamilyUpdate({
+                owner,
+                rows: familyRows,
+                categoryLookup,
+                defaultDomainId,
+                enforceBuyingPrice,
+                statuses: DL.Product.constants.STATUS,
+                memberLabels
+            })
+            if (plan) updates.push({ barcode: owner.barcode, ...plan.update })
+        }
+
+        if (updates.length) {
+            const res = await DL.Product.bulkWrite({
+                docs: updates,
+                getFilter: doc => ({ barcode: doc.barcode }),
+                getUpsert: () => false,
+                getUpdate: ({ barcode: _barcode, ...fields }) => ({ $set: fields })
+            })
+            updated += res?.modifiedCount ?? 0
+        }
+
+        owners += ownerProducts.length
+        const lastBarcode = ownerProducts[ownerProducts.length - 1]?.barcode
+        if (!lastBarcode || ownerProducts.length < BATCH) break
+        afterBarcode = lastBarcode
+    }
+
+    return { owners, updated }
 }
 
 export default async function syncComax(payload, { DL }) {
@@ -164,6 +247,15 @@ export default async function syncComax(payload, { DL }) {
 
     const categoryLookup = await loadCategoryLookup(DL)
 
+    // Alias barcodes are catalog scan aliases, not catalog items: Comax may
+    // still report them, but creating a doc for one would duplicate the product
+    // (and win some barcode lookups). The import that sets the alias is also
+    // the one that removes the old doc — this set keeps the nightly sync from
+    // resurrecting it.
+    const { ownerByAlias, ambiguous } = await readAliasIndex(DL)
+    if (ambiguous.length)
+        log.warn(`[Comax Sync] Ambiguous barcode alias(es) ignored: ${ambiguous.slice(0, 10).join(', ')}`)
+
     // Buying-price requirement is enforced only once buying prices were
     // actually imported — otherwise the first deploy would archive everything.
     const enforceBuyingPrice = await shouldEnforceBuyingPrice(DL)
@@ -175,6 +267,7 @@ export default async function syncComax(payload, { DL }) {
     let updated = 0
     let hiddenNoImage = 0
     let archivedNoPrice = 0
+    let aliasesSkipped = 0
 
     // Keyset paging on the unique barcode instead of skip: MongoDB bounds a
     // blocking sort by skip + limit, so skip-paging a 24k catalog died with
@@ -190,41 +283,51 @@ export default async function syncComax(payload, { DL }) {
         )
         if (!comaxProducts?.length) break
 
-        // Existing per-domain prices + images so the sync merges prices instead of
-        // replacing the array, and hides products with no image file
-        const existingProducts = await DL.Product.read(
-            { barcode: { $in: comaxProducts.map(c => c.barcode) } },
-            { _id: 0, barcode: 1, prices: 1, images: 1, 'kashrut.rabbinates': 1 },
-            { limit: 0 }
-        )
-        const existingByBarcode = new Map((existingProducts || []).map(p => [p.barcode, p]))
+        // Alias rows are not catalog items. Filtering them before the build
+        // means the sync can never upsert one; the cursor below still advances
+        // on the raw page, so a page made only of aliases cannot loop.
+        const batchProducts = ownerByAlias.size
+            ? comaxProducts.filter(c => !ownerByAlias.has(c.barcode))
+            : comaxProducts
+        aliasesSkipped += comaxProducts.length - batchProducts.length
 
-        const productsToSync = comaxProducts.map(c => buildProduct(c, DL, defaultDomain.id, existingByBarcode.get(c.barcode), enforceBuyingPrice, categoryLookup))
-        hiddenNoImage += productsToSync.filter(p =>
-            p.status === DL.Product.constants.STATUS.HIDDEN &&
-            (existingByBarcode.get(p.barcode)?.images?.product || []).length === 0
-        ).length
-        archivedNoPrice += comaxProducts.filter((c, i) =>
-            !c.archived &&
-            productsToSync[i].status === DL.Product.constants.STATUS.ARCHIVED &&
-            (!(retailPrice(c) > 0) || (enforceBuyingPrice && !(c.buyingPrice > 0)))
-        ).length
+        if (batchProducts.length) {
+            // Existing per-domain prices + images so the sync merges prices instead of
+            // replacing the array, and hides products with no image file
+            const existingProducts = await DL.Product.read(
+                { barcode: { $in: batchProducts.map(c => c.barcode) } },
+                { _id: 0, barcode: 1, prices: 1, images: 1, 'kashrut.rabbinates': 1, nameLocked: 1 },
+                { limit: 0 }
+            )
+            const existingByBarcode = new Map((existingProducts || []).map(p => [p.barcode, p]))
 
-        // Comax's archive is seasonal, not dead stock: those rows need a doc so
-        // the image worker and GS1 enrich can fill it while it is off the site.
-        const seasonal = new Set(comaxProducts.filter(c => c.archived).map(c => c.barcode))
-        const result = await DL.Product.bulkWrite({
-            docs: productsToSync,
-            getFilter: p => ({ barcode: p.barcode }),
-            // Upsert everything except archived: imageless HIDDEN products must exist
-            // as docs or the image worker would never pick them up (deadlock). The
-            // one exception is a Comax-archived (seasonal) item: its doc is created
-            // as ARCHIVED, so it stays off the site but its images and kashrut can
-            // be ready on the day the item comes back.
-            getUpsert: p => p.status !== DL.Product.constants.STATUS.ARCHIVED || seasonal.has(p.barcode)
-        })
-        created += result.upsertedCount ?? result.insertedCount ?? 0
-        updated += result.modifiedCount ?? 0
+            const productsToSync = batchProducts.map(c => buildProduct(c, DL, defaultDomain.id, existingByBarcode.get(c.barcode), enforceBuyingPrice, categoryLookup))
+            hiddenNoImage += productsToSync.filter(p =>
+                p.status === DL.Product.constants.STATUS.HIDDEN &&
+                (existingByBarcode.get(p.barcode)?.images?.product || []).length === 0
+            ).length
+            archivedNoPrice += batchProducts.filter((c, i) =>
+                !c.archived &&
+                productsToSync[i].status === DL.Product.constants.STATUS.ARCHIVED &&
+                (!(retailPrice(c) > 0) || (enforceBuyingPrice && !(c.buyingPrice > 0)))
+            ).length
+
+            // Comax's archive is seasonal, not dead stock: those rows need a doc so
+            // the image worker and GS1 enrich can fill it while it is off the site.
+            const seasonal = new Set(batchProducts.filter(c => c.archived).map(c => c.barcode))
+            const result = await DL.Product.bulkWrite({
+                docs: productsToSync,
+                getFilter: p => ({ barcode: p.barcode }),
+                // Upsert everything except archived: imageless HIDDEN products must exist
+                // as docs or the image worker would never pick them up (deadlock). The
+                // one exception is a Comax-archived (seasonal) item: its doc is created
+                // as ARCHIVED, so it stays off the site but its images and kashrut can
+                // be ready on the day the item comes back.
+                getUpsert: p => p.status !== DL.Product.constants.STATUS.ARCHIVED || seasonal.has(p.barcode)
+            })
+            created += result.upsertedCount ?? result.insertedCount ?? 0
+            updated += result.modifiedCount ?? 0
+        }
 
         await DL.ComaxProduct.update(
             { comaxId: { $in: comaxProducts.map(p => p.comaxId) } },
@@ -244,13 +347,25 @@ export default async function syncComax(payload, { DL }) {
         afterBarcode = lastBarcode
     }
 
+    // Family pass: union stock, sum sales, re-derive status for products that
+    // carry aliases. Runs before the hide sweeps so those validate the final
+    // status rather than the per-barcode one.
+    const families = await syncProductFamilies({
+        DL,
+        select,
+        defaultDomainId: defaultDomain.id,
+        categoryLookup,
+        enforceBuyingPrice,
+        batchSize: BATCH
+    })
+
     // Backstop for products the loop never visits: no Comax row (or one the
     // sync filter excludes) means their status would never be re-evaluated.
     const hiddenNoStock = await hideStorelessProducts({ DL })
     const hiddenFlagged = await hideCategoryFlaggedProducts({ DL })
     const hiddenKashrut = await hideKashrutMissingProducts({ DL })
 
-    console.log(`[Comax Sync] Created ${created}, updated ${updated}, hidden (no image): ${hiddenNoImage}, hidden (no stock): ${hiddenNoStock}, hidden (flag): ${hiddenFlagged}, hidden (kashrut): ${hiddenKashrut}, archived (no price): ${archivedNoPrice}, hidden (inactive): ${hiddenInactive}`)
+    console.log(`[Comax Sync] Created ${created}, updated ${updated}, aliases skipped: ${aliasesSkipped}, family owners: ${families.owners} (updated ${families.updated}), hidden (no image): ${hiddenNoImage}, hidden (no stock): ${hiddenNoStock}, hidden (flag): ${hiddenFlagged}, hidden (kashrut): ${hiddenKashrut}, archived (no price): ${archivedNoPrice}, hidden (inactive): ${hiddenInactive}`)
 
     if (!payload?.skipImageEnqueue) {
         try {
@@ -269,6 +384,9 @@ export default async function syncComax(payload, { DL }) {
         synced,
         created,
         updated,
+        aliasesSkipped,
+        familyOwners: families.owners,
+        familyUpdated: families.updated,
         hiddenNoImage,
         hiddenNoStock,
         hiddenFlagged,

@@ -13,6 +13,12 @@ export default async function getSettings({ DL, domainId }) {
     const settingsTree = settings.reduce((acc, s) => {
         if (!acc[s.category]) acc[s.category] = {}
         acc[s.category][s.key] = s.value
+        // Uploaded raster sizes, keyed "category.key". Kept outside the
+        // category tree so setting values keep their string/object shape.
+        if (s.width && s.height) {
+            if (!acc.__imageSize) acc.__imageSize = {}
+            acc.__imageSize[`${s.category}.${s.key}`] = { width: s.width, height: s.height }
+        }
         return acc
     }, {})
     return settingsTree

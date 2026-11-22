@@ -97,6 +97,30 @@ function normalizeMaxPayments(value) {
     return Math.min(36, Math.max(1, Math.trunc(n)))
 }
 
+// A charge without an explicit installment count is a single payment — never
+// inherit SIGN's maxPayments default here.
+export function normalizeChargePayments(value) {
+    if (value === undefined || value === null || value === '') return 1
+    const n = Number(value)
+    if (!Number.isFinite(n) || n < 1) return 1
+    return Math.min(36, Math.trunc(n))
+}
+
+// Hyp's action=soft charge accepts Tash/tashType for token charges. The J4
+// capture uses the same action, so pass the count the customer picked on the
+// payment page instead of letting Hyp fall back to a single charge.
+export function applyChargeInstallments(params, payments) {
+    const count = normalizeChargePayments(payments)
+    if (count > 1) {
+        params.set('Tash', String(count))
+        params.set('tashType', '1')
+    } else {
+        params.delete('Tash')
+        params.delete('tashType')
+    }
+    return params
+}
+
 export function buildSignQuery({ masof, key, passp, amount, orderNumber, orderId, customer, tmp, maxPayments = DEFAULT_MAX_PAYMENTS }) {
     const payments = normalizeMaxPayments(maxPayments)
     const params = new URLSearchParams()
@@ -224,9 +248,10 @@ export default function hypFactory({ DL }) {
         })
     }
 
-    async function capture({ order, amount }) {
+    async function capture({ order, amount, payments }) {
         const captureAmount = amount ?? order.finalSumWithShipping
-        return logged('capture', { orderNumber: order.number, amount: captureAmount }, async () => {
+        const chargePayments = normalizeChargePayments(payments ?? order.payment?.payments)
+        return logged('capture', { orderNumber: order.number, amount: captureAmount, payments: chargePayments }, async () => {
             const { masof, passp, baseUrl } = getConfig()
             const p = order.payment || {}
             const authorizedAmount = p.authorizedAmount
@@ -255,6 +280,7 @@ export default function hypFactory({ DL }) {
             params.set('inputObj.originalUid', String(providerUid || ''))
             params.set('inputObj.authorizationCodeManpik', '7')
             if (order.id) params.set('Info', order.id)
+            applyChargeInstallments(params, chargePayments)
 
             const text = await hypFetch(`${baseUrl}?${params.toString()}`)
             const parsed = parseHypResponse(text)
@@ -262,10 +288,11 @@ export default function hypFactory({ DL }) {
         })
     }
 
-    async function chargeToken({ order, amount }) {
+    async function chargeToken({ order, amount, payments }) {
         // immediate token charge, no J4 refs (no originalUid/originalAmount)
         // used for over-capture overflow and post-capture delta
-        return logged('chargeToken', { orderNumber: order.number, amount }, async () => {
+        const chargePayments = normalizeChargePayments(payments ?? order.payment?.payments)
+        return logged('chargeToken', { orderNumber: order.number, amount, payments: chargePayments }, async () => {
             const { masof, passp, baseUrl } = getConfig()
             const p = order.payment || {}
             if (!p.cardToken || !p.cardExpiry) throw { status: 400, message: 'Missing card token for charge' }
@@ -284,20 +311,21 @@ export default function hypFactory({ DL }) {
             params.set('Tyear', tyear)
             params.set('Amount', String(amount))
             if (order.id) params.set('Info', order.id)
+            applyChargeInstallments(params, chargePayments)
             const text = await hypFetch(`${baseUrl}?${params.toString()}`)
             const parsed = parseHypResponse(text)
             return parsed // { Id, CCode, ... }
         })
     }
 
-    async function captureOverCaptureSplit({ order, captureAmount }) {
+    async function captureOverCaptureSplit({ order, captureAmount, payments }) {
         // fallback when J4 > authorized and over-capture not allowed: capture max + token charge remainder
         const authorized = order.payment.authorizedAmount
         const overflow = Number((captureAmount - authorized).toFixed(2))
-        if (overflow <= 0) return { primary: await capture({ order, amount: captureAmount }) }
-        const primary = await capture({ order, amount: authorized })
+        if (overflow <= 0) return { primary: await capture({ order, amount: captureAmount, payments }) }
+        const primary = await capture({ order, amount: authorized, payments })
         if (primary.CCode !== 0) return { primary }
-        const secondary = await chargeToken({ order, amount: overflow })
+        const secondary = await chargeToken({ order, amount: overflow, payments })
         return { primary, secondary, overflow }
     }
 

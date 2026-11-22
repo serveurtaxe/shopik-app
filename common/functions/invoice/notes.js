@@ -47,6 +47,20 @@ function couponEntries(coupons) {
 }
 
 /**
+ * The order reference printed on every document ("הזמנה 12345").
+ *
+ * It is both the document `description` and the first line of its `comment`, so
+ * the customer and the accountant can always match a document to its order.
+ *
+ * @returns {string} empty string when the order has no number
+ */
+export function orderReference(orderNumber) {
+    const number = orderNumber == null ? '' : String(orderNumber).trim()
+    if (!number) return ''
+    return text('invoice_note_order', 'הזמנה [number]', { number })
+}
+
+/**
  * The note printed on the invoice (`comment` in the EZcount payload).
  *
  * It describes what changed between the order and what was actually supplied:
@@ -55,15 +69,15 @@ function couponEntries(coupons) {
  * the line rows (never folded into the unit prices). Raw picker data
  * (`missingReason`, picker names) never reaches the document.
  *
- * Capped at `maxLines` entries plus a pointer to the order; the EZcount comment
- * length limit is still unverified, so the total length is capped too.
+ * The order reference is composed by the caller (see `orderReference`), so a
+ * truncated note can never lose it; the total length is capped to stay well
+ * under EZcount's 10,000-character limit for all comments on a document.
  *
  * @returns {string} empty string when there is nothing to say
  */
 export function buildInvoiceNotes({
     cart = [],
     coupons = [],
-    orderNumber,
     include = {},
     maxLines = DEFAULT_NOTE_LIMIT,
     maxLength = DEFAULT_NOTE_LENGTH
@@ -94,20 +108,11 @@ export function buildInvoiceNotes({
 
     if (!entries.length) return ''
 
-    const summary = orderNumber != null && String(orderNumber).trim()
-        ? text('invoice_note_summary', 'פרטים מלאים בהזמנה [number]', { number: String(orderNumber).trim() })
-        : ''
-
     const kept = []
-    let truncated = false
     for (const entry of entries) {
-        if (kept.length >= maxLines) { truncated = true; break }
-        const next = [...kept, entry]
-        const withSummary = summary ? [...next, summary] : next
-        if (withSummary.join('\n').length > maxLength) { truncated = true; break }
+        if (kept.length >= maxLines) break
+        if ([...kept, entry].join('\n').length > maxLength) break
         kept.push(entry)
     }
-
-    if (truncated && summary) kept.push(summary)
     return kept.join('\n')
 }

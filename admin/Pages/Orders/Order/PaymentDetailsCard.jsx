@@ -5,6 +5,7 @@ import Button from 'common/components/Button'
 import Popover from 'common/components/Popover'
 import apiReq from 'common/functions/apiReq'
 import render from 'common/functions/render'
+import { getOrderSummary } from 'common/functions/orderSummary'
 import { useText } from 'common/texts/TextProvider'
 import InfoCard from 'components/Detail/InfoCard'
 import styles from './order.module.css'
@@ -22,7 +23,10 @@ export default function PaymentDetailsCard({ order, onChanged }) {
     const [manualAmt, setManualAmt] = useState(0)
     const [manualBusy, setManualBusy] = useState(false)
     const [manualError, setManualError] = useState('')
-    const pending = Number(order.refundPending || 0)
+    // Every row comes from the stored order (cart lines + coupons + shipping),
+    // so the breakdown always adds up to the charged amount.
+    const summary = getOrderSummary(order)
+    const pending = summary.refundPending
     const payment = order.payment || {}
     // provider sends the expiry as YYMM
     const expiry = /^\d{4}$/.test(payment.cardExpiry || '')
@@ -40,17 +44,25 @@ export default function PaymentDetailsCard({ order, onChanged }) {
             {payment.capturedAt && <SumRow label={'captured_at'} value={render({ type: 'datetime', value: payment.capturedAt })} />}
         </Flex>
             <Flex col gap={16} className={styles.sumsSection}>
-                <SumRow label={'items_count'} value={String((order.cart || []).length)} />
-                {(order.coupons || []).length > 0 && (order.sumNoCoupon ?? order.sum) != null && <SumRow label={'sum_before_coupon'} value={coin(order.sumNoCoupon ?? order.sum)} />}
-                {(order.coupons || []).map(coupon => <SumRow
-                    key={coupon.code}
-                    label={`${TR('coupon_discount')} ${coupon.code || ''}`}
-                    value={`-${coin(coupon.appliedDiscount ?? coupon.discount)}`}
+                <SumRow label={'items_count'} value={String(summary.itemsCount)} />
+                {summary.hasSales && <SumRow label={'products_before_sales'} value={coin(summary.productsBeforeSales)} />}
+                {summary.hasSales && <SumRow label={'sales_savings'} value={`-${coin(summary.saleSavings)}`} />}
+                <SumRow label={'products_total'} value={coin(summary.productsAfterSales)} />
+                {summary.coupons.map(coupon => <SumRow
+                    key={coupon.code || coupon.amount}
+                    label={`${TR('coupon_discount')} ${coupon.code || ''}`.trim()}
+                    value={`-${coin(coupon.amount)}`}
                 />)}
-                {order.sum != null && <SumRow label={'sum'} value={coin((order.coupons || []).length > 0 ? (order.finalSum ?? order.sum) : order.sum)} />}
-                {(order.finalShipping ?? order.shipping) != null && <SumRow label={'shipping_cost'} value={coin(order.finalShipping ?? order.shipping)} />}
-                {order.refundedTotal > 0 && <SumRow label={'refunded'} value={coin(order.refundedTotal)} />}
-                {order.refundedTotal > 0 && <SumRow label={'total_after_refunds'} value={coin(order.finalSumAfterRefunds ?? (Number(order.finalSumWithShipping ?? order.finalSum ?? order.sum ?? 0) - Number(order.refundedTotal || 0)))} />}
+                {summary.hasCoupons && <SumRow label={'total_after_discounts'} value={coin(summary.afterDiscounts)} />}
+                {summary.shipping > 0 && <SumRow label={'shipping_cost'} value={coin(summary.shipping)} />}
+                <SumRow
+                    label={'total_to_pay'}
+                    value={coin(summary.charged)}
+                    bold={!summary.hasRefunds}
+                    className={summary.hasRefunds ? undefined : styles.totalRow}
+                />
+                {summary.hasRefunds && <SumRow label={'refunded'} value={coin(summary.refundedTotal)} />}
+                {summary.hasRefunds && <SumRow label={'total_after_refunds'} value={coin(summary.netAfterRefunds)} bold className={styles.totalRow} />}
                 {pending > 0 && <SumRow label={'refund_pending'} value={coin(pending)} />}
                 {pending > 0 && !order.manualRequired && <Text size='s' mode='sub' style={{ lineHeight: '18px' }}>{'refund_auto_retry_note'}</Text>}
                 {order.manualRequired && <Popover
@@ -89,7 +101,6 @@ export default function PaymentDetailsCard({ order, onChanged }) {
                         </Flex>
                     </Flex>}
                 </Popover>}
-                <SumRow label={'total_to_pay'} value={coin(order.finalSumWithShipping ?? order.finalSum ?? order.sum)} bold className={styles.totalRow} />
             </Flex>
     </InfoCard>
 }

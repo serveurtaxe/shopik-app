@@ -74,12 +74,18 @@ export default async function gs1Aliases(payload, { DL }) {
     }
     const products = shorts.size
         ? await DL.Product.read(
-            { barcode: { $in: [...shorts] } },
-            { _id: 0, barcode: 1, name: 1, storeIds: 1, status: 1, 'images.product': 1 },
+            { $or: [{ barcode: { $in: [...shorts] } }, { scannableBarcodes: { $in: [...shorts] } }] },
+            { _id: 0, barcode: 1, scannableBarcodes: 1, name: 1, storeIds: 1, status: 1, 'images.product': 1 },
             { limit: 0 }
         )
         : []
-    const byBarcode = new Map((products || []).map(product => [product.barcode, product]))
+    const byBarcode = new Map()
+    for (const product of products || []) {
+        if (product?.barcode) byBarcode.set(product.barcode, product)
+        // A candidate that is a scan alias resolves to the product that owns it.
+        for (const alias of product?.scannableBarcodes || [])
+            byBarcode.set(String(alias), product)
+    }
 
     const rows = (docs || []).map(doc => {
         const ordered = doc.aliasStatus === 'manual'
