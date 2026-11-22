@@ -8,6 +8,11 @@ import { isRedisReady } from '#server/utils/redisSafe.js'
 
 const appVersion = pkg?.version || 'unknown'
 
+// A/B switch for the request-log cost investigation: REQUEST_LOG=off drops the
+// per-request log document entirely (one insert before the handler and one
+// update after it, in normal operation). Unset means normal logging.
+const requestLogEnabled = !/^(0|off|false|no)$/i.test(String(process.env.REQUEST_LOG ?? '').trim())
+
 // Bodies above this size are logged as `{ omitted: true, bytes }` instead of
 // verbatim — see loggedRequestBody below.
 export const MAX_LOGGED_BODY_BYTES = 64 * 1024
@@ -95,7 +100,7 @@ export default function router(app, bootData) {
                     body.domainId = await resolveDomainId(req, DL)
                 }
             }
-            if (apiFunction?.config?.log !== false) {
+            if (requestLogEnabled && apiFunction?.config?.log !== false) {
                 const logData = {
                     requestId,
                     action: route,
