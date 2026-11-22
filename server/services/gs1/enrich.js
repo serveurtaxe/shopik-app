@@ -25,12 +25,13 @@ const mediaTypes = () => String(process.env.GS1_MEDIA_TYPES || 'MK,HE')
 // stage the first usable response, else fall back to media=all (today's
 // behavior, caps intact). A hit is either a zip containing our main still
 // or a single raw image (HE returns the hero bytes unarchived — wrapped
-// into a one-entry zip, main only). Per-attempt results are logged — that
-// output is the EL/PL/HE/MK mapping proof per product.
+// into a one-entry zip, main only; media=all answers that same way when the
+// account holds a single still for the product). Per-attempt results are
+// logged — that output is the EL/PL/HE/MK mapping proof per product.
 // Returns { buffer, via } or null when nothing usable came back.
 // rateLimited/transient errors throw (caller retries the batch); anything
 // else on a type= attempt just moves to the next candidate.
-async function fetchStagedSource(external, barcode, wantedMain) {
+export async function fetchStagedSource(external, barcode, wantedMain) {
     if (wantedMain) {
         for (const t of mediaTypes()) {
             let buf = null
@@ -60,6 +61,16 @@ async function fetchStagedSource(external, barcode, wantedMain) {
     }
     const buf = await external.gs1.getMediaZip(barcode)
     if (!buf?.length) return null
+    // media=all answers a single still exactly like type=HE: the raw image
+    // bytes, not a zip. Measured on prod: 88 of the 299 imageless targets
+    // arrive this way, and returning them unwrapped uploaded a JPEG as
+    // application/zip; phase 3 then failed unzipping it on every run, so the
+    // product stayed imageless forever while we paid for the upload each night.
+    const wrapped = wrapSingleImage(buf, wantedMain)
+    if (wrapped) {
+        log.info(`[GS1] media=all for ${barcode}: single image (${buf.length} bytes), wrapped as ${wrapped.name}`)
+        return { buffer: wrapped.buffer, via: 'media=all (single)' }
+    }
     return { buffer: buf, via: 'media=all' }
 }
 
@@ -726,6 +737,15 @@ export async function runImages({ DL, external, runId, force = false, limit = 0,
                 return
             }
             if (!zip) {
+                totals.noZip++
+                return
+            }
+            // Only a zip may be staged: the pipeline unzips it in phase 3, so
+            // anything else (a JSON error body, HTML, an image we could not
+            // wrap) would be uploaded, queued, and fail there — after paying for
+            // the upload, leaving a stagingPath to an object phase 3 deleted.
+            if (!isZipBuffer(zip)) {
+                log.warn(`[GS1] Not a zip for ${barcode} (${zip.length} bytes, via=${via}) — not staging`)
                 totals.noZip++
                 return
             }
