@@ -60,7 +60,7 @@ const planOf = (rows, options = {}) => planAliasRows({
 }).plans
 
 describe('barcode alias import plan', () => {
-    it('plans a family: sheet name, merged aliases, summed sales, stock union', () => {
+    it('plans a family: sheet name, sheet aliases, summed sales, stock union', () => {
         const { rows } = parseAliasCsv(CSV)
         const [first] = planOf(rows)
 
@@ -69,6 +69,7 @@ describe('barcode alias import plan', () => {
         assert.equal(first.update.name, 'ביצים 12 יח׳ M')
         assert.equal(first.update.nameLocked, true)
         assert.deepEqual(first.update.scannableBarcodes, ['2222222222222', '3333333333333'])
+        assert.deepEqual(first.aliasesRemoved, [])
         assert.equal(first.update.totalSalesUnits, 726)
         assert.deepEqual(first.update.storeIds, ['store-a'])
         assert.equal(first.statusAfter, STATUS.ACTIVE)
@@ -119,18 +120,35 @@ describe('barcode alias import plan', () => {
         assert.equal(plan.update.totalSalesUnits, 725)
     })
 
-    it('keeps aliases from a previous import instead of replacing them', () => {
+    it('removes an alias the sheet no longer lists — the sheet is the source of truth', () => {
         const { rows } = parseAliasCsv(CSV)
         const plans = planAliasRows({
             rows,
-            products: [product('1111111111111', { scannableBarcodes: ['9999999999999'] })],
+            products: [product('1111111111111', { scannableBarcodes: ['9999999999999', '2222222222222'] })],
             comaxRows: [],
             categoryLookup: LOOKUP,
             defaultDomainId: 'dom',
             statuses: STATUS
         }).plans
 
-        assert.deepEqual(plans[0].aliases, ['9999999999999', '2222222222222', '3333333333333'])
+        assert.deepEqual(plans[0].aliases, ['2222222222222', '3333333333333'])
+        assert.deepEqual(plans[0].aliasesRemoved, ['9999999999999'])
+        assert.deepEqual(plans[0].update.scannableBarcodes, ['2222222222222', '3333333333333'])
+    })
+
+    it('clears the family when the row lists no secondary barcode', () => {
+        const { rows } = parseAliasCsv('שם מוצר,ברקוד ראשי,ברקוד משני\nביצים 12 יח׳ M,1111111111111,')
+        const [first] = planAliasRows({
+            rows,
+            products: [product('1111111111111', { scannableBarcodes: ['2222222222222'] })],
+            comaxRows: [],
+            categoryLookup: LOOKUP,
+            defaultDomainId: 'dom',
+            statuses: STATUS
+        }).plans
+
+        assert.deepEqual(first.aliasesRemoved, ['2222222222222'])
+        assert.deepEqual(first.update.scannableBarcodes, [])
     })
 
     it('blocks a row whose secondary barcode is another row\'s main', () => {

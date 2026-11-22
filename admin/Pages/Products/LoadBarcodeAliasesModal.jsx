@@ -39,6 +39,8 @@ function PlanList({ plans, TR }) {
                     {plan.mainBarcode}
                     {plan.mainName ? ` — ${plan.mainName}` : ''}
                     {' · '}{TR('barcode_alias_row_aliases', { count: plan.aliases.length })}
+                    {plan.aliasesRemoved?.length
+                        ? ` · ${TR('barcode_alias_row_removed', { count: plan.aliasesRemoved.length, barcodes: plan.aliasesRemoved.join(', ') })}` : ''}
                     {plan.duplicates.length ? ` · ${TR('barcode_alias_row_duplicates', { count: plan.duplicates.length })}` : ''}
                     {plan.salesBefore !== plan.salesAfter
                         ? ` · ${TR('barcode_alias_row_sales', { before: plan.salesBefore, after: plan.salesAfter })}` : ''}
@@ -72,9 +74,10 @@ function ErrorList({ errors, TR }) {
  *
  * Same two steps as the other bulk loads: the check pass plans every row and
  * writes nothing; the apply pass runs the plan for the rows that are clean.
- * The server owns parsing, duplicate detection, the deleted_products snapshot
- * and the order/cart rewrite (server/services/barcodeAliases/index.js) — this
- * modal only carries the file and renders the report.
+ * The server owns parsing, duplicate detection, the deleted_products snapshot,
+ * the guest-cart rewrite and the family write
+ * (server/services/barcodeAliases/index.js) — this modal only carries the file
+ * and renders the report.
  */
 export default function LoadBarcodeAliasesModal({ onDone }) {
     const { TR } = useText()
@@ -187,6 +190,7 @@ export default function LoadBarcodeAliasesModal({ onDone }) {
                 <Stat TR={TR} label='barcode_alias_blocked' value={stats?.blocked} />
                 <Stat TR={TR} label='barcode_alias_missing_main' value={stats?.missingMain} />
                 <Stat TR={TR} label='barcode_alias_aliases' value={stats?.aliases} />
+                <Stat TR={TR} label='barcode_alias_aliases_removed' value={stats?.aliasesRemoved} />
                 <Stat TR={TR} label='barcode_alias_duplicates' value={stats?.duplicateDocs} />
                 <Stat TR={TR} label='barcode_alias_parse_errors' value={stats?.parseErrors} />
             </Flex>

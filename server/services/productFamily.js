@@ -93,6 +93,33 @@ export async function readFamilyOwners(DL, { afterBarcode = null, limit = 1000 }
 }
 
 /**
+ * Units of family barcodes Comax no longer measures, from the docs that
+ * carried them before the alias import removed them.
+ *
+ * A barcode that is still measured must not be summed with its old doc total —
+ * that would count the same units twice — so callers only ask for the barcodes
+ * without a measurement. Snapshots are the only place those numbers live once
+ * the doc is gone, and reading them here (rather than from live docs) keeps the
+ * sum identical on every run and in every writer.
+ */
+export async function readDeletedSales(DL, barcodes = []) {
+    const Model = DL?.DeletedProduct?.Model
+    if (!Model?.find || !barcodes?.length) return []
+    const docs = await Model.find(
+        { barcode: { $in: [...new Set(barcodes)] }, restoredAt: null },
+        { _id: 0, barcode: 1, 'product.totalSalesUnits': 1 }
+    ).sort({ deletedAt: -1 }).lean()
+
+    const byBarcode = new Map()
+    for (const doc of docs || []) {
+        if (!doc?.barcode || byBarcode.has(doc.barcode)) continue
+        const units = Number(doc?.product?.totalSalesUnits)
+        if (Number.isFinite(units)) byBarcode.set(doc.barcode, units)
+    }
+    return [...byBarcode].map(([barcode, totalSalesUnits]) => ({ barcode, totalSalesUnits }))
+}
+
+/**
  * Which Comax row describes the family: the product's own row when it has one,
  * otherwise the best alias row — in season before archived, then the most
  * stocked, then the best seller, then barcode for determinism.
@@ -160,7 +187,8 @@ export function buildFamilyUpdate({
     categoryLookup,
     defaultDomainId,
     enforceBuyingPrice = false,
-    statuses
+    statuses,
+    carriedSales = 0
 } = {}) {
     if (!owner?.barcode || !rows?.length) return null
 
@@ -211,7 +239,13 @@ export function buildFamilyUpdate({
 
     const update = { status }
     if (storeIds) update.storeIds = storeIds
-    if (totalSalesUnits != null) update.totalSalesUnits = totalSalesUnits
+    if (totalSalesUnits != null) {
+        // `carriedSales` is the units of barcodes Comax stopped measuring (see
+        // readDeletedSales). They are part of the family and must survive every
+        // sync, not just the import that first folded them in.
+        const carried = Number(carriedSales) || 0
+        update.totalSalesUnits = Math.round((totalSalesUnits + carried) * 1000) / 1000
+    }
 
     // Without its own Comax row the product has no category/sub-group of its
     // own; take them from the effective family row so it lands where its
@@ -229,6 +263,7 @@ export default {
     buildAliasIndex,
     readAliasIndex,
     readFamilyOwners,
+    readDeletedSales,
     pickEffectiveComaxRow,
     sumFamilySales,
     unionStoreIds,

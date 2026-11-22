@@ -4,7 +4,8 @@
 // barcodes. Applying a row does four things, in this order:
 //
 //   1. writes the main product — its name (locked against Comax/GS1), the
-//      merged `scannableBarcodes`, and the family stock/sales/status;
+//      sheet's `scannableBarcodes` (the sheet is the source of truth: an alias
+//      it stopped listing is removed), and the family stock/sales/status;
 //   2. moves every product doc whose barcode became an alias into
 //      `deleted_products` (whole raw doc + rollback info), then deletes it;
 //   3. repoints the lines of live guest carts at the owner (orders are history:
@@ -14,7 +15,7 @@
 // The plan (`dryRun: true`, the default) performs every read and none of the
 // writes, so the admin can see matches, duplicates and conflicts first.
 
-import { buildFamilyUpdate, readAliasIndex } from '#server/services/productFamily.js'
+import { buildFamilyUpdate, readAliasIndex, readDeletedSales } from '#server/services/productFamily.js'
 import { loadCategoryLookup } from '#server/services/categoryMap/index.js'
 import { shouldEnforceBuyingPrice } from '#server/api/comax_product/syncRules.js'
 import { parseAliasCsv } from './parse.js'
@@ -145,9 +146,13 @@ export function planAliasRows({
             blockers.push({ reason: 'category_not_found', value: row.category })
 
         const aliasesBefore = [...(main?.scannableBarcodes || [])]
+        // The sheet is the source of truth. An alias it no longer lists is
+        // removed from the product (and reported), instead of being merged back
+        // in — otherwise a corrected sheet could never shrink a family.
         const aliases = main
-            ? [...new Set([...aliasesBefore, ...row.secondaries])].filter(barcode => barcode !== main.barcode)
+            ? [...new Set(row.secondaries)].filter(barcode => barcode !== main.barcode)
             : [...new Set(row.secondaries)]
+        const aliasesRemoved = aliasesBefore.filter(barcode => !aliases.includes(barcode))
 
         // Every alias must be a scan alias only: any doc still carrying one of
         // these barcodes is a duplicate, whether it predates this import or a
@@ -170,16 +175,6 @@ export function planAliasRows({
                 .map(barcode => comaxByBarcode.get(barcode))
                 .filter(Boolean)
             : []
-        const familyPlan = main
-            ? buildFamilyUpdate({
-                owner: { ...main, scannableBarcodes: aliases },
-                rows: familyRows,
-                categoryLookup,
-                defaultDomainId,
-                enforceBuyingPrice,
-                statuses
-            })
-            : null
 
         // Sales Comax can no longer report: an alias barcode that is not
         // measured any more (a retired code) still carries a total the catalog
@@ -198,6 +193,18 @@ export function planAliasRows({
             return Number.isFinite(stored) ? total + stored : total
         }, 0)
 
+        const familyPlan = main
+            ? buildFamilyUpdate({
+                owner: { ...main, scannableBarcodes: aliases },
+                rows: familyRows,
+                categoryLookup,
+                defaultDomainId,
+                enforceBuyingPrice,
+                statuses,
+                carriedSales: salesFromDocs
+            })
+            : null
+
         // A row with no product to attach to writes nothing: applying it would
         // set aliases on a document that does not exist.
         const update = {}
@@ -207,11 +214,10 @@ export function planAliasRows({
                 // The sheet is a decision: the name stays until a human changes it.
                 update.nameLocked = true
             }
-            if (aliases.length) update.scannableBarcodes = aliases
+            // Written even when empty: that is how the sheet removes an alias.
+            update.scannableBarcodes = aliases
             if (familyPlan) Object.assign(update, familyPlan.update)
             if (categoryOverride) update.category = categoryOverride
-            if (salesFromDocs > 0)
-                update.totalSalesUnits = Math.round(((update.totalSalesUnits ?? 0) + salesFromDocs) * 1000) / 1000
         }
 
         return {
@@ -225,6 +231,7 @@ export function planAliasRows({
             invalidSecondaries: row.invalidSecondaries || [],
             aliasesBefore,
             aliases,
+            aliasesRemoved,
             duplicates,
             blockers,
             blocked: blockers.length > 0,
@@ -254,6 +261,7 @@ function summarize(plans = [], parseErrors = []) {
         blocked: plans.filter(plan => plan.blocked).length,
         missingMain: plans.filter(plan => !plan.mainFound).length,
         aliases: applicable.reduce((count, plan) => count + plan.aliases.length, 0),
+        aliasesRemoved: applicable.reduce((count, plan) => count + plan.aliasesRemoved.length, 0),
         duplicateDocs: applicable.reduce((count, plan) => count + plan.duplicates.length, 0),
         parseErrors: parseErrors.length
     }
@@ -278,21 +286,6 @@ async function readComaxRows(DL, barcodes = []) {
 }
 
 // Snapshots of family barcodes this (or an earlier) import already removed.
-// Raw `Model.find` because `restoredAt` is not a declared filter field.
-async function readDeletedDocs(DL, barcodes = []) {
-    const Model = DL?.DeletedProduct?.Model
-    if (!Model?.find) return []
-    const out = []
-    for (const chunk of chunks([...new Set(barcodes)], READ_CHUNK)) {
-        const docs = await Model.find(
-            { barcode: { $in: chunk }, restoredAt: null },
-            { _id: 0, barcode: 1, 'product.totalSalesUnits': 1 }
-        ).sort({ deletedAt: -1 }).lean()
-        for (const doc of docs || [])
-            out.push({ barcode: doc.barcode, totalSalesUnits: doc?.product?.totalSalesUnits })
-    }
-    return out
-}
 
 /**
  * Read everything the plan needs and (unless `dryRun === false`) apply it.
@@ -318,7 +311,7 @@ export async function planBarcodeAliases(payload = {}, { DL } = {}) {
     const [products, comaxRows, deletedDocs, { ownerByAlias }, categoryLookup, defaultDomain, enforceBuyingPrice] = await Promise.all([
         readProducts(DL, barcodes),
         readComaxRows(DL, barcodes),
-        readDeletedDocs(DL, barcodes),
+        readDeletedSales(DL, barcodes),
         readAliasIndex(DL),
         loadCategoryLookup(DL),
         DL.Domain?.readOne

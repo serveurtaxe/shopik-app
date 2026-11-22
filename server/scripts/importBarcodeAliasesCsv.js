@@ -39,6 +39,7 @@ console.log(`[barcodeAliases] file: ${file}${dryRun ? ' (DRY RUN — no writes)'
 console.log(`[barcodeAliases] ${JSON.stringify(report.stats)}`)
 for (const row of report.rows)
     console.log(`[barcodeAliases] row ${row.line} ${row.mainBarcode} ${row.mainName} → ${row.aliases.join(', ')}`
+        + (row.aliasesRemoved.length ? ` | removes: ${row.aliasesRemoved.join(', ')}` : '')
         + (row.duplicates.length ? ` | deletes: ${row.duplicates.map(d => d.barcode).join(', ')}` : '')
         + (row.blocked ? ` | BLOCKED: ${row.blockers.map(b => `${b.reason}${b.barcode ? `(${b.barcode})` : ''}`).join(', ')}` : ''))
 for (const error of report.errors)

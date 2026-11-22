@@ -111,6 +111,26 @@ describe('product barcode families', () => {
         assert.equal(update.totalSalesUnits, 726)
     })
 
+    it('adds the units of barcodes Comax stopped measuring to the family sum', () => {
+        const { update } = plan({
+            rows: [row({ salesLastDays: 519 })],
+            // The retired alias has no Comax row any more; its 207 units are
+            // carried from the docs that held them.
+            carriedSales: 207
+        })
+
+        assert.equal(update.totalSalesUnits, 726)
+    })
+
+    it('leaves the total alone when nothing was measured, even with carried units', () => {
+        const { update } = plan({
+            rows: [row({ salesLastDays: undefined })],
+            carriedSales: 207
+        })
+
+        assert.equal(update.totalSalesUnits, undefined)
+    })
+
     it('ignores Comax rows outside the family', () => {
         const { update, familyRows } = plan({
             rows: [row(), row({ barcode: '9999999999999', salesLastDays: 5000 })]

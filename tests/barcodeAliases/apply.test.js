@@ -139,7 +139,7 @@ describe('barcode alias import apply', () => {
         assert.equal(report.dryRun, true)
         assert.deepEqual(report.stats, {
             rows: 1, validRows: 1, applicable: 1, blocked: 0, missingMain: 0,
-            aliases: 1, duplicateDocs: 1, parseErrors: 0
+            aliases: 1, aliasesRemoved: 0, duplicateDocs: 1, parseErrors: 0
         })
         assert.equal(calls.updates.length, 0, 'a check pass writes nothing')
 

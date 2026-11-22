@@ -8,7 +8,7 @@ import {
 } from './syncRules.js'
 import { deriveStatus, retailPrice } from './status.js'
 import { loadCategoryLookup, productCategoryFor } from '#server/services/categoryMap/index.js'
-import { buildFamilyUpdate, familyBarcodes, readAliasIndex, readFamilyOwners } from '#server/services/productFamily.js'
+import { buildFamilyUpdate, familyBarcodes, readAliasIndex, readDeletedSales, readFamilyOwners } from '#server/services/productFamily.js'
 import { invalidateMenu } from '#server/utils/data/getMenu.js'
 import enqueueChangedImages from '#server/services/image/enqueue.js'
 import log from '#server/utils/log.js'
@@ -135,18 +135,34 @@ export async function syncProductFamilies({
             : []
         const rowsByBarcode = new Map((comaxRows || []).map(row => [row.barcode, row]))
 
+        // Barcodes Comax stopped measuring keep their units from the deleted
+        // doc's snapshot, so the family sum is the whole family and not just
+        // what Comax still reports. Read once per page, only for the barcodes
+        // that need it.
+        const unmeasured = barcodes.filter(barcode => !Number.isFinite(rowsByBarcode.get(barcode)?.salesLastDays))
+        const carriedByBarcode = new Map(
+            unmeasured.length
+                ? (await readDeletedSales(DL, unmeasured)).map(row => [row.barcode, row.totalSalesUnits])
+                : []
+        )
+
         const updates = []
         for (const owner of ownerProducts) {
-            const familyRows = familyBarcodes(owner)
+            const family = familyBarcodes(owner)
+            const familyRows = family
                 .map(barcode => rowsByBarcode.get(barcode))
                 .filter(Boolean)
+            const carriedSales = family.reduce(
+                (total, barcode) => total + (Number(carriedByBarcode.get(barcode)) || 0), 0
+            )
             const plan = buildFamilyUpdate({
                 owner,
                 rows: familyRows,
                 categoryLookup,
                 defaultDomainId,
                 enforceBuyingPrice,
-                statuses: DL.Product.constants.STATUS
+                statuses: DL.Product.constants.STATUS,
+                carriedSales
             })
             if (plan) updates.push({ barcode: owner.barcode, ...plan.update })
         }
