@@ -151,8 +151,8 @@ async function buildOnce(DL, domain, lockFn) {
         await writeMeta(DL.redis, domain.domainId, meta)
         // The generation fingerprinted the catalog itself; adopt that value so
         // the caller's older cached signature does not immediately trigger a
-        // second scan.
-        seedFeedSignatureCache(domain.domainId, meta.signature)
+        // second scan. Publishing it to Redis also updates the other instances.
+        await seedFeedSignatureCache(DL, domain.domainId, meta.signature)
         log.info(`[Feed] Generated ${domain.domainId}: ${meta.products} products, ${meta.chunks} sitemap chunks, ${meta.items} feed items`)
         return meta
     } catch (error) {
@@ -199,8 +199,9 @@ export async function getFeedFile({ DL, domain, file, lockFn = acquireLock }) {
 
     if (chunkNumber && chunkNumber > (meta.chunks || 0)) return emptyChunk(meta, file)
 
-    // Freshness gate. A hit in this process-local cache costs one Redis GET for
-    // the meta (above) and no catalog reads at all.
+    // Freshness gate. A local hit costs one Redis GET for the meta (above) and
+    // no catalog reads at all; a miss costs one shared Redis signature read,
+    // and only if that is missing too does anything touch Mongo.
     let signature
     try {
         signature = await readFeedSignatureCached(DL, domainId)

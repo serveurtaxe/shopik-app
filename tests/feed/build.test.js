@@ -93,11 +93,12 @@ describe('generateFeeds', () => {
                 }
             },
             Category: {
-                Model: {
-                    countDocuments: async () => categories.length,
-                    findOne: () => ({ sort: () => ({ lean: async () => ({ updatedAt: '2026-01-01T00:00:00.000Z' }) }) })
-                },
                 async read(filter) {
+                    // The signature reads all active categories (from the Redis
+                    // hashset in production); the pages pass reads a subset.
+                    if (!filter.id?.$in) {
+                        return categories.map(category => ({ id: category.id, updatedAt: category.updatedAt }))
+                    }
                     categoryReads += 1
                     categoryFilter = filter
                     return categories.filter(category => filter.id.$in.includes(category.id))
@@ -191,12 +192,13 @@ describe('generateFeeds', () => {
                 read: async () => []
             },
             Category: {
-                Model: {
-                    countDocuments: async () => 0,
-                    findOne: () => ({ sort: () => ({ lean: async () => null }) })
-                },
-                read: async () => {
-                    throw new Error('category read must be skipped when there are no products')
+                async read(filter) {
+                    // The signature always reads the (empty) active category set;
+                    // the pages pass must be skipped when the catalog is empty.
+                    if (filter.id?.$in) {
+                        throw new Error('category read must be skipped when there are no products')
+                    }
+                    return []
                 }
             },
             DisplayBlock: {

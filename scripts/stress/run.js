@@ -8,6 +8,7 @@ import { StressClient } from './client.js'
 import { ensureGate, adminLogin, customerLogin, pinCurrentStore, closePrompt } from './auth.js'
 import { MongoObserver } from './observer.js'
 import { measureBaseline, runSequential, runChaos } from './load.js'
+import { runFeedBenchmark } from './feed.js'
 import { printReport, saveReport } from './report.js'
 import { CUSTOMER_PLATFORM } from './payloads.js'
 import { sleep } from './util.js'
@@ -26,9 +27,41 @@ if (opts.discoverOnly) {
     process.exit(0)
 }
 
-guardAgainstProduction(opts.uri)
-
 const log = message => console.log(`[stress] ${message}`)
+
+// Feed-only phase: sitemap + Google Merchant are served per Host and are a
+// Redis hit or a one-off generation, so they are measured on their own (no DB
+// observer, no fixtures, no login unless the server is gated).
+if (opts.feedOnly) {
+    if (!opts.feedHost) {
+        console.error('[stress] --feed-only needs --feed-host <domain> (or STRESS_FEED_HOST)')
+        process.exit(1)
+    }
+    try {
+        let cookie = ''
+        if (opts.gatePassword) {
+            const gate = new StressClient({ baseUrl: opts.baseUrl, origin: `https://${opts.feedHost}` })
+            const ok = await gate.gateLogin(opts.gatePassword)
+            log(`gate login: ${ok ? 'ok' : 'FAILED'}`)
+            cookie = gate.cookieHeader()
+        }
+        await runFeedBenchmark({
+            baseUrl: opts.baseUrl,
+            host: opts.feedHost,
+            calls: opts.feedCalls,
+            concurrency: opts.feedConcurrency,
+            cookie,
+            only: opts.only,
+            log
+        })
+    } catch (error) {
+        console.error(`[stress] feed benchmark failed: ${error?.message || error}`)
+        process.exitCode = 1
+    }
+    process.exit(process.exitCode || 0)
+}
+
+guardAgainstProduction(opts.uri)
 
 const fixtures = await loadFixtures(opts.uri, { idNum: opts.idNum, userPhone: opts.userPhone })
 if (opts.userPhone && !fixtures.customerPhone)
