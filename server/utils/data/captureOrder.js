@@ -24,6 +24,7 @@ async function recordCapture({ DL, utils, actor, order, ok, step, providerTxnId,
                 providerTxnId, parentProviderTxnId: order.payment?.providerTxnId,
                 amount, authorizedAmount, capturedTotal,
                 providerCode,
+                payments: order.payment?.payments,
                 hasJ5Refs: Boolean(order.payment?.authCode && order.payment?.providerUid),
                 tokefValid: isTokefValid(order.payment?.cardExpiry)
             },
@@ -41,6 +42,7 @@ async function persistCaptureTxn({ DL, order, status, amount, providerTxnId, pro
             provider: 'hyp', kind: DL.PaymentTransaction.constants.TRANSACTION_KIND.CAPTURE,
             status,
             amount, terminalId: process.env.HYP_MASOF || undefined,
+            payments: order.payment?.payments,
             providerTxnId, parentProviderTxnId: order.payment?.providerTxnId,
             providerCode, providerData, error
         })
@@ -130,6 +132,8 @@ export default async function captureOrder({ DL, _admin, _user, utils, external,
     if (!captureAmount || captureAmount <= 0) throw { status: 400, message: 'invalid charge amount' }
 
     const hyp = external.hyp
+    // Installment count chosen on Hyp's payment page (undefined/1 = one charge).
+    const payments = order.payment?.payments
     const authorizedAmount = Number(order.payment?.authorizedAmount ?? captureAmount)
     const alreadyPaid = Boolean(order.paid && order.payment?.captureProviderTxnId)
     let captureProviderTxnId = order.payment?.captureProviderTxnId
@@ -158,7 +162,7 @@ export default async function captureOrder({ DL, _admin, _user, utils, external,
         const needsSplit = captureAmount > authorizedAmount + EPS && !overCaptureAllowed
 
         if (needsSplit) {
-            const split = await hyp.captureOverCaptureSplit({ order, captureAmount }).catch((e) => ({ error: e }))
+            const split = await hyp.captureOverCaptureSplit({ order, captureAmount, payments }).catch((e) => ({ error: e }))
             if (split?.error) {
                 await failClosed({
                     ...ctx, amount: captureAmount,
@@ -200,7 +204,7 @@ export default async function captureOrder({ DL, _admin, _user, utils, external,
             })
             captureProviderTxnId = secondId || primaryId
         } else {
-            const result = await hyp.capture({ order, amount: captureAmount }).catch((e) => ({ error: e }))
+            const result = await hyp.capture({ order, amount: captureAmount, payments }).catch((e) => ({ error: e }))
             if (result?.error || Number(result?.CCode) !== 0) {
                 await failClosed({
                     ...ctx, amount: captureAmount,
@@ -245,7 +249,7 @@ export default async function captureOrder({ DL, _admin, _user, utils, external,
                     amount: captureAmount, capturedTotal, delta
                 })
             }
-            const charged = await hyp.chargeToken({ order, amount: delta }).catch((e) => ({ error: e }))
+            const charged = await hyp.chargeToken({ order, amount: delta, payments }).catch((e) => ({ error: e }))
             if (charged?.error || Number(charged?.CCode) !== 0) {
                 await failClosed({
                     ...ctx, amount: delta, capturedTotal,
