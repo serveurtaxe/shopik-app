@@ -50,6 +50,29 @@ Deliberately not fired (they do no DB read to rank): `geocode/*`, `address/autoc
 (streams an xlsx from storage). A route that was never fired shows as a `skipped (…)`
 row with a reason — never read it as a cheap route.
 
+## Feed-only benchmark (sitemap + Google Merchant)
+
+`/sitemap.xml`, `/sitemap-pages.xml`, `/sitemap-products-<n>.xml` and
+`/google-feed.xml` are served per Host and answer from Redis; only the first request
+of a new catalog pays the generation (≈1.6s for 7.4k products, building both the
+sitemap and the feed in one scan). That cold/warm split is not what the DB ranking
+measures, so the feed has its own phase that needs only a running server — no
+stress DB, fixtures or login:
+
+```bash
+node scripts/stress/run.js --feed-only \
+  --base-url http://127.0.0.1:1990 --feed-host shopik.co.il
+```
+
+It sends the configured storefront domain as `Host` (fetch/undici refuses to
+override Host, so this phase uses node:http), measures the first hit, then
+`--feed-calls` warm calls (default 10) at `--feed-concurrency` (default 2), reports
+p50/p95/p99 and bytes, repeats the request with `If-None-Match` (expects 304), and
+checks that unknown/admin hosts answer 404. `--only <regex>` filters the endpoint
+keys (`sitemap`, `google-feed`). It never clears a cache: if the catalog
+changed, the first request regenerates exactly like a crawler would — read that
+number as the cold-start cost, the rest as steady-state.
+
 ### Caveat: the copy converges to the branch's schema
 
 The app builds every index its models declare (mongoose `autoIndex`) the moment it

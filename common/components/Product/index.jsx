@@ -11,20 +11,13 @@ import { round2, round3 } from 'common/functions/calcOrder/utils.js'
 import { getProductImageUrl, mainImageHash } from 'common/functions/productImageUrl.js'
 import { getRowPriceInfo, isBundleReached } from 'common/functions/rowPrice.js'
 import { getUnitPriceText, parseWeightOrVolume } from 'common/functions/unitPrice.js'
+import { getFirstSale, getSalePriceInfo } from 'common/functions/salePrice.js'
 import { useState, useEffect } from 'react'
-import { getSalesCache } from '#common/functions/salesCache.js'
 import TR from 'common/texts/TR.js'
 
-export function getFirstSale(product, sales) {
-    const saleId = product?.saleIds?.[0]
-    if (!saleId) return null
-    if (sales && sales[saleId]) return sales[saleId]
-    try {
-        const cache = getSalesCache?.()
-        if (cache && cache[saleId]) return cache[saleId]
-    } catch { }
-    return null
-}
+// Re-exported for existing callers; the implementation lives in
+// common/functions/salePrice.js so the server feed can share it.
+export { getFirstSale, getSalePriceInfo }
 
 export function getSaleBadgeText(sale) {
     if (!sale) return null
@@ -43,32 +36,6 @@ export function formatPrice(price) {
     if (price == null || isNaN(price)) return ''
     const n = Number(price)
     return Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.00$/, '')
-}
-
-export function getSalePriceInfo(product, sale) {
-    if (!sale || !product) return null
-    const regular = Number(product.price)
-    if (isNaN(regular)) return null
-    const amount = Number(sale.amount) || 1
-    const kind = sale.kind
-    const price = sale.price
-    const percent = sale.percent
-    let saleSingle = null
-    let saleTotal = null
-    if (kind === 'percent' && percent != null) {
-        const p = Number(percent)
-        saleSingle = round2(regular * (1 - p / 100))
-        saleTotal = round2(saleSingle * amount)
-    } else if (price != null) {
-        const total = Number(price)
-        saleTotal = round2(total)
-        saleSingle = amount > 1 ? round2(total / amount) : saleTotal
-    } else {
-        return null
-    }
-    if (saleSingle < 0) saleSingle = 0
-    if (saleTotal < 0) saleTotal = 0
-    return { regular, saleSingle, saleTotal, amount, kind, isBundle: amount > 1 }
 }
 
 export function getSaleRemaining(sale, amount) {

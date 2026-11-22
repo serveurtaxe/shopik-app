@@ -4,6 +4,7 @@ import path from 'path'
 import router from './router.js'
 import bodyParsers from './middleware/bodyParsers.js'
 import registerManifestRoute from './routes/manifest.js'
+import registerFeedRoutes from './routes/feed.js'
 import boot from './boot.js'
 import ssr from './ssr.js'
 import startImageWorker from '#server/workers/imageWorker.js'
@@ -106,6 +107,7 @@ app.use(parseUrlencoded)
 app.use(compression())
 
 registerManifestRoute(app, bootData)
+registerFeedRoutes(app, bootData)
 router(app, bootData)
 
 if (process.env.SITE_GATE_PASSWORD) {
