@@ -22,6 +22,9 @@ export default function Head({
             {meta.title && <meta property="og:title" content={meta.title} />}
             {meta.description && <meta property="og:description" content={meta.description} />}
             {meta.image && <meta property="og:image" content={meta.image} />}
+            {meta.image && meta.imageType && <meta property="og:image:type" content={meta.imageType} />}
+            {meta.image && meta.imageWidth && <meta property="og:image:width" content={String(meta.imageWidth)} />}
+            {meta.image && meta.imageHeight && <meta property="og:image:height" content={String(meta.imageHeight)} />}
             {meta.url && <meta property="og:url" content={meta.url} />}
             {meta.type && <meta property="og:type" content={meta.type} />}
             {meta.siteName && <meta property="og:site_name" content={meta.siteName} />}
