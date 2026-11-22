@@ -14,6 +14,10 @@ export function buildMeta({ settings, initData, page, notFound, url, host } = {}
     const image = notFound
         ? ''
         : (initData?.image
+            // ogImage uploads store the exact variant file, which
+            // getSettingFileUrl returns as-is. Older values are a base dir
+            // containing only l/m/s (never `full`), so 'l' is the safe
+            // fallback for them.
             || getSettingFileUrl(seo.ogImage, 'l')
             || getPwaIconUrl(appearance.appIcon, PWA_ICON_FILES.icon512)
             || getSettingFileUrl(appearance.logo))

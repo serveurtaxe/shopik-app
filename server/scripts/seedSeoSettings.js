@@ -9,7 +9,8 @@
  *
  * ogImage is the social-card image — recommend ~1200x630 uploads. It stores a
  * single full-res variant (`sizes: { full: null }` = convert to webp only),
- * unlike the standard l/m/s thumbnails, so Facebook/Twitter get a large card.
+ * unlike the standard l/m/s thumbnails. The upload sets the value to that
+ * exact `.webp` file, so Facebook/Twitter get a large card.
  */
 export default async function seedSeoSettings({ DL }) {
     const domains = await DL.Domain.read({}, { _id: 0, id: 1, name: 1 }, { limit: 0 })
