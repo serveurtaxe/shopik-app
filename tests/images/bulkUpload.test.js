@@ -83,6 +83,16 @@ describe('bulk image upload plan', () => {
         assert.equal(plan.matched, 1)
     })
 
+    it('matches a file named after a scan alias to the product that owns it', () => {
+        // The sheet's image column names the alias barcode, not the main one.
+        const owner = { ...product('3528'), scannableBarcodes: ['7290001201824'] }
+        const plan = planUploadFiles(files(['7290001201824.png']), [owner])
+
+        assert.deepEqual(plan.unmatched, [])
+        assert.deepEqual(plan.accepted, [{ name: '7290001201824.png', barcode: '7290001201824' }])
+        assert.equal(plan.matched, 1)
+    })
+
     it('tells the client how many uploads the server will hold at once', () => {
         const plan = planUploadFiles(files(['3528.png']), [product('3528')])
 

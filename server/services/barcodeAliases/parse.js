@@ -18,8 +18,7 @@ import { parseCsvRows } from '#server/services/categoryMap/parse.js'
 export const ALIAS_HEADERS = {
     name: ['שם מוצר', 'שם', 'name', 'productname'],
     main: ['ברקוד ראשי', 'ברקוד', 'mainbarcode', 'barcode'],
-    secondary: ['ברקוד משני', 'ברקודים משניים', 'scannablebarcodes', 'secondarybarcodes', 'secondaries'],
-    category: ['קטגוריה', 'category', 'categoryid']
+    secondary: ['ברקוד משני', 'ברקודים משניים', 'scannablebarcodes', 'secondarybarcodes', 'secondaries']
 }
 
 // Headers are matched ignoring spaces and Hebrew/ASCII quote marks, so
@@ -75,7 +74,7 @@ export function splitBarcodeCell(value) {
 /**
  * @returns {{
  *   rows: Array<{ line: number, name: string, mainBarcode: string,
- *                 secondaries: string[], invalidSecondaries: string[], category: string }>,
+ *                 secondaries: string[], invalidSecondaries: string[] }>,
  *   errors: Array<{ line: number, name: string, mainBarcode: string, reason: string }>
  * }}
  */
@@ -103,11 +102,10 @@ export function parseAliasCsv(text = '') {
         const line = index + 2
         const name = col.name === undefined ? '' : String(cells[col.name] ?? '').trim()
         const rawMain = col.main === undefined ? '' : String(cells[col.main] ?? '').trim()
-        const category = col.category === undefined ? '' : String(cells[col.category] ?? '').trim()
 
         // The export ends with a blank line; a row with only a name is a real
         // data problem (nothing to attach the name to).
-        if (!rawMain && !name && !category) return
+        if (!rawMain && !name) return
 
         const mainBarcode = normalizeBarcode(rawMain)
         if (!mainBarcode) {
@@ -125,8 +123,7 @@ export function parseAliasCsv(text = '') {
             mainBarcode,
             // A cell that repeats the main barcode is simply the family head.
             secondaries: [...new Set(barcodes)].filter(barcode => barcode !== mainBarcode),
-            invalidSecondaries: invalid,
-            category
+            invalidSecondaries: invalid
         })
     })
 

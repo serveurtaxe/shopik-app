@@ -60,34 +60,12 @@ function chunks(list, size) {
     return out
 }
 
-function toCategory(category) {
-    if (!category?.id) return null
-    return {
-        id: category.id,
-        title: category.name,
-        pathIds: [...(category.parentIds || []), category.id]
-    }
-}
-
-// The sheet's optional category column accepts either the category id
-// (`nc:206:2027`) or its exact display name (`ביצים`).
-export function resolveCategory(value, lookup) {
-    const raw = String(value ?? '').trim()
-    if (!raw) return null
-    const byId = lookup?.categoriesById?.get(raw)
-    if (byId) return toCategory(byId)
-    for (const category of lookup?.categoriesById?.values() || [])
-        if (category?.name === raw) return toCategory(category)
-    return null
-}
-
 /**
  * Pure planning step: which rows can be applied, what each will write, and
  * which barcodes need to be removed first.
  */
 export function planAliasRows({
     rows = [],
-    parseErrors = [],
     products = [],
     comaxRows = [],
     ownerByAlias = new Map(),
@@ -131,9 +109,10 @@ export function planAliasRows({
                 blockers.push({ barcode, reason: 'already_alias', owner })
         }
 
-        const categoryOverride = row.category ? resolveCategory(row.category, categoryLookup) : null
-        if (row.category && !categoryOverride)
-            blockers.push({ reason: 'category_not_found', value: row.category })
+        // A token in the secondary cell that is not a barcode is reported, never
+        // guessed at: silently dropping it would quietly shrink the family.
+        for (const token of row.invalidSecondaries || [])
+            blockers.push({ barcode: token, reason: 'invalid_secondary' })
 
         const aliasesBefore = [...(main?.scannableBarcodes || [])]
         // The sheet is the source of truth. An alias it no longer lists is
@@ -150,15 +129,7 @@ export function planAliasRows({
         const duplicates = aliases
             .map(barcode => productByBarcode.get(barcode))
             .filter(product => product && product.barcode !== main?.barcode)
-            .map(product => ({
-                _id: product._id,
-                barcode: product.barcode,
-                id: product.id,
-                name: product.name || '',
-                status: product.status || '',
-                totalSalesUnits: product.totalSalesUnits ?? null,
-                storeIds: product.storeIds || []
-            }))
+            .map(product => ({ _id: product._id, barcode: product.barcode }))
 
         const familyRows = main
             ? [...new Set([main.barcode, ...aliases])]
@@ -188,7 +159,6 @@ export function planAliasRows({
             // Written even when empty: that is how the sheet removes an alias.
             update.scannableBarcodes = aliases
             if (familyPlan) Object.assign(update, familyPlan.update)
-            if (categoryOverride) update.category = categoryOverride
         }
 
         return {
@@ -198,26 +168,20 @@ export function planAliasRows({
             mainId: main?.id || null,
             mainName: main?.name || '',
             mainFound: !!main,
-            secondaries: row.secondaries,
-            invalidSecondaries: row.invalidSecondaries || [],
-            aliasesBefore,
             aliases,
             aliasesRemoved,
             duplicates,
             blockers,
             blocked: blockers.length > 0,
-            category: update.category || main?.category || null,
             statusBefore: main?.status ?? null,
             statusAfter: update.status ?? main?.status ?? null,
             salesBefore: main?.totalSalesUnits ?? null,
             salesAfter: update.totalSalesUnits ?? main?.totalSalesUnits ?? null,
-            storesBefore: [...(main?.storeIds || [])],
-            storesAfter: update.storeIds ?? [...(main?.storeIds || [])],
             update
         }
     })
 
-    return { plans, parseErrors }
+    return { plans }
 }
 
 function summarize(plans = [], parseErrors = []) {
@@ -289,7 +253,6 @@ export async function planBarcodeAliases(payload = {}, { DL } = {}) {
 
     const { plans } = planAliasRows({
         rows,
-        parseErrors: errors,
         products,
         comaxRows,
         ownerByAlias,
@@ -387,7 +350,6 @@ export async function applyBarcodeAliases(plans = [], { DL, adminId = null } = {
                 productId: raw.id,
                 product: raw,
                 mainBarcode: plan.mainBarcode,
-                previousScannableBarcodes: plan.aliasesBefore,
                 reason: 'barcode-alias-import',
                 deletedBy: adminId || null,
                 deletedAt: new Date()

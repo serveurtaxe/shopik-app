@@ -20,7 +20,12 @@ export default async function gs1Alias(payload, { DL, external }) {
     if (!clear && !short) throw { status: 400, message: 'short is required' }
 
     if (!clear) {
-        const product = await DL.Product.readOne({ barcode: short }, { _id: 0, barcode: 1, name: 1 })
+        // The short may itself be a scan alias of a family; that product is the
+        // one the GTIN describes, so the mapping is valid either way.
+        const select = { _id: 0, barcode: 1, name: 1 }
+        let product = await DL.Product.readOne({ barcode: short }, select)
+        if (!product && DL.Product.Model?.findOne)
+            product = await DL.Product.Model.findOne({ scannableBarcodes: short }, select).lean()
         if (!product) throw { status: 400, message: 'product does not exist' }
     }
 

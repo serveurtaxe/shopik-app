@@ -6,7 +6,6 @@ const snapshot = (barcode, over = {}) => ({
     id: `d-${barcode}`,
     barcode,
     mainBarcode: '1111111111111',
-    previousScannableBarcodes: [],
     product: { barcode, name: 'כפול', images: { product: [{ url: 'https://example.com/x.jpg' }] }, ...over },
     reason: 'barcode-alias-import'
 })

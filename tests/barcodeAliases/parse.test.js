@@ -35,8 +35,7 @@ describe('barcode alias csv', () => {
             name: 'ביצים 12 יח׳ M',
             mainBarcode: '742259241895',
             secondaries: ['693493255370', '7290001201589'],
-            invalidSecondaries: [],
-            category: ''
+            invalidSecondaries: []
         })
     })
 

@@ -6,9 +6,8 @@ import mongoose from 'mongoose'
 // (otherwise the same barcode would resolve to two products). Deleting
 // outright loses everything the doc carried — images, GS1 fields, price
 // history — so the whole raw document is kept here first, together with the
-// owner it was merged into and the owner's alias list *before* the merge. That
-// is everything `scripts/restoreDeletedProducts.js` needs to put the catalog
-// back exactly as it was.
+// owner it was merged into. That is everything
+// `scripts/restoreDeletedProducts.js` needs to put the catalog back.
 const deletedProductSchema = {
     // The deleted product's own barcode (now an alias of `mainBarcode`).
     barcode: {
@@ -31,8 +30,6 @@ const deletedProductSchema = {
         filter: 'exact',
         index: true
     },
-    // Owner aliases before the import, so a restore removes only what it added.
-    previousScannableBarcodes: { type: [String], default: [] },
     reason: String,
     deletedBy: String,
     deletedAt: { type: Date, default: Date.now },

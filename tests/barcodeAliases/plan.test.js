@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { planAliasRows, resolveCategory } from '../../server/services/barcodeAliases/index.js'
+import { planAliasRows } from '../../server/services/barcodeAliases/index.js'
 import { parseAliasCsv } from '../../server/services/barcodeAliases/parse.js'
 
 const STATUS = { ACTIVE: 'active', HIDDEN: 'hidden', ARCHIVED: 'archived' }
@@ -162,19 +162,12 @@ describe('barcode alias import plan', () => {
         assert.deepEqual(plans[0].update, {})
     })
 
-    it('resolves an optional category column by id or by name', () => {
-        assert.deepEqual(resolveCategory('nc:206:2027', LOOKUP), { id: EGGS.id, title: 'ביצים', pathIds: ['nc:206', EGGS.id] })
-        assert.deepEqual(resolveCategory('ביצים', LOOKUP).id, EGGS.id)
-        assert.equal(resolveCategory('לא קיימת', LOOKUP), null)
-        assert.equal(resolveCategory('', LOOKUP), null)
-    })
-
-    it('blocks an unknown category and writes a resolved one', () => {
-        const { rows } = parseAliasCsv('ברקוד ראשי,ברקוד משני,קטגוריה\n1111111111111,,ביצים\n4444444444444,,לא קיימת')
+    it('blocks a secondary token that is not a barcode instead of dropping it', () => {
+        const { rows } = parseAliasCsv('ברקוד ראשי,ברקוד משני\n1111111111111,2222222222222 729O001201589')
         const plans = planOf(rows)
 
-        assert.deepEqual(plans[0].update.category, { id: EGGS.id, title: 'ביצים', pathIds: ['nc:206', EGGS.id] })
-        assert.deepEqual(plans[1].blockers, [{ reason: 'category_not_found', value: 'לא קיימת' }])
+        assert.deepEqual(plans[0].blockers, [{ barcode: '729O001201589', reason: 'invalid_secondary' }])
+        assert.equal(plans[0].blocked, true)
     })
 
     it('leaves the stored price of a main that has no Comax row of its own', () => {

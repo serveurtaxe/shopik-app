@@ -1202,7 +1202,7 @@
         "barcode_alias_reason_secondary_is_main": "ברקוד משני הוא ברקוד ראשי של שורה אחרת",
         "barcode_alias_reason_secondary_claimed_twice": "ברקוד משני מופיע ביותר משורה אחת",
         "barcode_alias_reason_already_alias": "הברקוד כבר משויך למוצר אחר",
-        "barcode_alias_reason_category_not_found": "הקטגוריה לא נמצאה",
+        "barcode_alias_reason_invalid_secondary": "ברקוד משני לא תקין",
         "barcode_alias_reason_invalid_main": "ברקוד ראשי לא תקין",
         "passover_kosher": "כשר לפסח",
         "passover_not_kosher": "לא כשר לפסח",

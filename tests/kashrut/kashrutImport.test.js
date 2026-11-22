@@ -115,15 +115,20 @@ describe('planKashrutUpdate', () => {
     })
 })
 
-// Fake DL: read returns the products whose barcode is in the $in filter.
+// Fake DL: read returns the products whose barcode (or scan alias) is in the
+// $in filter, in either the plain `barcode` or the `$or` shape.
 function fakeDL(products = []) {
     const writes = []
     return {
         writes,
         Product: {
-            read: async ({ barcode }) => {
-                const wanted = barcode?.$in || []
-                return products.filter(p => wanted.includes(p.barcode))
+            read: async (filter = {}) => {
+                const clauses = filter.$or || [filter]
+                const byBarcode = clauses.flatMap(clause => clause.barcode?.$in || [])
+                const byAlias = clauses.flatMap(clause => clause.scannableBarcodes?.$in || [])
+                return products.filter(p =>
+                    byBarcode.includes(p.barcode)
+                    || (p.scannableBarcodes || []).some(alias => byAlias.includes(String(alias))))
             },
             bulkWrite: async ({ docs, getUpdate }) => {
                 writes.push(...docs.map(d => ({ barcode: d.barcode, update: getUpdate(d) })))
@@ -175,6 +180,19 @@ describe('load_kashrut', () => {
         assert.deepEqual(Object.keys(write.update), ['$set'])
         assert.deepEqual(write.update.$set.kashrut.rabbinates.map(r => r.code), ['67093', '55004'])
         assert.equal(write.update.$set.kashrut.supervisionType, '181')
+    })
+
+    it('matches a row whose barcode is a scan alias and writes it to the owner', async () => {
+        const DL = fakeDL([
+            { barcode: '1003848', scannableBarcodes: ['7290014761698'] }
+        ])
+
+        const report = await loadKashrut({ csv: CSV, dryRun: false }, info(DL))
+
+        // The alias row and the main row both land on the owning product; the
+        // product that is not in the catalog stays unmatched.
+        assert.deepEqual(report.unmatched.map(row => row.barcode), ['1014'])
+        assert.ok(DL.writes.every(write => write.barcode === '1003848'))
     })
 
     it('reports codes that are not in the priority table instead of writing them', async () => {
