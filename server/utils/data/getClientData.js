@@ -1,5 +1,6 @@
 import { getSmsConfig } from '#server/external/sms/config.js'
 import resolveDomainId from '#server/utils/resolveDomainId.js'
+import { isProdEnv } from '#server/utils/isProd.js'
 
 export default async function getClientData(req, bootData) {
     const { utils } = bootData
@@ -56,6 +57,11 @@ export default async function getClientData(req, bootData) {
         },
         env: {
             FILES_BASE_URL: process.env.FILES_BASE_URL || 'https://files.shopik.co.il',
+            // Vee issued the accessibility sitekey for production only, so the
+            // widget must not load in any non-production run — even when a dev
+            // server falls back to the default domain and sees its settings.
+            // Strict boolean on purpose (common/functions/vee.js compares !== true).
+            PROD: isProdEnv(),
         },
     }
 }

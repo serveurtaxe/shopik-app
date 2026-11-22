@@ -2,11 +2,10 @@ import helmet from 'helmet'
 import cors from 'cors'
 import { rateLimit } from 'express-rate-limit'
 import { expandOrigins, normalizeHostname } from '#server/utils/normalizeDomain.js'
+import { isProdEnv } from '#server/utils/isProd.js'
 
-export const isProdEnv = () =>
-    process.env.NODE_ENV === 'production' ||
-    process.env.PRODUCTION === 'true' ||
-    Boolean(process.env.PRODUCTION)
+// Re-exported for the modules that already import it from here.
+export { isProdEnv }
 
 const REFRESH_MS = 3_600_000 // 1h — new/disabled domains are rare; restarts reload immediately
 const RATE_WINDOW_MS = 60_000
