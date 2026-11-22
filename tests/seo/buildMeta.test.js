@@ -39,8 +39,19 @@ describe('buildMeta', () => {
         const meta = buildMeta({ settings, initData: {}, page: { title: 'Home', description: 'route desc' }, url: '/', host: 'store-b.com' })
         assert.equal(meta.title, 'Shopik | Home')
         assert.equal(meta.description, 'Store-wide description')
-        assert.equal(meta.image, 'https://files.shopik.co.il/images/settings/d1/ogImage/v1/full.webp')
+        assert.equal(meta.image, 'https://files.shopik.co.il/images/settings/d1/ogImage/v1/l.webp')
         assert.equal(meta.type, 'website')
+    })
+
+    it('an ogImage value pointing at an exact variant file is used as-is', () => {
+        const meta = buildMeta({
+            settings: { ...settings, seo: { ...settings.seo, ogImage: 'images/settings/d1/ogImage/v1/full.webp' } },
+            initData: {},
+            page: { title: 'Home' },
+            url: '/',
+            host: 'store-b.com'
+        })
+        assert.equal(meta.image, 'https://files.shopik.co.il/images/settings/d1/ogImage/v1/full.webp')
     })
 
     it('an unset seoDescription emits nothing, not the page description', () => {

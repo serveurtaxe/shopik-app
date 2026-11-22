@@ -35,6 +35,15 @@ export default async function search(payload, { DL, req, _user, _admin, utils, p
     if (/^\d+$/.test(trimmed)) {
         const exactFilter = { ...effectiveFilter, barcode: trimmed }
         let products = await DL.Product.read(exactFilter, selectForStock, { limit: safeLimit, skip: safeSkip })
+        // A scan alias has no doc of its own (see Product.scannableBarcodes), so
+        // scanning a retired code must still land on the product that owns it.
+        if (!products.length && !safeSkip) {
+            const owner = await DL.Product.Model.findOne(
+                { ...effectiveFilter, scannableBarcodes: trimmed },
+                selectForStock
+            ).lean()
+            products = owner ? [owner] : []
+        }
         if (wantAnnotate) products = utils.data.withStock.annotateInStock(products, storeId, mode)
         const sales = await collectSales(products)
         return { products: priceFor(products), sales }

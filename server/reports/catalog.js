@@ -237,7 +237,7 @@ async function build(DL) {
         ).lean(),
         DL.Product.Model.find(
             {},
-            { _id: 0, barcode: 1, name: 1, prices: 1, kashrut: 1, 'images.product': 1, gs1SyncedAt: 1 }
+            { _id: 0, barcode: 1, scannableBarcodes: 1, name: 1, prices: 1, kashrut: 1, 'images.product': 1, gs1SyncedAt: 1 }
         ).lean(),
         DL.CategoryMap.read(
             {},
@@ -269,11 +269,21 @@ async function build(DL) {
     ])
 
     const productByBarcode = new Map()
+    const ownerByAlias = new Map()
     for (const product of products) {
         if (product.barcode == null) continue
         const key = normBarcode(product.barcode)
         if (!productByBarcode.has(key)) productByBarcode.set(key, product)
+        // A scan alias has no doc of its own by design (the alias import folds
+        // it into the product that owns it), so a Comax row for one describes
+        // that product — not a hidden item the site forgot.
+        for (const alias of product.scannableBarcodes || []) {
+            const aliasKey = normBarcode(alias)
+            if (aliasKey) ownerByAlias.set(aliasKey, key)
+        }
     }
+    const productForBarcode = key =>
+        productByBarcode.get(key) || productByBarcode.get(ownerByAlias.get(key))
     const gs1Set = new Set((gs1EveryBarcode || []).map(normBarcode))
     const gs1CheckedAt = new Map()
     for (const row of gs1NoRecord || []) {
@@ -287,7 +297,7 @@ async function build(DL) {
     const docless = new Set()
     for (const item of comax) {
         const key = normBarcode(item.barcode)
-        if (key && !productByBarcode.has(key)) docless.add(key)
+        if (key && !productForBarcode(key)) docless.add(key)
     }
     const gs1Fallback = docless.size ? await readGs1Fallback(DL, docless) : new Map()
 
@@ -320,7 +330,7 @@ async function build(DL) {
 
     const rows = comax.map(item => {
         const key = normBarcode(item.barcode)
-        const product = productByBarcode.get(key)
+        const product = productForBarcode(key)
         const subGroupCode = String(item.subGroupCode ?? '').trim()
         const flags = flagsBySubGroup.get(subGroupCode)
         const explained = explainStatus({

@@ -2,6 +2,7 @@ import DataManager from 'features/DataManager'
 import { useModal } from 'common/components/Modal'
 import LoadKashrutModal from './LoadKashrutModal'
 import LoadImagesModal from './LoadImagesModal'
+import LoadBarcodeAliasesModal from './LoadBarcodeAliasesModal'
 import styles from './products.module.css'
 
 export default function Products({ }) {
@@ -29,10 +30,20 @@ export default function Products({ }) {
         )
     }
 
+    const loadBarcodeAliases = {
+        icon: 'upload',
+        text: 'action_load_barcode_aliases',
+        permission: 'product:update',
+        onClick: ({ refresh }) => openModal(
+            <LoadBarcodeAliasesModal onDone={refresh} />,
+            { title: 'product_load_barcode_aliases' }
+        )
+    }
+
     return <div className={styles.products}>
         <DataManager
             apiRoute='product'
-            actions={[loadKashrut, loadImages, 'add', 'export', 'refresh']}
+            actions={[loadKashrut, loadImages, loadBarcodeAliases, 'add', 'export', 'refresh']}
             defaultSort={{ updatedAt: -1 }}
             rowActions={['edit']}
             onRowClick={console.log}

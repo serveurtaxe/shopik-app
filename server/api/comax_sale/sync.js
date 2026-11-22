@@ -1,5 +1,6 @@
 import { updateSalesAndProducts } from '../sale/sync.js'
 import { findInflatedBarcode } from '#server/utils/data/validateSalePrice.js'
+import { readAliasIndex } from '#server/services/productFamily.js'
 const IGNORE_PROMO_TYPES = [18, 19, 5, 6, 9, 10]
 
 const round2 = n => Math.round(Number(n) * 100) / 100
@@ -370,6 +371,15 @@ export default async function syncComaxSales(payload, { DL }) {
         (activeProducts || []).map(p => [p.barcode, minAcrossDomains(p?.prices)])
     )
 
+    // Comax runs a promotion on one barcode; the catalog sells one product that
+    // may be scanned under several (`scannableBarcodes`). A sale found on an
+    // alias belongs to the product that owns that alias, so every barcode a
+    // sale resolves to is normalized to its owner before it is matched against
+    // the catalog. Without this a promo under a retired code would silently
+    // apply to nothing.
+    const { ownerByAlias } = await readAliasIndex(DL)
+    const ownerOf = barcode => (barcode && ownerByAlias.get(barcode)) || barcode
+
     // Collect all item Kods for barcode resolution, plus the model Kods some
     // sales are defined on. Model Kods are resolved through
     // comax_products.models.id, not through the product barcode.
@@ -405,15 +415,26 @@ export default async function syncComaxSales(payload, { DL }) {
             { limit: 0 }
         )
 
+        // Comax knows barcodes, the catalog knows products: an alias row has no
+        // product doc of its own (the import folded it into its owner), so the
+        // maps are keyed by the barcode the sale can be matched and priced on —
+        // the owner's. The deposit keeps the cheapest of the family, which is the
+        // same "cheapest eligible item of the bundle" rule as before.
         for (const p of matchingProducts) {
-            if (p.comaxId) kodToBarcodeMap.set(String(p.comaxId), p.barcode)
-            if (p.barcode) kodToBarcodeMap.set(String(p.barcode), p.barcode)
-            if (p.barcode && Number(p.trailingPrice) > 0)
-                barcodeToDepositMap.set(p.barcode, Number(p.trailingPrice))
+            if (!p.barcode) continue
+            const barcode = ownerOf(p.barcode)
+            if (p.comaxId) kodToBarcodeMap.set(String(p.comaxId), barcode)
+            kodToBarcodeMap.set(String(p.barcode), barcode)
+
+            const deposit = Number(p.trailingPrice)
+            if (deposit > 0) {
+                const known = Number(barcodeToDepositMap.get(barcode)) || 0
+                if (!known || deposit < known) barcodeToDepositMap.set(barcode, deposit)
+            }
         }
 
         for (const [kod, barcodes] of buildModelKodToBarcodes(matchingProducts, modelKodsSet)) {
-            modelKodToBarcodes.set(kod, barcodes)
+            modelKodToBarcodes.set(kod, [...new Set(barcodes.map(ownerOf))])
         }
     }
 

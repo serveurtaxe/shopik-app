@@ -90,7 +90,13 @@ export function planUploadFiles(files = [], products = []) {
         .map(([barcode, names]) => ({ barcode, names }))
     for (const { barcode } of conflicts) byBarcode.delete(barcode)
 
-    const productByBarcode = new Map((products || []).map(p => [p?.barcode, p]))
+    const productByBarcode = new Map()
+    for (const product of products || []) {
+        if (product?.barcode) productByBarcode.set(product.barcode, product)
+        // The file may be named after a scan alias; it describes the owner.
+        for (const alias of product?.scannableBarcodes || [])
+            productByBarcode.set(String(alias), product)
+    }
     const unmatched = []
     const accepted = []
     const sources = {}
@@ -194,10 +200,12 @@ async function runUpload({ DL, barcode, fileBase64 }) {
     if (buffer.length > MAX_FILE_BYTES)
         throw { status: 400, message: `file too large (max ${MAX_FILE_BYTES / 1024 / 1024}MB)` }
 
-    const product = await DL.Product.readOne(
-        { barcode },
-        { _id: 0, id: 1, barcode: 1, name: 1, images: 1, status: 1 }
-    )
+    const select = { _id: 0, id: 1, barcode: 1, name: 1, images: 1, status: 1 }
+    let product = await DL.Product.readOne({ barcode }, select)
+    // The file may be named after a scan alias; the image belongs to the
+    // product that owns that barcode.
+    if (!product && DL.Product.Model?.findOne)
+        product = await DL.Product.Model.findOne({ scannableBarcodes: barcode }, select).lean()
     if (!product) throw { status: 404, message: `no product with barcode ${barcode}` }
 
     const meta = await readImage(buffer)
