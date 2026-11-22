@@ -145,8 +145,9 @@ export default async function upload_file(payload, { DL, external }) {
                 } catch {
                     throw { status: 400, message: 'invalid image' }
                 }
+                const variants = Object.entries(sizes)
                 await Promise.all(
-                    Object.entries(sizes).map(([name, data]) =>
+                    variants.map(([name, data]) =>
                         store.uploadFile({
                             path: path.posix.join(baseDir, `${name}.webp`),
                             data,
@@ -155,7 +156,13 @@ export default async function upload_file(payload, { DL, external }) {
                         })
                     )
                 )
-                basePath = baseDir
+                // Single-variant settings (e.g. seo.ogImage's convert-only
+                // `full`) store the exact file, so consumers resolve it without
+                // guessing the variant name. Multi-variant settings store the
+                // base dir and callers pick a size.
+                basePath = variants.length === 1
+                    ? path.posix.join(baseDir, `${variants[0][0]}.webp`)
+                    : baseDir
             } else {
                 const rawType = type || (ext === '.svg' ? 'image/svg+xml' : 'image/x-icon')
                 const name = `${sanitizeName(path.basename(String(filename || 'image'), path.extname(String(filename || ''))) || 'image')}${ext || (rawType === 'image/svg+xml' ? '.svg' : '.ico')}`
