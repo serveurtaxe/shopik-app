@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildDocPayload, buildInvoiceItems, buildPaymentRow, vatTypeOf, DOC_TYPE, VAT_TYPE } from '../../common/functions/invoice/payload.js'
+import { buildDocPayload, buildInvoiceItems, buildPaymentRow, cardTypeCode, vatTypeOf, DOC_TYPE, VAT_TYPE, CARD_DEAL_TYPE } from '../../common/functions/invoice/payload.js'
 import { readVatSummary } from '../../common/functions/invoice/summary.js'
 
 const lines = [
@@ -68,6 +68,16 @@ describe('buildDocPayload', () => {
         assert.equal(payload.item.length, 3)
     })
 
+    it('prints the order number as the document description', () => {
+        const payload = buildDocPayload({ order, lines, customer })
+        assert.equal(payload.description, 'הזמנה 12345')
+    })
+
+    it('omits the description when the order has no number', () => {
+        const payload = buildDocPayload({ order: { name: 'Order Name' }, lines })
+        assert.equal('description' in payload, false)
+    })
+
     it('uses the credit type and records the original document in the note', () => {
         const payload = buildDocPayload({
             order, lines, customer, docType: DOC_TYPE.CREDIT,
@@ -129,6 +139,19 @@ describe('buildDocPayload', () => {
         assert.equal(keys.includes('item'), true)
     })
 
+    it('sends only display fields on a card payment row', () => {
+        const payment = [buildPaymentRow({
+            amount: 155,
+            settings: { paymentType: 3 },
+            card: { last4: '1234', company: 'Visa', installments: 3 }
+        })]
+        const payload = buildDocPayload({ order, lines, customer, payment })
+        assert.deepEqual(Object.keys(payload.payment[0]).sort(), [
+            'cc_deal_type', 'cc_num_of_payments', 'cc_number', 'cc_payment_num',
+            'cc_type', 'cc_type_name', 'date', 'payment_sum', 'payment_type'
+        ])
+    })
+
     it('does not ask EZcount to send when there is no email', () => {
         const payload = buildDocPayload({ order: { number: 1 }, lines })
         assert.equal(payload.dont_send_email, 'true')
@@ -150,6 +173,23 @@ describe('buildDocPayload', () => {
     })
 })
 
+describe('cardTypeCode', () => {
+    it('maps the card company to the EZcount code', () => {
+        assert.equal(cardTypeCode('Visa'), 2)
+        assert.equal(cardTypeCode('MasterCard'), 99)
+        assert.equal(cardTypeCode('Isracard'), 1)
+        assert.equal(cardTypeCode('Diners'), 3)
+        assert.equal(cardTypeCode('Amex'), 4)
+        assert.equal(cardTypeCode('Leumi Card'), 6)
+    })
+
+    it('falls back to 0 for an unknown or missing company', () => {
+        assert.equal(cardTypeCode('PL'), 0)
+        assert.equal(cardTypeCode(''), 0)
+        assert.equal(cardTypeCode(undefined), 0)
+    })
+})
+
 describe('buildPaymentRow', () => {
     it('defaults to the neutral "other" payment type', () => {
         const row = buildPaymentRow({ amount: 155, date: new Date(2026, 9, 28) })
@@ -165,6 +205,57 @@ describe('buildPaymentRow', () => {
         assert.equal(row.payment_sum, 20.01)
         assert.equal(row.other_payment_type_name, 'Hyp')
         assert.equal(row.date, '05/01/2026')
+    })
+
+    it('prints the card company, last 4 digits and installments', () => {
+        const row = buildPaymentRow({
+            amount: 155,
+            settings: { paymentType: 3 },
+            date: new Date(2026, 9, 28),
+            card: { last4: '1234', company: 'Visa', installments: 3 }
+        })
+        assert.equal(row.payment_type, 3)
+        assert.equal(row.cc_type, 2)
+        assert.equal(row.cc_type_name, 'Visa')
+        assert.equal(row.cc_number, '1234')
+        assert.equal(row.cc_deal_type, CARD_DEAL_TYPE.PAYMENTS)
+        assert.equal(row.cc_num_of_payments, 3)
+        assert.equal(row.cc_payment_num, 0)
+    })
+
+    it('keeps a leading zero in the last 4 digits', () => {
+        const row = buildPaymentRow({
+            amount: 10,
+            settings: { paymentType: 3 },
+            card: { last4: '0123', company: 'MasterCard', installments: 1 }
+        })
+        assert.equal(row.cc_number, '0123')
+        assert.equal(row.cc_type, 99)
+        assert.equal(row.cc_deal_type, CARD_DEAL_TYPE.REGULAR)
+        assert.equal(row.cc_num_of_payments, 1)
+    })
+
+    it('labels an unknown company and defaults the installment count', () => {
+        const row = buildPaymentRow({
+            amount: 10,
+            settings: { paymentType: 3 },
+            card: { last4: '9999', company: 'PL', installments: 0 }
+        })
+        assert.equal(row.cc_type, 0)
+        assert.equal(row.cc_type_name, 'PL')
+        assert.equal(row.cc_num_of_payments, 1)
+        assert.equal(row.cc_deal_type, CARD_DEAL_TYPE.REGULAR)
+    })
+
+    it('falls back to "other" when there are no card details', () => {
+        const row = buildPaymentRow({
+            amount: 10,
+            settings: { paymentType: 3, paymentName: 'Hyp' },
+            card: { company: 'Visa', installments: 2 }
+        })
+        assert.equal(row.payment_type, 9)
+        assert.equal(row.other_payment_type_name, 'Hyp')
+        assert.equal('cc_number' in row, false)
     })
 })
 
