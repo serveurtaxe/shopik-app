@@ -5,10 +5,10 @@ import Icon from 'common/components/Icon'
 import classNames from 'common/functions/classNames'
 import styles from './detail.module.css'
 
-export function InfoRow({ icon, label, children }) {
+export function InfoRow({ icon, label, children, grow }) {
     return <Flex gap={12} alignItems='flex-start'>
         <Icon name={icon} size={22} className={styles.infoIcon} />
-        <Flex col gap={4}>
+        <Flex col gap={4} grow={grow}>
             {label && <Text size='l' bold>{label}</Text>}
             {children}
         </Flex>

@@ -51,7 +51,7 @@ export default function Order() {
             onChanged={refresh}
         />}
         sidebar={<>
-            <OrderDetailsCard order={order} />
+            <OrderDetailsCard order={order} onChanged={refresh} />
             <PaymentDetailsCard order={order} onChanged={refresh} />
             <InvoiceSection order={order} onChanged={refresh} />
         </>}
