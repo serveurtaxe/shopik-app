@@ -42,7 +42,7 @@ function fakeProductModel(docs) {
     }
 }
 
-function makeDL({ owners = [], comaxRows = [], deletedDocs = [] }) {
+function makeDL({ owners = [], comaxRows = [] }) {
     const Model = fakeProductModel(owners)
     const writes = []
     return {
@@ -60,13 +60,6 @@ function makeDL({ owners = [], comaxRows = [], deletedDocs = [] }) {
             },
             ComaxProduct: {
                 read: async (filter = {}) => (comaxRows || []).filter(row => (filter.barcode?.$in || []).includes(row.barcode))
-            },
-            DeletedProduct: {
-                Model: {
-                    find: () => ({
-                        sort: () => ({ lean: async () => deletedDocs })
-                    })
-                }
             }
         }
     }
@@ -136,19 +129,6 @@ describe('comax sync family pass', () => {
         // Three reads: two owners and the empty page that ends the loop.
         assert.equal(calls.length, 3)
         assert.deepEqual(calls[1].barcode, { $gt: '1111111111111' })
-    })
-
-    it('adds the units a barcode carried before its doc was removed', async () => {
-        const { writes, DL } = makeDL({
-            owners: [owner('1111111111111', ['2222222222222'])],
-            // The alias is a retired code: Comax no longer measures it.
-            comaxRows: [comaxRow('1111111111111', { salesLastDays: 519 })],
-            deletedDocs: [{ barcode: '2222222222222', product: { totalSalesUnits: 207 } }]
-        })
-
-        await runPass({ DL })
-
-        assert.equal(writes[0].update.$set.totalSalesUnits, 726)
     })
 
     it('leaves a family with no Comax row of its own untouched', async () => {

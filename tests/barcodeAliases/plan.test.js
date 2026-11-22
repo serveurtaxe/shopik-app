@@ -73,20 +73,19 @@ describe('barcode alias import plan', () => {
         assert.equal(first.update.totalSalesUnits, 726)
         assert.deepEqual(first.update.storeIds, ['store-a'])
         assert.equal(first.statusAfter, STATUS.ACTIVE)
-        assert.equal(first.salesFromDocs, 0, 'every family barcode was measured by Comax')
         // The old duplicate doc is what gets removed, with everything the
         // restore script needs to put it back.
         assert.deepEqual(first.duplicates.map(dup => dup.barcode), ['2222222222222'])
     })
 
-    it('keeps the sales of a duplicate Comax no longer measures', () => {
+    it('counts only what Comax reports for the family, never a stored total', () => {
         const { rows } = parseAliasCsv('שם מוצר,ברקוד ראשי,ברקוד משני\nביצים 12 יח׳ M,1111111111111,2222222222222')
         const [plan] = planAliasRows({
             rows,
             products: [
                 product('1111111111111', { totalSalesUnits: 519 }),
-                // The retired code has no Comax row any more: its recorded
-                // units would disappear together with its doc.
+                // A retired code: Comax stopped reporting it. Its doc still has
+                // a total, but that number is not Comax's and must not be added.
                 product('2222222222222', { totalSalesUnits: 206 })
             ],
             comaxRows: [comaxRow('1111111111111', { salesLastDays: 519 })],
@@ -95,29 +94,8 @@ describe('barcode alias import plan', () => {
             statuses: STATUS
         }).plans
 
-        assert.equal(plan.salesFromDocs, 206)
-        assert.equal(plan.update.totalSalesUnits, 725)
-        assert.equal(plan.salesAfter, 725)
-    })
-
-    it('writes the same total when the same file is applied again', () => {
-        const { rows } = parseAliasCsv('שם מוצר,ברקוד ראשי,ברקוד משני\nביצים 12 יח׳ M,1111111111111,2222222222222')
-        const [plan] = planAliasRows({
-            rows,
-            // Re-run: the alias doc is gone, its 206 units now live only in the
-            // owner's total and in the snapshot the first run left behind.
-            products: [product('1111111111111', { totalSalesUnits: 725, scannableBarcodes: ['2222222222222'] })],
-            comaxRows: [comaxRow('1111111111111', { salesLastDays: 519 })],
-            deletedDocs: [{ barcode: '2222222222222', totalSalesUnits: 206 }],
-            ownerByAlias: new Map([['2222222222222', '1111111111111']]),
-            categoryLookup: LOOKUP,
-            defaultDomainId: 'dom',
-            statuses: STATUS
-        }).plans
-
-        assert.deepEqual(plan.duplicates, [], 'the alias has no doc to delete any more')
-        assert.equal(plan.salesFromDocs, 206)
-        assert.equal(plan.update.totalSalesUnits, 725)
+        assert.equal(plan.update.totalSalesUnits, 519)
+        assert.equal(plan.salesAfter, 519)
     })
 
     it('removes an alias the sheet no longer lists — the sheet is the source of truth', () => {

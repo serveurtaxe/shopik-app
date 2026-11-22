@@ -15,7 +15,7 @@
 // The plan (`dryRun: true`, the default) performs every read and none of the
 // writes, so the admin can see matches, duplicates and conflicts first.
 
-import { buildFamilyUpdate, readAliasIndex, readDeletedSales } from '#server/services/productFamily.js'
+import { buildFamilyUpdate, readAliasIndex } from '#server/services/productFamily.js'
 import { loadCategoryLookup } from '#server/services/categoryMap/index.js'
 import { shouldEnforceBuyingPrice } from '#server/api/comax_product/syncRules.js'
 import { parseAliasCsv } from './parse.js'
@@ -90,7 +90,6 @@ export function planAliasRows({
     parseErrors = [],
     products = [],
     comaxRows = [],
-    deletedDocs = [],
     ownerByAlias = new Map(),
     categoryLookup,
     defaultDomainId,
@@ -99,15 +98,6 @@ export function planAliasRows({
 } = {}) {
     const productByBarcode = new Map((products || []).map(product => [product.barcode, product]))
     const comaxByBarcode = new Map((comaxRows || []).map(row => [row.barcode, row]))
-
-    // `deleted_products` rows the import wrote earlier. A barcode with a live
-    // doc is skipped: the doc holds the current number, the snapshot is history.
-    const snapshotByBarcode = new Map()
-    for (const snapshot of deletedDocs || []) {
-        const barcode = snapshot?.barcode
-        if (!barcode || productByBarcode.has(barcode) || snapshotByBarcode.has(barcode)) continue
-        snapshotByBarcode.set(barcode, snapshot)
-    }
 
     const mainLines = new Map()
     const secondaryLines = new Map()
@@ -175,24 +165,6 @@ export function planAliasRows({
                 .map(barcode => comaxByBarcode.get(barcode))
                 .filter(Boolean)
             : []
-
-        // Sales Comax can no longer report: an alias barcode that is not
-        // measured any more (a retired code) still carries a total the catalog
-        // learned earlier — in its doc while it has one, and in its
-        // `deleted_products` snapshot after this import removed that doc.
-        // Folding both in is what makes re-applying the same file write the
-        // same total. The owner's own total is never folded in: the family sum
-        // replaces it, and folding it back would count the family sales twice.
-        const salesFromDocs = aliases.reduce((total, barcode) => {
-            if (Number.isFinite(comaxByBarcode.get(barcode)?.salesLastDays)) return total
-            const stored = Number(
-                productByBarcode.has(barcode)
-                    ? productByBarcode.get(barcode).totalSalesUnits
-                    : snapshotByBarcode.get(barcode)?.totalSalesUnits
-            )
-            return Number.isFinite(stored) ? total + stored : total
-        }, 0)
-
         const familyPlan = main
             ? buildFamilyUpdate({
                 owner: { ...main, scannableBarcodes: aliases },
@@ -200,8 +172,7 @@ export function planAliasRows({
                 categoryLookup,
                 defaultDomainId,
                 enforceBuyingPrice,
-                statuses,
-                carriedSales: salesFromDocs
+                statuses
             })
             : null
 
@@ -240,9 +211,6 @@ export function planAliasRows({
             statusAfter: update.status ?? main?.status ?? null,
             salesBefore: main?.totalSalesUnits ?? null,
             salesAfter: update.totalSalesUnits ?? main?.totalSalesUnits ?? null,
-            // Part of salesAfter that came from the deleted duplicates rather
-            // than from a Comax measurement (see the note above).
-            salesFromDocs,
             storesBefore: [...(main?.storeIds || [])],
             storesAfter: update.storeIds ?? [...(main?.storeIds || [])],
             update
@@ -308,10 +276,9 @@ export async function planBarcodeAliases(payload = {}, { DL } = {}) {
 
     const barcodes = [...new Set(rows.flatMap(row => [row.mainBarcode, ...row.secondaries]))]
 
-    const [products, comaxRows, deletedDocs, { ownerByAlias }, categoryLookup, defaultDomain, enforceBuyingPrice] = await Promise.all([
+    const [products, comaxRows, { ownerByAlias }, categoryLookup, defaultDomain, enforceBuyingPrice] = await Promise.all([
         readProducts(DL, barcodes),
         readComaxRows(DL, barcodes),
-        readDeletedSales(DL, barcodes),
         readAliasIndex(DL),
         loadCategoryLookup(DL),
         DL.Domain?.readOne
@@ -325,7 +292,6 @@ export async function planBarcodeAliases(payload = {}, { DL } = {}) {
         parseErrors: errors,
         products,
         comaxRows,
-        deletedDocs,
         ownerByAlias,
         categoryLookup,
         defaultDomainId: defaultDomain?.id,
