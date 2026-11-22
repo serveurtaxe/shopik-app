@@ -1191,6 +1191,7 @@
         "barcode_alias_row_removed": "הסרה: [barcodes]",
         "barcode_alias_row_duplicates": "[count] מוצרים כפולים",
         "barcode_alias_row_sales": "מכירות [before] → [after]",
+        "barcode_alias_row_label_removed": "הוסרה תווית (הברקודים המשניים נושאים תווית אחרת)",
         "barcode_alias_errors": "שגיאות בקובץ",
         "barcode_alias_line": "שורה [line]",
         "barcode_alias_more": "ועוד [count]",

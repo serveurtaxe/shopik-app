@@ -8,7 +8,7 @@ import {
 } from './syncRules.js'
 import { deriveStatus, retailPrice } from './status.js'
 import { loadCategoryLookup, productCategoryFor } from '#server/services/categoryMap/index.js'
-import { buildFamilyUpdate, familyBarcodes, readAliasIndex, readFamilyOwners } from '#server/services/productFamily.js'
+import { buildFamilyUpdate, familyBarcodes, readAliasIndex, readDeletedLabels, readFamilyOwners } from '#server/services/productFamily.js'
 import { invalidateMenu } from '#server/utils/data/getMenu.js'
 import enqueueChangedImages from '#server/services/image/enqueue.js'
 import log from '#server/utils/log.js'
@@ -135,18 +135,27 @@ export async function syncProductFamilies({
             : []
         const rowsByBarcode = new Map((comaxRows || []).map(row => [row.barcode, row]))
 
+        // A brand lives on each barcode's own doc; the aliases' docs were
+        // folded into the owner, so their last label is in the snapshot. The
+        // family may only keep a label all of them share.
+        const deletedLabels = await readDeletedLabels(DL, barcodes)
+
         const updates = []
         for (const owner of ownerProducts) {
             const familyRows = familyBarcodes(owner)
                 .map(barcode => rowsByBarcode.get(barcode))
                 .filter(Boolean)
+            const memberLabels = familyBarcodes(owner)
+                .filter(barcode => barcode !== owner.barcode)
+                .map(barcode => deletedLabels.get(barcode) ?? '')
             const plan = buildFamilyUpdate({
                 owner,
                 rows: familyRows,
                 categoryLookup,
                 defaultDomainId,
                 enforceBuyingPrice,
-                statuses: DL.Product.constants.STATUS
+                statuses: DL.Product.constants.STATUS,
+                memberLabels
             })
             if (plan) updates.push({ barcode: owner.barcode, ...plan.update })
         }

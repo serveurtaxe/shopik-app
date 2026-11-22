@@ -44,6 +44,8 @@ function PlanList({ plans, TR }) {
                     {plan.duplicates.length ? ` · ${TR('barcode_alias_row_duplicates', { count: plan.duplicates.length })}` : ''}
                     {plan.salesBefore !== plan.salesAfter
                         ? ` · ${TR('barcode_alias_row_sales', { before: plan.salesBefore, after: plan.salesAfter })}` : ''}
+                    {plan.labelBefore && !plan.labelAfter
+                        ? ` · ${TR('barcode_alias_row_label_removed')}` : ''}
                     {plan.statusBefore && plan.statusAfter && plan.statusBefore !== plan.statusAfter
                         ? ` · ${plan.statusBefore} → ${plan.statusAfter}` : ''}
                 </Text>
