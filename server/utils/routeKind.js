@@ -40,6 +40,9 @@ const ALSO_READ = new Set([
 export { ALSO_READ }
 
 export function isReadOnlyRoute(route) {
+    // The router passes '/order/mine' while the stress runner passes
+    // 'order/mine'; normalize so the exact-route exceptions below match both.
+    route = String(route ?? '').replace(/^\/+/, '')
     const action = route.split('/').pop() || ''
     if (NEVER_RUN.has(action)) return false
     if (DENY_PREFIXES.some(prefix => action.startsWith(prefix))) return false

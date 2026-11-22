@@ -23,6 +23,13 @@ describe('isReadOnlyRoute', () => {
             'user/register', 'bot/order/create'
         ]) assert.equal(isReadOnlyRoute(route), false, route)
     })
+
+    it('handles the leading slash the router passes', () => {
+        assert.equal(isReadOnlyRoute('/order/mine'), true)
+        assert.equal(isReadOnlyRoute('/payment/refunds'), true)
+        assert.equal(isReadOnlyRoute('/display_block/categories'), true)
+        assert.equal(isReadOnlyRoute('/product/update'), false)
+    })
 })
 
 describe('summarizeLogValue', () => {
@@ -65,5 +72,11 @@ describe('shouldLogRequest', () => {
         assert.equal(shouldLogRequest({ ...read, sampleRate: 0.1, random: () => 0.5 }), false)
         assert.equal(shouldLogRequest({ ...read, sampleRate: 0, random: () => 0 }), false)
         assert.equal(shouldLogRequest({ ...read, sampleRate: 1, random: () => 0.999 }), true)
+    })
+
+    it('samples the router form of an exact-route read', () => {
+        assert.equal(shouldLogRequest({
+            route: '/order/mine', httpStatus: 200, durationMs: 10, sampleRate: 0.1, random: () => 0.5
+        }), false)
     })
 })
