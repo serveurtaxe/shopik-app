@@ -15,7 +15,7 @@
 // The plan (`dryRun: true`, the default) performs every read and none of the
 // writes, so the admin can see matches, duplicates and conflicts first.
 
-import { buildFamilyUpdate, readAliasIndex } from '#server/services/productFamily.js'
+import { buildFamilyUpdate, readAliasIndex, readDeletedLabels } from '#server/services/productFamily.js'
 import { loadCategoryLookup } from '#server/services/categoryMap/index.js'
 import { shouldEnforceBuyingPrice } from '#server/api/comax_product/syncRules.js'
 import { parseAliasCsv } from './parse.js'
@@ -34,6 +34,7 @@ const PRODUCT_SELECT = {
     totalSalesUnits: 1,
     prices: 1,
     buyingPrice: 1,
+    label: 1,
     images: 1,
     kashrut: 1,
     category: 1,
@@ -68,6 +69,7 @@ export function planAliasRows({
     rows = [],
     products = [],
     comaxRows = [],
+    deletedLabels = new Map(),
     ownerByAlias = new Map(),
     categoryLookup,
     defaultDomainId,
@@ -143,7 +145,11 @@ export function planAliasRows({
                 categoryLookup,
                 defaultDomainId,
                 enforceBuyingPrice,
-                statuses
+                statuses,
+                // A brand is per barcode: the alias's own doc while it still
+                // exists, otherwise the label its snapshot kept.
+                memberLabels: aliases.map(barcode =>
+                    productByBarcode.get(barcode)?.label ?? deletedLabels.get(barcode) ?? '')
             })
             : null
 
@@ -177,6 +183,10 @@ export function planAliasRows({
             statusAfter: update.status ?? main?.status ?? null,
             salesBefore: main?.totalSalesUnits ?? null,
             salesAfter: update.totalSalesUnits ?? main?.totalSalesUnits ?? null,
+            // The brand is a family decision: it is dropped when the aliases do
+            // not carry the same label (see familyLabel).
+            labelBefore: main?.label ?? '',
+            labelAfter: update.label ?? main?.label ?? '',
             update
         }
     })
@@ -240,9 +250,10 @@ export async function planBarcodeAliases(payload = {}, { DL } = {}) {
 
     const barcodes = [...new Set(rows.flatMap(row => [row.mainBarcode, ...row.secondaries]))]
 
-    const [products, comaxRows, { ownerByAlias }, categoryLookup, defaultDomain, enforceBuyingPrice] = await Promise.all([
+    const [products, comaxRows, deletedLabels, { ownerByAlias }, categoryLookup, defaultDomain, enforceBuyingPrice] = await Promise.all([
         readProducts(DL, barcodes),
         readComaxRows(DL, barcodes),
+        readDeletedLabels(DL, barcodes),
         readAliasIndex(DL),
         loadCategoryLookup(DL),
         DL.Domain?.readOne
@@ -255,6 +266,7 @@ export async function planBarcodeAliases(payload = {}, { DL } = {}) {
         rows,
         products,
         comaxRows,
+        deletedLabels,
         ownerByAlias,
         categoryLookup,
         defaultDomainId: defaultDomain?.id,

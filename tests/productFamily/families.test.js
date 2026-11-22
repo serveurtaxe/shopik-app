@@ -4,6 +4,7 @@ import {
     buildAliasIndex,
     buildFamilyUpdate,
     familyBarcodes,
+    familyLabel,
     pickEffectiveComaxRow,
     sumFamilySales,
     unionStoreIds
@@ -96,6 +97,28 @@ describe('product barcode families', () => {
     it('unions the stores of the whole family and keeps "never tracked" unknown', () => {
         assert.deepEqual(unionStoreIds([row({ storeIds: ['b', 'a'] }), row({ barcode: '2', storeIds: ['c'] })]), ['a', 'b', 'c'])
         assert.equal(unionStoreIds([row({ storeIds: undefined })]), null)
+    })
+
+    it('keeps a label only when every family barcode carries the same one', () => {
+        assert.equal(familyLabel('ביצי רמות השבים', [' ביצי רמות השבים ']), 'ביצי רמות השבים')
+        assert.equal(familyLabel('רמות', []), 'רמות')
+        // An alias with no brand cannot promise the main's brand.
+        assert.equal(familyLabel('רמות', ['']), '')
+        assert.equal(familyLabel('רמות', ['ביצי אחר']), '')
+        assert.equal(familyLabel('', ['רמות']), '')
+        assert.equal(familyLabel(undefined, [undefined]), '')
+    })
+
+    it('removes the label when an alias carries a different one', () => {
+        const { update } = plan({ owner: owner({ label: 'רמות' }), memberLabels: ['ביצי אחר'] })
+
+        assert.equal(update.label, '')
+    })
+
+    it('leaves the label alone when the family is uniform', () => {
+        const { update } = plan({ owner: owner({ label: 'רמות' }), memberLabels: ['רמות'] })
+
+        assert.equal('label' in update, false)
     })
 
     it('writes the stock union and the sales sum of the family, not of one row', () => {

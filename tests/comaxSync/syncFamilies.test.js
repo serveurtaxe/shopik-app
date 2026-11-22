@@ -42,7 +42,7 @@ function fakeProductModel(docs) {
     }
 }
 
-function makeDL({ owners = [], comaxRows = [] }) {
+function makeDL({ owners = [], comaxRows = [], deletedDocs = [] }) {
     const Model = fakeProductModel(owners)
     const writes = []
     return {
@@ -60,6 +60,11 @@ function makeDL({ owners = [], comaxRows = [] }) {
             },
             ComaxProduct: {
                 read: async (filter = {}) => (comaxRows || []).filter(row => (filter.barcode?.$in || []).includes(row.barcode))
+            },
+            DeletedProduct: {
+                Model: {
+                    find: () => ({ sort: () => ({ lean: async () => deletedDocs }) })
+                }
             }
         }
     }
@@ -129,6 +134,31 @@ describe('comax sync family pass', () => {
         // Three reads: two owners and the empty page that ends the loop.
         assert.equal(calls.length, 3)
         assert.deepEqual(calls[1].barcode, { $gt: '1111111111111' })
+    })
+
+    it('drops the label when an alias says a different brand', async () => {
+        const { writes, DL } = makeDL({
+            owners: [owner('1111111111111', ['2222222222222'], { label: 'ביצי רמות השבים' })],
+            comaxRows: [comaxRow('1111111111111')],
+            // The alias doc was folded into the owner; its last label is here.
+            deletedDocs: [{ barcode: '2222222222222', product: { label: 'ביצי אחר' } }]
+        })
+
+        await runPass({ DL })
+
+        assert.equal(writes[0].update.$set.label, '')
+    })
+
+    it('keeps the label when every alias carries the same brand', async () => {
+        const { writes, DL } = makeDL({
+            owners: [owner('1111111111111', ['2222222222222'], { label: 'רמות' })],
+            comaxRows: [comaxRow('1111111111111')],
+            deletedDocs: [{ barcode: '2222222222222', product: { label: 'רמות' } }]
+        })
+
+        await runPass({ DL })
+
+        assert.equal('label' in writes[0].update.$set, false)
     })
 
     it('leaves a family with no Comax row of its own untouched', async () => {

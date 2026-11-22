@@ -83,6 +83,7 @@ export async function readFamilyOwners(DL, { afterBarcode = null, limit = 1000 }
             scannableBarcodes: 1,
             prices: 1,
             buyingPrice: 1,
+            label: 1,
             images: 1,
             'kashrut.rabbinates': 1,
             category: 1
@@ -90,6 +91,29 @@ export async function readFamilyOwners(DL, { afterBarcode = null, limit = 1000 }
         .sort({ barcode: 1 })
         .limit(Number(limit) || 1000)
         .lean()
+}
+
+/**
+ * Last label of each family barcode whose doc the alias import removed.
+ *
+ * A brand is GS1 data that lived on the alias's own doc; once that doc is gone
+ * the snapshot is the only place left to ask whether the family is uniform.
+ * Raw `Model.find` because `restoredAt` is not a declared filter field.
+ */
+export async function readDeletedLabels(DL, barcodes = []) {
+    const Model = DL?.DeletedProduct?.Model
+    if (!Model?.find || !barcodes?.length) return new Map()
+    const docs = await Model.find(
+        { barcode: { $in: [...new Set(barcodes)] }, restoredAt: null },
+        { _id: 0, barcode: 1, 'product.label': 1 }
+    ).sort({ deletedAt: -1 }).lean()
+
+    const byBarcode = new Map()
+    for (const doc of docs || []) {
+        if (!doc?.barcode || byBarcode.has(doc.barcode)) continue
+        byBarcode.set(doc.barcode, doc?.product?.label ?? '')
+    }
+    return byBarcode
 }
 
 /**
@@ -120,6 +144,23 @@ export function sumFamilySales(rows = []) {
     return measured ? Math.round(total * 1000) / 1000 : null
 }
 
+/**
+ * The label (brand) the family may show.
+ *
+ * `label` comes from GS1 and belongs to one GTIN, not to a family: the picker
+ * may hand over any alias, so a label may only be shown when every barcode in
+ * the family carries the same one. An alias with no label is not "the same" —
+ * it cannot promise the main's brand. Returns '' when they disagree.
+ */
+export function familyLabel(ownerLabel, memberLabels = []) {
+    const labels = [ownerLabel, ...(memberLabels || [])]
+        .map(value => String(value ?? '').trim())
+    const [first] = labels
+    if (!first) return ''
+    const key = first.toLowerCase()
+    return labels.every(label => label.toLowerCase() === key) ? first : ''
+}
+
 // Union of every tracked store list. null when no row was ever tracked, which
 // means "unknown" and must not hide the product.
 export function unionStoreIds(rows = []) {
@@ -144,7 +185,8 @@ function storedPriceOf(owner, defaultDomainId) {
 
 /**
  * The fields the family — rather than a single Comax row — decides for a
- * product: stock union, sales sum and the status derived from them.
+ * product: stock union, sales sum, the status derived from them, and the label
+ * (a brand only when every family barcode carries the same one).
  *
  * Deliberately narrow. Price, name, category and images are not family data:
  * the product's stored price stays (unless it has its own Comax row), and the
@@ -152,6 +194,9 @@ function storedPriceOf(owner, defaultDomainId) {
  * its own the effective alias row supplies the sub-group (and therefore the
  * category) and the `showInWeb`/`archived` signals, nothing else.
  *
+ * @param {{ owner: object, rows?: object[], memberLabels?: string[] }} args
+ *   `memberLabels` are the labels of the owner's aliases (live docs or their
+ *   deleted snapshots), never Comax data — Comax has no brand field.
  * @returns {{ update: object, effective: object, familyRows: object[] } | null}
  */
 export function buildFamilyUpdate({
@@ -160,7 +205,8 @@ export function buildFamilyUpdate({
     categoryLookup,
     defaultDomainId,
     enforceBuyingPrice = false,
-    statuses
+    statuses,
+    memberLabels = []
 } = {}) {
     if (!owner?.barcode || !rows?.length) return null
 
@@ -223,6 +269,12 @@ export function buildFamilyUpdate({
         if (subGroupCode) update.comaxSubGroupCode = subGroupCode
     }
 
+    // A brand only survives while the whole family carries it: the picker may
+    // hand over any alias, so a label the aliases do not share is a promise the
+    // storefront cannot keep.
+    const label = familyLabel(owner.label, memberLabels)
+    if ((owner.label ?? '') !== label) update.label = label
+
     return { update, effective, familyRows }
 }
 
@@ -231,8 +283,10 @@ export default {
     buildAliasIndex,
     readAliasIndex,
     readFamilyOwners,
+    readDeletedLabels,
     pickEffectiveComaxRow,
     sumFamilySales,
     unionStoreIds,
+    familyLabel,
     buildFamilyUpdate
 }

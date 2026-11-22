@@ -301,6 +301,11 @@ export async function enrichBatch({ DL, external, runId, onlyInStock = true, bar
             // doc, so a GTIN left in mapped.doc would rewrite Product.barcode
             // (or upsert a duplicate product under the GTIN).
             const doc = { ...mapped.doc, barcode: short }
+            // The label is the brand GS1 reports for THIS GTIN. When the GTIN is
+            // an alias (or resolved through one), its brand is not the product's
+            // brand — writing it would put another package's brand on the family.
+            // Only the product's own barcode may set the label.
+            if (barcode !== short) delete doc.label
             // A locked name was chosen by a human; the supplier may own every
             // other field but never this one.
             if (nameLockedSet.has(short)) delete doc.name

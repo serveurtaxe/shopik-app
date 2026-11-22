@@ -162,6 +162,54 @@ describe('barcode alias import plan', () => {
         assert.deepEqual(plans[0].update, {})
     })
 
+    it('drops the main label when an alias carries a different brand', () => {
+        const { rows } = parseAliasCsv('שם מוצר,ברקוד ראשי,ברקוד משני\nביצים 30 M,1111111111111,2222222222222')
+        const [plan] = planAliasRows({
+            rows,
+            products: [
+                product('1111111111111', { label: 'ביצי רמות השבים' }),
+                // First import: the alias doc is still there to ask.
+                product('2222222222222', { label: 'ביצי אחר' })
+            ],
+            comaxRows: [comaxRow('1111111111111'), comaxRow('2222222222222')],
+            categoryLookup: LOOKUP,
+            defaultDomainId: 'dom',
+            statuses: STATUS
+        }).plans
+
+        assert.equal(plan.update.label, '')
+    })
+
+    it('reads the alias brand from its snapshot once the doc is gone', () => {
+        const { rows } = parseAliasCsv('שם מוצר,ברקוד ראשי,ברקוד משני\nביצים 30 M,1111111111111,2222222222222')
+        const [plan] = planAliasRows({
+            rows,
+            products: [product('1111111111111', { label: 'רמות', scannableBarcodes: ['2222222222222'] })],
+            comaxRows: [comaxRow('1111111111111')],
+            deletedLabels: new Map([['2222222222222', 'ביצי אחר']]),
+            categoryLookup: LOOKUP,
+            defaultDomainId: 'dom',
+            statuses: STATUS
+        }).plans
+
+        assert.equal(plan.update.label, '')
+    })
+
+    it('leaves a uniform family label alone', () => {
+        const { rows } = parseAliasCsv('שם מוצר,ברקוד ראשי,ברקוד משני\nביצים 30 M,1111111111111,2222222222222')
+        const [plan] = planAliasRows({
+            rows,
+            products: [product('1111111111111', { label: 'רמות', scannableBarcodes: ['2222222222222'] })],
+            comaxRows: [comaxRow('1111111111111')],
+            deletedLabels: new Map([['2222222222222', 'רמות']]),
+            categoryLookup: LOOKUP,
+            defaultDomainId: 'dom',
+            statuses: STATUS
+        }).plans
+
+        assert.equal('label' in plan.update, false)
+    })
+
     it('blocks a secondary token that is not a barcode instead of dropping it', () => {
         const { rows } = parseAliasCsv('ברקוד ראשי,ברקוד משני\n1111111111111,2222222222222 729O001201589')
         const plans = planOf(rows)
