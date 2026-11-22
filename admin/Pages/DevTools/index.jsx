@@ -363,7 +363,7 @@ export default function DevTools() {
                         texts — enriched: {gs1EnrichResult.texts.enriched}, skipped: {gs1EnrichResult.texts.skipped}, batches: {gs1EnrichResult.texts.batches}, rescued: {gs1EnrichResult.texts.rescued}
                     </Text>}
                     {gs1EnrichResult.images && <Text>
-                        images — queued: {gs1EnrichResult.images.queued}, reused: {gs1EnrichResult.images.reused}, noZip: {gs1EnrichResult.images.noZip}, skipped: {gs1EnrichResult.images.skipped}
+                        images — queued: {gs1EnrichResult.images.queued}, reused: {gs1EnrichResult.images.reused}, parked: {gs1EnrichResult.images.parked} ({Object.entries(gs1EnrichResult.images.parkReasons || {}).map(([reason, n]) => `${reason} ${n}`).join(', ') || 'none'}), skipped: {gs1EnrichResult.images.skipped}
                     </Text>}
                 </Flex>}
             </Flex>

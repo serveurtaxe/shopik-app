@@ -48,6 +48,15 @@ const gs1ProductSchema = {
     fingerprint: String,
     stagingPath: String,
     imagesDone: Boolean,
+    // Dated park for the images phase: the last attempt that came back with
+    // nothing usable. The doc stays out of imagesEligibility() until
+    // GS1_IMAGES_RETRY_DAYS (14) passes, so a batch advances past failures
+    // instead of re-reading them at the head of every run.
+    imagesRetriedAt: Date,
+    // Why it was parked: 'no-zip' | 'unwrappable' | 'no-account'. 'no-account'
+    // (GS1 holds the product but not its media for our account) is permanent
+    // and is never retried automatically.
+    imagesRetryReason: String,
     raw: {},
     syncedAt: {
         type: Date,

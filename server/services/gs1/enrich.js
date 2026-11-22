@@ -550,10 +550,54 @@ export async function requeueRescued({ DL, onlyInStock = true, barcode = '' }) {
 // (needed to backfill alternates onto pre-alternates mains).
 // limit: max raw docs to take this call (0 = all) — keeps single HTTP calls
 // inside Cloud Run request timeouts; repeat until queued=0.
+const DAY_MS = 24 * 60 * 60 * 1000
+
+// How long a failed attempt parks its doc. Long enough that the batch loop
+// walks the whole catalog instead of re-reading the same failures every run,
+// short enough that media GS1 publishes later gets picked up on its own (a
+// force run ignores the window).
+const imagesRetryDays = () => {
+    const value = Number(process.env.GS1_IMAGES_RETRY_DAYS)
+    return Number.isFinite(value) && value > 0 ? value : 14
+}
+
+/**
+ * Which gs1_products docs the images phase takes. Exported for tests: this
+ * filter is the whole parking mechanism, and getting it wrong silently stops
+ * the phase (prod sat at 8,313 never-imaged docs behind exactly that).
+ *
+ * force   — ignore imagesDone and the park window (manual backfill)
+ * barcode — single-product probe: ignores the park window, so the answer is
+ *           about GS1, not about when we last asked.
+ */
+export function imagesEligibility({ barcode = '', force = false, retryDays = imagesRetryDays(), now = Date.now() } = {}) {
+    const base = barcode ? { status: 'enriched', barcode } : { status: 'enriched' }
+    if (force) return { ...base, assetCount: { $gt: 0 } }
+    const filter = { ...base, assetCount: { $gt: 0 }, imagesDone: { $ne: true } }
+    if (!barcode) {
+        filter.$or = [
+            { imagesRetriedAt: { $exists: false } },
+            { imagesRetriedAt: { $lte: new Date(now - retryDays * DAY_MS) } }
+        ]
+        // 'no-account' means GS1 does not expose this product's media to us at
+        // all: permanent for the barcode, so it is never retried automatically.
+        filter.imagesRetryReason = { $ne: 'no-account' }
+    }
+    return filter
+}
+
+// Why a doc was parked. GS1's 400 ("pcode is cannot be null") is a per-account
+// visibility answer, not a failure — retrying it is pure waste.
+export const parkReason = e => (e?.notFound ? 'no-account' : 'no-zip')
+
+const formatParkReasons = reasons => Object.entries(reasons)
+    .map(([reason, n]) => `${reason} ${n}`).join(', ') || 'none'
+
 export async function runImages({ DL, external, runId, force = false, limit = 0, barcode = '' }) {
     const cap = Number(limit || process.env.GS1_IMAGE_LIMIT || 0)
     const limitZip = pLimit(zipConcurrency())
-    const totals = { queued: 0, noZip: 0, skipped: 0, reused: 0 }
+    const totals = { queued: 0, skipped: 0, reused: 0, parked: 0, parkReasons: {} }
+    const parkedSamples = []
     let taken = 0
     // Barcodes already handled this call. The loop pages the collection, but
     // a still-eligible doc (force runs ignore imagesDone; a queued doc's
@@ -563,18 +607,15 @@ export async function runImages({ DL, external, runId, force = false, limit = 0,
     const seen = new Set()
     for (; ;) {
         if (cap && taken >= cap) break
-        const baseFilter = barcode
-            ? { status: 'enriched', barcode }
-            : { status: 'enriched' }
         const raws = await DL.Gs1Product.read(
-            force ? { ...baseFilter, assetCount: { $gt: 0 } }
-                : { ...baseFilter, assetCount: { $gt: 0 }, imagesDone: { $ne: true } },
+            imagesEligibility({ barcode, force }),
             { _id: 0, barcode: 1, raw: 1, aliasShort: 1, aliasStatus: 1 },
             { limit: imageBatchSize() }
         )
         if (!raws?.length) break
         const fresh = raws.filter(r => r?.barcode && !seen.has(r.barcode))
-        // Whole batch already handled → no forward progress possible.
+        // Nothing here is new to this call: every doc in the page was handled
+        // above or is parked, so the eligible set is drained.
         if (!fresh.length) break
         for (const r of fresh) seen.add(r.barcode)
 
@@ -644,6 +685,15 @@ export async function runImages({ DL, external, runId, force = false, limit = 0,
 
         await Promise.all(raws.map(stored => limitZip(async () => {
             const barcode = stored.barcode
+            // A failed attempt leaves a dated park so the phase advances: the
+            // doc drops out of imagesEligibility() until the window passes,
+            // instead of being re-fetched at the head of every batch.
+            const park = reason => {
+                bufferRaw({ barcode, imagesRetriedAt: new Date(), imagesRetryReason: reason })
+                totals.parked++
+                totals.parkReasons[reason] = (totals.parkReasons[reason] || 0) + 1
+                if (parkedSamples.length < 20) parkedSamples.push(`${barcode}(${reason})`)
+            }
             const product = productByBarcode.get(barcode)
             if (!product) {
                 bufferRaw({ barcode, status: 'skipped', skipReason: 'no-product-images' })
@@ -733,21 +783,16 @@ export async function runImages({ DL, external, runId, force = false, limit = 0,
                     return
                 }
                 log.warn(`[GS1] Zip failed for ${barcode}:`, e?.message || e)
-                totals.noZip++
-                return
+                return park(parkReason(e))
             }
-            if (!zip) {
-                totals.noZip++
-                return
-            }
+            if (!zip) return park('no-zip')
             // Only a zip may be staged: the pipeline unzips it in phase 3, so
             // anything else (a JSON error body, HTML, an image we could not
             // wrap) would be uploaded, queued, and fail there — after paying for
             // the upload, leaving a stagingPath to an object phase 3 deleted.
             if (!isZipBuffer(zip)) {
                 log.warn(`[GS1] Not a zip for ${barcode} (${zip.length} bytes, via=${via}) — not staging`)
-                totals.noZip++
-                return
+                return park('unwrappable')
             }
             mem(`zip-downloaded gtin=${barcode} via=${via} bytes=${zip.length}`)
             const stagingPath = await stageZip(barcode, zip)
@@ -768,10 +813,15 @@ export async function runImages({ DL, external, runId, force = false, limit = 0,
         bufferProgress(runId, { processed: raws.length })
         await flush()
         taken += raws.length
-        mem(`images-batch taken=${taken} queued=${totals.queued} reused=${totals.reused} noZip=${totals.noZip}`)
+        mem(`images-batch taken=${taken} queued=${totals.queued} reused=${totals.reused} parked=${totals.parked}`)
     }
     await flush()
-    log.success(`[GS1] Images launch done: ${totals.queued} queued, ${totals.reused} reused, ${totals.noZip} no-zip, ${totals.skipped} skipped`)
+    log.success(`[GS1] Images launch done: ${totals.queued} queued, ${totals.reused} reused, `
+        + `${totals.parked} parked (${formatParkReasons(totals.parkReasons)}), ${totals.skipped} skipped`)
+    // Bounded sample: the full list is in gs1_products (imagesRetryReason /
+    // imagesRetriedAt), and the log is the only place a run says what went wrong.
+    if (parkedSamples.length)
+        log.info(`[GS1] Parked: ${parkedSamples.join(', ')}${totals.parked > parkedSamples.length ? ', …' : ''}`)
     return totals
 }
 
