@@ -2,7 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { rewriteCartRefs } from '../../server/services/barcodeAliases/index.js'
 
-// Minimal stand-in for the order/guest-cart model: it only has to honour the
+// Minimal stand-in for the guest-cart model: it only has to honour the
 // filters and arrayFilters the rewrite actually issues, plus id keyset paging.
 function fakeModel(docs) {
     const calls = []
@@ -61,7 +61,7 @@ function fakeModel(docs) {
 
 const MAPPING = { barcode: '2222222222222', id: 'p-dup', ownerBarcode: '1111111111111', ownerId: 'p-main' }
 
-describe('order and cart reference rewrite', () => {
+describe('guest cart reference rewrite', () => {
     it('points a scanned barcode line at the owning product and keeps the snapshot', async () => {
         const Model = fakeModel([
             { id: 'o1', cart: [{ id: 'p-dup', barcode: '2222222222222', name: 'ביצים 12', price: 12, image: 'x.png' }] }
@@ -89,7 +89,7 @@ describe('order and cart reference rewrite', () => {
         assert.equal(Model.docs[0].cart[0].count, 2)
     })
 
-    it('leaves other lines of the same order alone', async () => {
+    it('leaves the other lines of the same cart alone', async () => {
         const Model = fakeModel([
             {
                 id: 'o1',

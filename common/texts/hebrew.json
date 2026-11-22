@@ -1182,7 +1182,6 @@
         "barcode_alias_duplicates": "מוצרים כפולים למחיקה",
         "barcode_alias_parse_errors": "שגיאות בקובץ",
         "barcode_alias_deleted": "מוצרים שנמחקו",
-        "barcode_alias_orders": "הזמנות שעודכנו",
         "barcode_alias_carts": "עגלות שעודכנו",
         "barcode_alias_dry_note": "לא בוצעו שינויים. לחצו 'ייבוא בפועל' כדי לשמור. שורות חסומות לא ייובאו.",
         "barcode_alias_applied_note": "הייבוא הושלם.",

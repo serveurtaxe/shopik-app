@@ -49,34 +49,36 @@ const comaxRow = (barcode, overrides = {}) => ({
     ...overrides
 })
 
-function makeDL({ orders = [] }) {
+function makeDL({ orders = [], guestCarts = [] }) {
     const calls = { updates: [], deleted: [], snapshots: [], writes: [] }
 
-    const orderModel = {
+    // Same `cart` shape in orders and guest carts, so one fake model drives
+    // both — and the test can assert that only the cart side changes.
+    const cartModelFor = docs => ({
         find(filter = {}) {
             const after = filter.id?.$gt
             const wanted = filter.$or.flatMap(sub => [
                 ...(sub['cart.barcode']?.$in || []),
                 ...(sub['cart.id']?.$in || [])
             ])
-            const found = orders
-                .filter(order => !after || order.id > after)
-                .filter(order => order.cart.some(item => wanted.includes(item.barcode) || wanted.includes(item.id)))
+            const found = docs
+                .filter(doc => !after || doc.id > after)
+                .filter(doc => doc.cart.some(item => wanted.includes(item.barcode) || wanted.includes(item.id)))
                 .sort((a, b) => a.id.localeCompare(b.id))
             let cap = 0
             const chain = {
                 sort: () => chain,
                 limit: n => { cap = n; return chain },
-                lean: async () => found.slice(0, cap || found.length).map(order => ({ id: order.id }))
+                lean: async () => found.slice(0, cap || found.length).map(doc => ({ id: doc.id }))
             }
             return chain
         },
         async updateMany(filter = {}, update = {}, options = {}) {
             let modifiedCount = 0
-            for (const order of orders) {
-                if (filter.id?.$in && !filter.id.$in.includes(order.id)) continue
+            for (const doc of docs) {
+                if (filter.id?.$in && !filter.id.$in.includes(doc.id)) continue
                 let changed = 0
-                for (const item of order.cart) {
+                for (const item of doc.cart) {
                     const rule = options.arrayFilters[0]
                     const [key, wanted] = Object.entries(rule)[0]
                     if (item[key.replace(/^item\./, '')] !== wanted) continue
@@ -88,7 +90,7 @@ function makeDL({ orders = [] }) {
             }
             return { modifiedCount }
         }
-    }
+    })
 
     return {
         calls,
@@ -123,8 +125,8 @@ function makeDL({ orders = [] }) {
                 read: async () => [{ subGroupCode: '10110', categoryId: 'nc:206:2027', showOnSite: true, requireKashrut: false, categoryActive: true }]
             },
             Domain: { readOne: async () => ({ id: 'dom' }) },
-            Order: { Model: orderModel },
-            GuestCart: { Model: null }
+            Order: { Model: cartModelFor(orders) },
+            GuestCart: { Model: cartModelFor(guestCarts) }
         }
     }
 }
@@ -147,12 +149,14 @@ describe('barcode alias import apply', () => {
         assert.equal(plan.salesAfter, 726)
     })
 
-    it('snapshots the duplicate, deletes it and repoints the orders', async () => {
+    it('snapshots the duplicate, deletes it and leaves the orders alone', async () => {
+        const line = () => ({ id: 'p-dup', barcode: '2222222222222', name: 'ביצים 12 ישנות', price: 11 })
         const orders = [
-            { id: 'o1', cart: [{ id: 'p-dup', barcode: '2222222222222', name: 'ביצים 12 ישנות', price: 11 }] },
+            { id: 'o1', cart: [line()] },
             { id: 'o2', cart: [{ id: 'p-other', barcode: '5555555555555' }] }
         ]
-        const { calls, DL } = makeDL({ orders })
+        const guestCarts = [{ id: 'c1', cart: [line()] }]
+        const { calls, DL } = makeDL({ orders, guestCarts })
 
         const report = await planBarcodeAliases({ csv: CSV, dryRun: false, adminId: 'admin-1' }, { DL })
 
@@ -174,11 +178,14 @@ describe('barcode alias import apply', () => {
         assert.deepEqual(calls.deleted, [{ id: 'p-dup' }])
 
         assert.equal(report.applied.deleted, 1)
-        assert.equal(report.applied.ordersRewritten, 1)
-        assert.deepEqual(orders[0].cart[0], {
+        // A placed order is history: the line keeps what the customer bought.
+        assert.deepEqual(orders[0].cart[0], line())
+        assert.deepEqual(orders[1].cart[0], { id: 'p-other', barcode: '5555555555555' })
+        // A live cart must point at a product that still exists.
+        assert.equal(report.applied.cartsRewritten, 1)
+        assert.deepEqual(guestCarts[0].cart[0], {
             id: 'p-main', barcode: '1111111111111', name: 'ביצים 12 ישנות', price: 11
         })
-        assert.deepEqual(orders[1].cart[0], { id: 'p-other', barcode: '5555555555555' })
     })
 
     it('applies nothing when every row is blocked', async () => {

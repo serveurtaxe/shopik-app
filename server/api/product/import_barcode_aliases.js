@@ -6,7 +6,7 @@ import { planBarcodeAliases } from '#server/services/barcodeAliases/index.js'
  * `dryRun` defaults to true (the modal's "בדיקה בלבד" step); `dryRun: false`
  * applies every clean row. The service owns the whole plan/apply flow
  * (services/barcodeAliases/index.js), including the deleted_products snapshot
- * and the order/cart reference rewrite.
+ * and the live guest-cart reference rewrite.
  *
  * POST /api/product/import_barcode_aliases { csv, dryRun? }
  */

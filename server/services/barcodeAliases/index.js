@@ -7,9 +7,8 @@
 //      merged `scannableBarcodes`, and the family stock/sales/status;
 //   2. moves every product doc whose barcode became an alias into
 //      `deleted_products` (whole raw doc + rollback info), then deletes it;
-//   3. rewrites the `id`/`barcode` of those lines in orders and guest carts.
-//      Names, prices and images on the line are historical snapshots and are
-//      left alone;
+//   3. repoints the lines of live guest carts at the owner (orders are history:
+//      their line snapshots are left exactly as the customer saw them);
 //   4. returns a report of what happened.
 //
 // The plan (`dryRun: true`, the default) performs every read and none of the
@@ -357,11 +356,12 @@ export async function planBarcodeAliases(payload = {}, { DL } = {}) {
 }
 
 /**
- * Rewrite `cart[].id` / `cart[].barcode` from a deleted product to its owner.
+ * Rewrite `cart[].id` / `cart[].barcode` from a deleted product to its owner
+ * (guest carts only — placed orders are history and are never rewritten).
  *
- * Keyset-paged by order id and applied per alias with `arrayFilters`, so only
- * the matching line changes. Name/price/images on the line are the snapshot
- * the customer saw and are deliberately untouched.
+ * Keyset-paged by document id and applied per alias with `arrayFilters`, so
+ * only the matching line changes. Name/price/images on the line are the
+ * snapshot the customer saw and are deliberately untouched.
  */
 export async function rewriteCartRefs(Model, mappings = []) {
     if (!Model?.find || !mappings?.length) return 0
@@ -409,7 +409,6 @@ export async function rewriteCartRefs(Model, mappings = []) {
 export async function applyBarcodeAliases(plans = [], { DL, adminId = null } = {}) {
     const applicable = plans.filter(plan => plan.mainFound && !plan.blocked)
     let deleted = 0
-    let ordersRewritten = 0
     let cartsRewritten = 0
     const rows = []
 
@@ -447,16 +446,17 @@ export async function applyBarcodeAliases(plans = [], { DL, adminId = null } = {
             })
         }
 
-        // 3. Historical lines keep their snapshot but point at the product.
+        // 3. A live cart must not point at a product that no longer exists —
+        // checkout would have nothing to sell. Placed orders are history and
+        // keep the barcode/id the customer actually bought under.
         if (mappings.length) {
-            ordersRewritten += await rewriteCartRefs(DL.Order?.Model, mappings)
             cartsRewritten += await rewriteCartRefs(DL.GuestCart?.Model, mappings)
         }
 
         rows.push({ line: plan.line, mainBarcode: plan.mainBarcode, deleted: mappings.length })
     }
 
-    return { rows: applicable.length, deleted, ordersRewritten, cartsRewritten, detail: rows }
+    return { rows: applicable.length, deleted, cartsRewritten, detail: rows }
 }
 
 export default { planBarcodeAliases, planAliasRows, applyBarcodeAliases, rewriteCartRefs }

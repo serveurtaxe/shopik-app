@@ -193,7 +193,6 @@ export default function LoadBarcodeAliasesModal({ onDone }) {
 
             {appliedReport && <Flex gap={16} wrap>
                 <Stat TR={TR} label='barcode_alias_deleted' value={appliedReport.deleted} />
-                <Stat TR={TR} label='barcode_alias_orders' value={appliedReport.ordersRewritten} />
                 <Stat TR={TR} label='barcode_alias_carts' value={appliedReport.cartsRewritten} />
             </Flex>}
 
