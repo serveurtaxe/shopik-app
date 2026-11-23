@@ -5,6 +5,11 @@ import pkg from '#package.json' with { type: 'json' }
 import uid from '#common/functions/uid.js'
 import { acquireRequestLock } from '#server/utils/requestLock.js'
 import { isRedisReady } from '#server/utils/redisSafe.js'
+import {
+    requestLogEnabled,
+    shouldLogRequest,
+    summarizeLogValue
+} from '#server/utils/requestLog.js'
 
 const appVersion = pkg?.version || 'unknown'
 
@@ -74,11 +79,12 @@ export default function router(app, bootData) {
         const route = req.path.replace(/^api\/?/, '').replace(/\/$/, '')
         const apiFunction = apiRoutes[route]
         const requestId = uid(16)
+        const requestStart = performance.now()
         let actorId,
             actorType,
             actorName,
-            requestLog,
-            requestLogPromise,
+            logMeta = null,
+            logOutcome = null,
             releaseRequestLock,
             info
         try {
@@ -95,9 +101,10 @@ export default function router(app, bootData) {
                     body.domainId = await resolveDomainId(req, DL)
                 }
             }
-            if (apiFunction?.config?.log !== false) {
-                const logData = {
+            if (requestLogEnabled() && apiFunction?.config?.log !== false) {
+                logMeta = {
                     requestId,
+                    requestTime: new Date,
                     action: route,
                     ip,
                     userAgent: headers['user-agent'],
@@ -109,7 +116,6 @@ export default function router(app, bootData) {
                         }
                     }
                 }
-                requestLog = DL.Log.start(logData)
             }
 
             if (typeof apiFunction !== 'function') {
@@ -293,12 +299,7 @@ export default function router(app, bootData) {
                     data: result,
                     status: 200
                 }
-                if (requestLog) {
-                    requestLogPromise = requestLog.success({
-                        ...response,
-                        data: Array.isArray(result) ? `[${result.length} elements]` : result
-                    })
-                }
+                logOutcome = { httpStatus: 200, data: result }
                 return res.send(response)
             }
         } catch (error) {
@@ -318,22 +319,45 @@ export default function router(app, bootData) {
                 capturedTotal: error.capturedTotal ?? undefined,
                 delta: error.delta ?? undefined,
             }
-            if (requestLog)
-                requestLogPromise = requestLog.error(errorRes)
+            logOutcome = { httpStatus: errorRes.status, data: errorRes, isError: true }
 
             return res.send(errorRes)
         } finally {
             if (apiFunction?.config?.preventMultiple)
                 await releaseRequestLock?.()
-            if (requestLog) {
-                if (actorId) {
-                    requestLog.actor({
-                        type: actorType,
-                        id: actorId,
-                        name: actorName
-                    })
+
+            // One insert after the response. Nothing awaits it: the client is
+            // already served, and the log must never delay or fail the request.
+            if (logMeta) {
+                const httpStatus = logOutcome?.httpStatus || res.statusCode || 500
+                const durationMs = +(performance.now() - requestStart).toFixed(2)
+                if (shouldLogRequest({ route, httpStatus, durationMs })) {
+                    try {
+                        void DL.Log.record({
+                            ...logMeta,
+                            // Errors and slow/mutation requests are kept in full;
+                            // only successful read responses are summarized.
+                            status: httpStatus >= 400
+                                ? DL.Log.constants.STATUS.ERROR
+                                : DL.Log.constants.STATUS.SUCCESS,
+                            responseTime: new Date,
+                            duration: durationMs,
+                            ...(actorId ? {
+                                actor: { type: actorType, id: actorId, name: actorName }
+                            } : {}),
+                            data: {
+                                ...logMeta.data,
+                                // An error payload is kept verbatim (message, code,
+                                // stack); everything else is capped at 4 KB.
+                                ...(logOutcome?.data === undefined ? {} : {
+                                    response: logOutcome.isError
+                                        ? logOutcome.data
+                                        : summarizeLogValue(logOutcome.data)
+                                })
+                            }
+                        })
+                    } catch { }
                 }
-                try { await requestLogPromise } catch { }
             }
         }
     })

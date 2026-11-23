@@ -168,7 +168,21 @@ const methods = Log => {
         }
     }
 
-    return { start }
+    // One-shot insert for request logs: the router builds the finished document
+    // after the response, so there is no pending insert to update. Outbound logs
+    // (sms, comax) keep using start() + success()/error().
+    function record(logData) {
+        const logBody = {
+            requestTime: new Date,
+            appVersion,
+            ...logData
+        }
+        if (logBody.data)
+            logBody.data = truncateLogData(logBody.data)
+        return Log.create(logBody).catch(() => null)
+    }
+
+    return { start, record }
 }
 
 export const meta = {
