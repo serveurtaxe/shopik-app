@@ -10,6 +10,13 @@ function barcodeIndex(products = []) {
     return byBarcode
 }
 
+// A line is missing display data when the snapshot predates a field. The family
+// barcodes are never stored on the line, so they are read for every line the
+// scan modal may open — it matches the physical package against them (an alias
+// must scan as its product).
+const needsDisplay = item => !item.images || !item.images.product?.length || !item.storageType || !item.unit?.step || !item.netContentText
+const needsFamily = item => !Array.isArray(item.scannableBarcodes)
+
 export default async function enrichCart(order, DL) {
     if (!order?.cart?.length || !DL?.Product?.Model) return order
     const needsEnrich = []
@@ -17,10 +24,7 @@ export default async function enrichCart(order, DL) {
     const barcodes = []
     for (let i = 0; i < order.cart.length; i++) {
         const item = order.cart[i]
-        const missingImages = !item.images || !item.images.product || item.images.product.length === 0
-        const missingUnit = !item.unit || item.unit.step == null || item.unit.minAmount == null
-        const missingMeta = !item.storageType || !item.category || !item.label || !item.netContentText
-        if (missingImages || missingUnit || missingMeta) {
+        if (needsDisplay(item) || needsFamily(item)) {
             needsEnrich.push(i)
             if (item.id) ids.push(item.id)
             if (item.barcode) barcodes.push(item.barcode)
@@ -58,6 +62,8 @@ export default async function enrichCart(order, DL) {
         const item = order.cart[idx]
         const prod = (item.id && byId.get(item.id)) || (item.barcode && byBarcode.get(item.barcode))
         if (!prod) continue
+        if (needsFamily(item)) item.scannableBarcodes = prod.scannableBarcodes || []
+        if (!needsDisplay(item)) continue
         if (!item.images || !item.images.product?.length) {
             item.images = prod.images || item.images
         }
@@ -87,8 +93,7 @@ export async function enrichOrders(orders, DL) {
     for (const order of orders) {
         if (!order?.cart?.length) continue
         for (const item of order.cart) {
-            const miss = !item.images || !item.images.product?.length || !item.storageType || !item.unit?.step || !item.netContentText
-            if (miss) {
+            if (needsDisplay(item) || needsFamily(item)) {
                 if (item.id) allIds.add(item.id)
                 if (item.barcode) allBarcodes.add(item.barcode)
                 needMap.push(item)
@@ -108,10 +113,11 @@ export async function enrichOrders(orders, DL) {
     for (const order of orders) {
         if (!order?.cart?.length) continue
         for (const item of order.cart) {
-            const miss = !item.images || !item.images.product?.length || !item.storageType || !item.unit?.step || !item.netContentText
-            if (!miss) continue
+            if (!needsDisplay(item) && !needsFamily(item)) continue
             const prod = (item.id && byId.get(item.id)) || (item.barcode && byBarcode.get(item.barcode))
             if (!prod) continue
+            if (needsFamily(item)) item.scannableBarcodes = prod.scannableBarcodes || []
+            if (!needsDisplay(item)) continue
             if (!item.images || !item.images.product?.length) item.images = prod.images || item.images
             if (!item.label && prod.label) item.label = prod.label
             if (!item.producer && prod.producer) item.producer = prod.producer

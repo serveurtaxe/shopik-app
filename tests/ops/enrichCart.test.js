@@ -68,6 +68,26 @@ describe('enrichCart', () => {
         assert.equal(calls[0].select.scannableBarcodes, 1)
     })
 
+    it('gives the pick screen the family barcodes in the pick response too', async () => {
+        // pick_item answers with the order through enrichCart and the ops screen
+        // swaps it into state — the next scan reads this list.
+        const { DL } = makeDL()
+        const order = {
+            cart: [line({
+                id: 'p-main',
+                barcode: '1111111111111',
+                images: { product: [{ main: true }] },
+                storageType: 'regular',
+                netContentText: '12 יח׳',
+                unit: { type: 'item', baseUnit: 'unit', minAmount: 1, step: 1 }
+            })]
+        }
+
+        await enrichCart(order, DL)
+
+        assert.deepEqual(order.cart[0].scannableBarcodes, ['2222222222222'])
+    })
+
     it('returns the order untouched when the line matches nothing', async () => {
         const { DL } = makeDL([])
         const order = { cart: [line()] }
@@ -84,5 +104,25 @@ describe('enrichCart', () => {
 
         assert.equal(orders[0].cart[0].unit.step, 1)
         assert.deepEqual(orders[1], { cart: [] })
+    })
+
+    it('gives the pick screen the family barcodes of a complete line', async () => {
+        const { DL, calls } = makeDL()
+        // A fresh order: every display field is in the snapshot, so nothing used
+        // to be read — but the scan modal still needs the aliases of the product.
+        const item = line({
+            id: 'p-main',
+            barcode: '1111111111111',
+            images: { product: [{ main: true }] },
+            storageType: 'regular',
+            netContentText: '12 יח׳',
+            unit: { type: 'item', baseUnit: 'unit', minAmount: 1, step: 1 }
+        })
+        const orders = [{ cart: [item] }]
+
+        await enrichOrders(orders, DL)
+
+        assert.deepEqual(orders[0].cart[0].scannableBarcodes, ['2222222222222'])
+        assert.equal(calls.length, 1)
     })
 })
