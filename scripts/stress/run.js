@@ -12,6 +12,11 @@ import { runFeedBenchmark } from './feed.js'
 import { printReport, saveReport } from './report.js'
 import { CUSTOMER_PLATFORM } from './payloads.js'
 import { sleep } from './util.js'
+import { loadStressEnv } from './env.js'
+
+// Read STRESS_* (and SECRET) from .env before parsing flags. DB/DB_URI are
+// intentionally not loaded — see env.js.
+loadStressEnv()
 
 const opts = parseArgs()
 if (opts.help) {

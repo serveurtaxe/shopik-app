@@ -5,6 +5,11 @@ import path from 'node:path';
 import readline from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
 import { fmtMs } from './stress/util.js';
+import { loadStressEnv } from './stress/env.js';
+
+// The release gate reads STRESS_* from the environment it builds below; fill
+// the gaps from .env (DB/DB_URI are intentionally not loaded).
+loadStressEnv();
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pkgPath = path.join(root, 'package.json');
