@@ -84,13 +84,6 @@ export default async function enrichCart(order, DL) {
     return order
 }
 
-// A line is missing display data when the snapshot predates a field. The family
-// barcodes are never stored on the line, so they are read for every line the
-// pick screen may open — the scan modal matches the physical package against
-// them (an alias must scan as its product).
-const needsDisplay = item => !item.images || !item.images.product?.length || !item.storageType || !item.unit?.step || !item.netContentText
-const needsFamily = item => !Array.isArray(item.scannableBarcodes)
-
 export async function enrichOrders(orders, DL) {
     if (!Array.isArray(orders) || !orders.length) return orders
     // collect all barcodes/ids across orders that need enrich
