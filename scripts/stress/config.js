@@ -24,7 +24,7 @@ export function parseArgs(argv = process.argv.slice(2)) {
         slowMs: 20,
         only: null,
         mutations: false,
-        idNum: null,
+        idNum: process.env.STRESS_ID_NUM || null,
         userPhone: null,
         headlessOtp: false,
         gatePassword: process.env.STRESS_GATE_PASSWORD || null,
@@ -139,7 +139,8 @@ Usage:
                           (default 20; use 1 on a short --only run to see every read)
   --only <regex>          only run matching routes (e.g. --only "order/")
   --mutations             include write routes (default off)
-  --id-num <n>            admin idNum for login (else prompted)
+  --id-num <n>            admin idNum for login (or env STRESS_ID_NUM; required
+                          before start-up with --headless-otp)
   --user-phone <phone>    shopper to log in as for the storefront routes; without it a
                           real cart-order-with-store owner is sampled from the stress DB
   --storefront-origin <url> Origin header for storefront calls (domain resolution),
