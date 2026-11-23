@@ -5,7 +5,7 @@ import { parseArgs, guardAgainstProduction, usage } from './config.js'
 import { discoverRoutes } from './routes.js'
 import { loadFixtures } from './fixtures.js'
 import { StressClient } from './client.js'
-import { ensureGate, adminLogin, customerLogin, pinCurrentStore, closePrompt } from './auth.js'
+import { ensureGate, adminLogin, customerLogin, pinCurrentStore, closePrompt, promptAdminId } from './auth.js'
 import { MongoObserver } from './observer.js'
 import { measureBaseline, runSequential, runChaos } from './load.js'
 import { runFeedBenchmark } from './feed.js'
@@ -64,6 +64,17 @@ if (opts.feedOnly) {
         process.exitCode = 1
     }
     process.exit(process.exitCode || 0)
+}
+
+// --headless-otp needs the admin's phone, which comes from the DB row selected
+// by idNum and is loaded with the fixtures. Asking inside adminLogin is too late
+// (fixtures.adminPhone is already null by then), so prompt before the load.
+if (opts.headlessOtp && !opts.idNum) {
+    if (!process.stdin.isTTY)
+        throw new Error('--headless-otp needs the admin idNum before fixtures load: pass --id-num or set STRESS_ID_NUM.')
+    opts.idNum = await promptAdminId()
+    if (!opts.idNum)
+        throw new Error('No admin idNum given.')
 }
 
 guardAgainstProduction(opts.uri)

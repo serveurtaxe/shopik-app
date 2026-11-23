@@ -29,6 +29,13 @@ export function closePrompt() {
     rl = null
 }
 
+// Prompted before fixtures load: with --headless-otp the admin's phone has to
+// come from the DB row selected by this idNum, so asking later (inside the login
+// flow) is too late.
+export async function promptAdminId() {
+    return ask('Admin ID number: ')
+}
+
 export async function ensureGate(client, { gatePassword }) {
     const probe = await client.call('domain/count', {})
     if (probe.kind !== 'gate') return { gated: false }
@@ -51,7 +58,10 @@ async function headlessOtp(fixtures, phone) {
 async function adminOtp(client, fixtures, { idNum, phone, label, headless }) {
     if (headless) {
         if (!phone)
-            throw new Error(`--headless-otp needs the ${label} (by --id-num) to exist in the stress DB.`)
+            throw new Error(
+                `--headless-otp: no ${label} with idNum "${idNum}" and a phone was found in the stress DB. ` +
+                'Pass the right --id-num / STRESS_ID_NUM (or drop --headless-otp).'
+            )
         return headlessOtp(fixtures, phone)
     }
     const issued = await client.call('admin/login_otp', { idNum }, { timeoutMs: 15_000, keepBody: true })
