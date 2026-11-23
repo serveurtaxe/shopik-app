@@ -20,7 +20,7 @@ describe('getSettingFileSize', () => {
 
 describe('getSettingFileUrl with named sizes', () => {
     it('appends .webp for plain size names', () => {
-        assert.equal(getSettingFileUrl('images/settings/d1/ogImage/v1', 'full'),
+        assert.equal(getSettingFileUrl('images/settings/d1/ogImage/v1', 'l'),
             'https://files.shopik.co.il/images/settings/d1/ogImage/v1/l.webp')
     })
 
